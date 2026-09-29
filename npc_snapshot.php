@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . "/lib/playthrough_guard.php";
+pgr_http_preflight("npc_snapshot");
 
 /**
  * StobeServer - NPC snapshot ingest endpoint.

@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'tts_pronunciation.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'tts_filter_presets.php';
 
 function stobePocketTtsDefaultSettings(): array {
     return [
@@ -118,6 +119,12 @@ function stobeResolveNpcDataForTts(string $npcName, array|false $npcData = false
              WHERE id = 'voiceid'
              LIMIT 1"
         );
+        $filterRow = $db->fetchOne(
+            "SELECT value
+             FROM core_narrator
+             WHERE id = 'tts_filter_preset'
+             LIMIT 1"
+        );
         $profileId = intval(trim(strval($profileRow['value'] ?? '0')));
         if ($profileId <= 0) {
             $profileId = intval($npcData['profile_id'] ?? 0);
@@ -135,12 +142,13 @@ function stobeResolveNpcDataForTts(string $npcName, array|false $npcData = false
             'name' => $resolvedName,
             'profile_id' => $profileId > 0 ? $profileId : 0,
             'voiceid' => $voiceId,
+            'tts_filter_preset' => stobeNormalizeTtsFilterPresetId($filterRow['value'] ?? 'none'),
             'gender' => trim(strval($npcData['gender'] ?? '')),
         ];
     }
 
     $resolved = $db->fetchOne(
-        "SELECT id, name, profile_id, voiceid, gender
+        "SELECT id, name, profile_id, voiceid, gender, metadata
          FROM core_npc
          WHERE LOWER(name) = LOWER($1)
          ORDER BY
@@ -739,8 +747,10 @@ function stobeReadWavDurationMsFromFile(string $path): int {
     return stobeEstimateWavDurationMs($binary);
 }
 
-function stobeSynthesizePocketTtsLine(string $npcName, string $line, array|false $npcData = false): array {
-    return stobeSynthesizeTtsLine($npcName, $line, $npcData);
+function stobeSynthesizePocketTtsLine(string $npcName, string $line, array|false $npcData = false, ?string $filterPresetOverride = null): array {
+    require_once dirname(__DIR__) . '/lib/stobe_interaction.php';
+    stobeInteractionRequire();
+    return stobeSynthesizeTtsLine($npcName, $line, $npcData, $filterPresetOverride);
 }
 
 function stobeNormalizeTtsConnectorType(string $type): string {
@@ -751,6 +761,7 @@ function stobeNormalizeTtsConnectorType(string $type): string {
     return match ($normalized) {
         'pockettts', 'pocketts', 'pocket_tts' => 'pocket_tts',
         'xtts', 'xtts_fastapi' => 'xtts',
+        'higgs' => 'higgs',
         'chatterbox' => 'chatterbox',
         'omnivoice', 'omni_voice', 'omni_tts' => 'omnivoice',
         'cartesia' => 'cartesia',
@@ -865,9 +876,10 @@ function stobeResolveTtsRuntimeConfig(string $npcName, array|false $npcData = fa
     if ($endpoint === '') {
         $endpoint = trim(strval($connectorConfig['endpoint'] ?? ''));
     }
-    if ($endpoint === '' && in_array($provider, ['pocket_tts', 'xtts', 'chatterbox', 'omnivoice'], true)) {
+    if ($endpoint === '' && in_array($provider, ['pocket_tts', 'xtts', 'chatterbox', 'omnivoice', 'higgs'], true)) {
         $endpoint = match ($provider) {
             'omnivoice' => 'http://127.0.0.1:8021',
+            'higgs' => 'http://127.0.0.1:8025',
             'chatterbox' => 'http://127.0.0.1:8023',
             'pocket_tts' => 'http://127.0.0.1:8024',
             default => 'http://127.0.0.1:8020',
@@ -887,6 +899,10 @@ function stobeResolveTtsRuntimeConfig(string $npcName, array|false $npcData = fa
     $isNarrator = strcasecmp(trim($npcName), 'The Narrator') === 0;
     if (function_exists('stobeIsNarratorName')) {
         $isNarrator = stobeIsNarratorName($npcName);
+    }
+    $filterPreset = stobeTtsFilterPresetFromMetadata($resolvedNpcData['metadata'] ?? []);
+    if ($isNarrator) {
+        $filterPreset = stobeNormalizeTtsFilterPresetId($resolvedNpcData['tts_filter_preset'] ?? 'none');
     }
 
     $dbVoiceId = stobeResolveNpcVoiceIdByName($npcName);
@@ -929,6 +945,7 @@ function stobeResolveTtsRuntimeConfig(string $npcName, array|false $npcData = fa
         'language' => $language,
         'voiceid' => $voiceId,
         'voiceid_source' => $voiceSource,
+        'tts_filter_preset' => $filterPreset,
         'gender' => $resolvedGender,
         'fallback_voiceid' => $fallbackVoiceId,
         'fallback_male' => $fallbackVoices['male'],
@@ -1661,7 +1678,7 @@ if (!function_exists('stobeSynthesizeViaPocketTts')) {
     }
 }
 
-function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcData = false): array {
+function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcData = false, ?string $filterPresetOverride = null): array {
     $pronunciationRows = stobeTtsPronunciationRows();
     if (!empty($pronunciationRows)) {
         $pronunciationScope = stobeTtsPronunciationSpeakerScope($npcName, $npcData);
@@ -1695,6 +1712,9 @@ function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcD
     $modelId = trim(strval($runtime['model_id'] ?? ''));
     $endpoint = trim(strval($runtime['endpoint'] ?? ''));
     $voiceSource = trim(strval($runtime['voiceid_source'] ?? ''));
+    $filterPreset = $filterPresetOverride === null
+        ? stobeNormalizeTtsFilterPresetId($runtime['tts_filter_preset'] ?? 'none')
+        : stobeNormalizeTtsFilterPresetId($filterPresetOverride);
 
     stobeLogInfo('TTS runtime resolved', [
         'npc_name' => $npcName,
@@ -1702,9 +1722,10 @@ function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcD
         'voiceid' => $voiceId,
         'voiceid_source' => $voiceSource,
         'connector' => strval($runtime['connector_name'] ?? ''),
+        'tts_filter_preset' => $filterPreset,
     ]);
 
-    $hashSource = implode('|', [$provider, $endpoint, $voiceId, $language, $modelId, trim($speechText)]);
+    $hashSource = implode('|', [$provider, $endpoint, $voiceId, $language, $modelId, $filterPreset, STOBE_TTS_FILTER_PRESET_VERSION, trim($speechText)]);
     $hash = md5($hashSource);
     $soundCacheDir = stobeEnsureSoundCacheDir();
     $localPath = $soundCacheDir . DIRECTORY_SEPARATOR . $hash . '.wav';
@@ -1728,6 +1749,8 @@ function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcD
         $binary = stobeSynthesizeViaPocketTts($speechText, $runtime);
     } elseif ($provider === 'xtts') {
         $binary = stobeSynthesizeViaXtts($speechText, $runtime);
+    } elseif ($provider === 'higgs') {
+        $binary = stobeSynthesizeViaHiggs($speechText, $runtime);
     } elseif ($provider === 'chatterbox') {
         $binary = stobeSynthesizeViaChatterbox($speechText, $runtime);
     } elseif ($provider === 'omnivoice') {
@@ -1751,6 +1774,7 @@ function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcD
         ]);
         return [];
     }
+    $binary = stobeApplyTtsFilterPresetToWavBinary($binary, $filterPreset);
 
     $bytesWritten = @file_put_contents($localPath, $binary);
     if ($bytesWritten === false || intval($bytesWritten) <= 44) {
@@ -1795,9 +1819,10 @@ function stobeResolveTtsRuntimeFromConnector(array $connector, string $voiceOver
     if ($endpoint === '') {
         $endpoint = trim(strval($connectorConfig['endpoint'] ?? ''));
     }
-    if ($endpoint === '' && in_array($provider, ['pocket_tts', 'xtts', 'chatterbox', 'omnivoice'], true)) {
+    if ($endpoint === '' && in_array($provider, ['pocket_tts', 'xtts', 'chatterbox', 'omnivoice', 'higgs'], true)) {
         $endpoint = match ($provider) {
             'omnivoice' => 'http://127.0.0.1:8021',
+            'higgs' => 'http://127.0.0.1:8025',
             'chatterbox' => 'http://127.0.0.1:8023',
             'pocket_tts' => 'http://127.0.0.1:8024',
             default => 'http://127.0.0.1:8020',
@@ -1843,7 +1868,7 @@ function stobeResolveTtsRuntimeFromConnector(array $connector, string $voiceOver
     ];
 }
 
-function stobeSynthesizeTtsFromConnector(array $connector, string $text, string $voiceOverride = ''): array {
+function stobeSynthesizeTtsFromConnector(array $connector, string $text, string $voiceOverride = '', string $filterPreset = 'none'): array {
     $speechText = stobeNormalizeSpeechTextForTts($text);
     if ($speechText === '') {
         return [];
@@ -1865,8 +1890,9 @@ function stobeSynthesizeTtsFromConnector(array $connector, string $text, string 
     }
     $modelId = trim(strval($runtime['model_id'] ?? ''));
     $endpoint = trim(strval($runtime['endpoint'] ?? ''));
+    $filterPreset = stobeNormalizeTtsFilterPresetId($filterPreset);
 
-    $hashSource = implode('|', ['test', $provider, $endpoint, $voiceId, $language, $modelId, trim($speechText)]);
+    $hashSource = implode('|', ['test', $provider, $endpoint, $voiceId, $language, $modelId, $filterPreset, STOBE_TTS_FILTER_PRESET_VERSION, trim($speechText)]);
     $hash = md5($hashSource);
     $soundCacheDir = stobeEnsureSoundCacheDir();
     $localPath = $soundCacheDir . DIRECTORY_SEPARATOR . $hash . '.wav';
@@ -1890,6 +1916,8 @@ function stobeSynthesizeTtsFromConnector(array $connector, string $text, string 
         $binary = stobeSynthesizeViaPocketTts($speechText, $runtime);
     } elseif ($provider === 'xtts') {
         $binary = stobeSynthesizeViaXtts($speechText, $runtime);
+    } elseif ($provider === 'higgs') {
+        $binary = stobeSynthesizeViaHiggs($speechText, $runtime);
     } elseif ($provider === 'chatterbox') {
         $binary = stobeSynthesizeViaChatterbox($speechText, $runtime);
     } elseif ($provider === 'omnivoice') {
@@ -1908,6 +1936,7 @@ function stobeSynthesizeTtsFromConnector(array $connector, string $text, string 
     if (substr($binary, 0, 4) !== 'RIFF') {
         return [];
     }
+    $binary = stobeApplyTtsFilterPresetToWavBinary($binary, $filterPreset);
 
     $bytesWritten = @file_put_contents($localPath, $binary);
     if ($bytesWritten === false || intval($bytesWritten) <= 44) {

@@ -225,11 +225,11 @@ foreach ($versionCandidates as $versionPath) {
     }
 }
 if ($serverVersionDisplay === '') {
-    $serverVersionDisplay = '1.2.3';
+    $serverVersionDisplay = '1.3.1';
 }
 $serverReleaseDate = readVersionFile(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'release_date.txt');
 if ($serverReleaseDate === '') {
-    $serverReleaseDate = '2026-08-31';
+    $serverReleaseDate = '2026-09-19';
 }
 
 $pluginVersionDisplay = 'N/A';
@@ -1118,7 +1118,12 @@ if (count($wordCloud) > 0) {
             <button onclick="window.open('https://docs.google.com/spreadsheets/d/1UtAR_r18wskmTMMsg8IlhVvr1Fn9tHvRJT8drH6RuzY/edit?gid=1257158105#gid=1257158105', '_blank')" class="dashboard-btn">
                 <span class="btn-icon">🥇</span> AI/LLM Tier List
             </button>
+            <button type="button" onclick="window.location.href=<?php echo htmlspecialchars(json_encode($webRoot . '/ui/quickstart.php'), ENT_QUOTES, 'UTF-8'); ?>" class="dashboard-btn">
+                <span class="btn-icon" aria-hidden="true">&#x1F680;</span><span>Go to Quickstart</span>
+            </button>
         </div>
+
+        <?php require __DIR__ . '/tmpl/playthrough_home_controls.php'; ?>
 
         <div class="dashboard-container">
             <?= render_widget('Current Playthrough', $currentPlaythroughContent) ?>

@@ -155,7 +155,7 @@ function chatJsonPostJson(int $port, array $payload): array
 
 function chatJsonEventRows(): array
 {
-    return $GLOBALS['db']->fetchAll('SELECT type, data FROM eventlog ORDER BY rowid ASC');
+    return $GLOBALS['db']->fetchAll('SELECT type, data, people FROM eventlog ORDER BY rowid ASC');
 }
 
 chatJsonForceNoApiKey();
@@ -218,7 +218,12 @@ try {
     chatJsonAssertSame('chat', strval($rows[1]['type'] ?? ''), 'second JSON endpoint row should be mirrored chat');
     chatJsonAssertSame($speaker . ': Hello from JSON (talking to: ' . $target . ')', strval($rows[1]['data'] ?? ''), 'mirrored row should preserve cleaned target payload');
     chatJsonAssertSame('chat', strval($rows[2]['type'] ?? ''), 'third JSON endpoint row should be fallback chat reply');
-    chatJsonAssertSame($target . ': No OpenRouter API key configured yet.', strval($rows[2]['data'] ?? ''), 'fallback JSON endpoint reply should be stored');
+    chatJsonAssertSame($target . ': No OpenRouter API key configured yet. (talking to: ' . $speaker . ')', strval($rows[2]['data'] ?? ''), 'fallback JSON endpoint reply should be stored');
+
+    foreach ($rows as $row) {
+        chatJsonAssertSame('["' . $speaker . '|hand_1001","' . $target . '|hand_1002"]', $row['people'], 'JSON events must retain only the supplied audience');
+    }
+    chatJsonAssertSameInt(0, count(DataEventLog(10, $nearby)), 'snapshot discovery alone must not grant event awareness');
 
     chatJsonAssert(is_array(getNpcData($speaker)), 'JSON endpoint should JIT-create speaker participant profile');
     chatJsonAssert(is_array(getNpcData($target)), 'JSON endpoint should JIT-create target participant profile');

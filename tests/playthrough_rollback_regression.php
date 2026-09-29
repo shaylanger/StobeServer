@@ -5,7 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/../lib/bootstrap.php';
 require_once __DIR__ . '/../debug/db_updates.php';
 require_once __DIR__ . '/../lib/playthrough_storage.php';
-require_once __DIR__ . '/../lib/playthrough_snapshot.php';
+require_once __DIR__ . '/../lib/playthrough_autosave.php';
 require_once __DIR__ . '/../lib/playthrough_rollback.php';
 require_once __DIR__ . '/../lib/player_base_functions.php';
 
@@ -34,10 +34,10 @@ function ptConfOptGetRaw(string $id): array
     return ['exists' => true, 'value' => strval($row['value'] ?? '')];
 }
 
-function ptConfOptRestore(string $id, array $snapshot): void
+function ptConfOptRestore(string $id, array $backup): void
 {
     global $db;
-    if (!($snapshot['exists'] ?? false)) {
+    if (!($backup['exists'] ?? false)) {
         $db->exec('DELETE FROM conf_opts WHERE id = $1', [$id]);
         return;
     }
@@ -45,7 +45,7 @@ function ptConfOptRestore(string $id, array $snapshot): void
         'INSERT INTO conf_opts (id, value, updated_at)
          VALUES ($1, $2, NOW())
          ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()',
-        [$id, strval($snapshot['value'] ?? '')]
+        [$id, strval($backup['value'] ?? '')]
     );
 }
 
@@ -67,12 +67,12 @@ foreach ($trackedConfKeys as $key) {
     $confBackup[$key] = ptConfOptGetRaw($key);
 }
 
-$dragonBreakEnabledBackup = $GLOBALS['DRAGON_BREAK_AUTOSNAPSHOT'] ?? null;
+$dragonBreakEnabledBackup = $GLOBALS['DRAGON_BREAK_AUTO_PLAYTHROUGH'] ?? null;
 $dragonBreakMinDaysBackup = $GLOBALS['DRAGON_BREAK_MIN_DAYS'] ?? null;
 $preserveRelationshipsBackup = getSetting('NEVER_CLEAR_RELATIONSHIP_DATA', 'false');
 setSetting('NEVER_CLEAR_RELATIONSHIP_DATA', 'false');
 
-$createdSnapshotIds = [];
+$createdPlaythroughIds = [];
 $zoneKeepName = 'UT_ROLLBACK_ZONE_KEEP_' . $seed;
 $zoneDropName = 'UT_ROLLBACK_ZONE_DROP_' . $seed;
 $baseKeepId = 'ut-rollback-base-keep-' . $seed;
@@ -457,42 +457,42 @@ try {
     ptAssert(stobeDragonBreakDaysRollback(200000, 113600) === 1, '86400 rollback should map to 1 day');
 
     // Force deterministic dragonbreak config.
-    $GLOBALS['DRAGON_BREAK_AUTOSNAPSHOT'] = true;
+$GLOBALS['DRAGON_BREAK_AUTO_PLAYTHROUGH'] = true;
     $GLOBALS['DRAGON_BREAK_MIN_DAYS'] = 1;
 
     $futureBase = 900000000 + random_int(10000, 99999);
 
-    // Case 1: rollback detected but below 1-day threshold => no dragonbreak snapshot.
+    // Case 1: rollback detected but below 1-day threshold => no Dragon Break playthrough.
     setConfOpt('PLAYTHROUGH_LAST_SEEN_GAMETS', strval($futureBase + 1000));
     setConfOpt('PLAYTHROUGH_LAST_SEEN_TS', strval(time()));
     $resultSmall = stobeHandlePotentialGametsRollback($futureBase + 500, 'test_small_rewind');
     ptAssert(boolval($resultSmall['triggered'] ?? false), 'Small rewind should still trigger rollback handling');
-    ptAssert(intval($resultSmall['snapshot_id'] ?? 0) === 0, 'Small rewind should not create dragonbreak snapshot');
+    ptAssert(intval($resultSmall['playthrough_id'] ?? 0) === 0, 'Small rewind should not create a Dragon Break playthrough');
 
-    // Case 2: rollback >= 1 day => snapshot expected.
+    // Case 2: rollback >= 1 day => playthrough expected.
     setConfOpt('PLAYTHROUGH_LAST_SEEN_GAMETS', strval($futureBase + 200000));
     setConfOpt('PLAYTHROUGH_LAST_SEEN_TS', strval(time()));
     $resultLarge = stobeHandlePotentialGametsRollback($futureBase + 100000, 'test_large_rewind');
     ptAssert(boolval($resultLarge['triggered'] ?? false), 'Large rewind should trigger rollback handling');
-    $snapshotId = intval($resultLarge['snapshot_id'] ?? 0);
-    ptAssert($snapshotId > 0, 'Large rewind should create dragonbreak snapshot');
+    $playthroughId = intval($resultLarge['playthrough_id'] ?? 0);
+    ptAssert($playthroughId > 0, 'Large rewind should create a Dragon Break playthrough');
 
-    $createdSnapshotIds[] = $snapshotId;
-    $profile = stobePlaythroughGetProfileById($snapshotId);
-    ptAssert(is_array($profile), 'Dragonbreak snapshot profile should exist');
-    ptAssert(intval($profile['rollback_delta_days'] ?? 0) >= 1, 'Snapshot should record rollback_delta_days >= 1');
+    $createdPlaythroughIds[] = $playthroughId;
+    $profile = stobePlaythroughGetProfileById($playthroughId);
+    ptAssert(is_array($profile), 'Dragon Break playthrough profile should exist');
+    ptAssert(intval($profile['rollback_delta_days'] ?? 0) >= 1, 'Playthrough should record rollback_delta_days >= 1');
 
     echo 'All playthrough rollback regression tests passed.' . PHP_EOL;
 } finally {
     setSetting('NEVER_CLEAR_RELATIONSHIP_DATA', $preserveRelationshipsBackup);
-    // Cleanup created snapshots.
-    foreach ($createdSnapshotIds as $snapshotId) {
-        if ($snapshotId > 0) {
-            stobePlaythroughDeleteProfile($snapshotId);
+    // Cleanup created playthroughs.
+    foreach ($createdPlaythroughIds as $playthroughId) {
+        if ($playthroughId > 0) {
+            stobePlaythroughDeleteProfile($playthroughId);
         }
     }
 
-    // Cleanup any residual test snapshots by name prefix (safety net).
+    // Cleanup any residual test playthroughs by name prefix (safety net).
     $rows = stobePlaythroughListProfiles(2000);
     foreach ($rows as $row) {
         $name = strval($row['name'] ?? '');
@@ -502,15 +502,15 @@ try {
     }
 
     // Restore conf opts.
-    foreach ($confBackup as $key => $snapshot) {
-        ptConfOptRestore($key, $snapshot);
+    foreach ($confBackup as $key => $backup) {
+        ptConfOptRestore($key, $backup);
     }
 
     // Restore globals.
     if ($dragonBreakEnabledBackup === null) {
-        unset($GLOBALS['DRAGON_BREAK_AUTOSNAPSHOT']);
+        unset($GLOBALS['DRAGON_BREAK_AUTO_PLAYTHROUGH']);
     } else {
-        $GLOBALS['DRAGON_BREAK_AUTOSNAPSHOT'] = $dragonBreakEnabledBackup;
+        $GLOBALS['DRAGON_BREAK_AUTO_PLAYTHROUGH'] = $dragonBreakEnabledBackup;
     }
     if ($dragonBreakMinDaysBackup === null) {
         unset($GLOBALS['DRAGON_BREAK_MIN_DAYS']);

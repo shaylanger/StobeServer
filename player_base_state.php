@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . "/lib/playthrough_guard.php";
+pgr_http_preflight("player_base_state");
 
 /**
  * Receives selected player-character base presence from Stobe.dll.

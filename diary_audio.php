@@ -1,4 +1,9 @@
 <?php
+require_once __DIR__ . '/lib/playthrough_switching.php';
+pas_http_guard();
+require_once __DIR__ . '/lib/stobe_interaction.php';
+stobeInteractionRequire();
+
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache');

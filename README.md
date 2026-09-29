@@ -1,5 +1,7 @@
 # StobeServer
 
+For AI assistants and coding agents, start with [AGENTS.md](AGENTS.md), then the [architecture and custom-extension guide](docs/agent-guide.md) and [setup and validation guide](docs/building.md). These files ship with the server; preserve their relative paths in application packages.
+
 PHP backend server for the Stobe AI Framework for Kenshi. 
 It is the Kenshi-side counterpart to HerikaServer patterns (event routing, prompt building, connector model), with Stobe-specific schema and game logic.
 
@@ -85,3 +87,8 @@ replays pending database updates.
 ## PR Submissions
 
 Building AI systems is complex, and changes can unintentionally affect other connected systems. Before opening a pull request, follow the repository PR template and make sure the change has been discussed with either `RANGROO` or `tyler.maister` in Discord. When adding new features, prefer making them optional or toggleable where practical.
+
+### Biography voice filters
+
+Biography imports and exports accept an optional `tts_filter_preset` column. Choose a trusted preset from the biography editor's Voice Filter list; custom audio filter expressions are not accepted. The preset seeds newly created NPCs only and does not overwrite existing NPC choices. Use `none` to disable filtering explicitly. Older imports without the column preserve saved presets.
+Stobe uses presets from selected biography traits: unique traits take priority over random traits, then personality, backstory, speechstyle, occupation, appearance, and goals. Blank means no new preset; `none` explicitly prevents a lower-priority trait from supplying one.

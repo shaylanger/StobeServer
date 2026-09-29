@@ -12,6 +12,7 @@ ini_set('display_errors', '0');
 
 $enginePath = dirname(__DIR__) . DIRECTORY_SEPARATOR;
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'bootstrap.php');
+ptr_runtime_ready();
 
 /**
  * Fetch latest known in-game timestamp from eventlog.
@@ -53,6 +54,20 @@ if (function_exists('stobePlayer2HealthTick')) {
 }
 stobeBackgroundRecordTick($tickGamets);
 
+// Retention is independent of game activity and remains opt-in.
+require_once $enginePath . 'lib/playthrough_retention.php';
+$retentionConn = ptp_connect();
+if ($retentionConn) {
+    try { ptr_tick($retentionConn); }
+    catch (Throwable $e) { stobeLogWarn('Playthrough Save cleanup skipped: ' . $e->getMessage()); }
+    finally { pg_close($retentionConn); }
+}
+
+require_once $enginePath . 'lib/dynamic_profile_scheduler.php';
+dps_run();
+
+if (!stobeInteractionAllowed()) exit(0);
+
 if ($tickGamets <= 0) {
     stobeLogDebug('Background manager skipped: no gamets yet');
     exit(0);
@@ -74,9 +89,6 @@ try {
         stobeMaybeRunRegularMemoryCycle($tickEventType, $tickTimestamp, $tickGamets, $tickPayload);
     }
     stobeBackgroundRecordTick($tickGamets);
-    if (function_exists('stobeMaybeRunDynamicProfileCycle')) {
-        stobeMaybeRunDynamicProfileCycle($tickEventType, $tickTimestamp, $tickGamets, $tickPayload);
-    }
     stobeBackgroundRecordTick($tickGamets);
     if (function_exists('stobeMaybeRunAutoDiaryCycle')) {
         stobeMaybeRunAutoDiaryCycle($tickTimestamp, $tickGamets);

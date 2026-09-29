@@ -3,6 +3,7 @@
 $path = dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR;
 require_once($path . "lib/bootstrap.php");
 require_once($path . 'lib/settings_presets.php');
+require_once($path . 'ui/tmpl/voice_filter_field.php');
 $presetToken = stobePresetToken();
 try {
     require_once($path . "debug/db_updates.php");
@@ -14,6 +15,11 @@ try {
     $db = $GLOBALS['db'] ?? null;
     if ($db) {
         $requiredSettings = [
+            [
+                'id' => 'EVENT_TYPE_FILTER',
+                'value' => '',
+                'description' => 'Selected event types are excluded from AI conversation history. Events are still recorded. Custom types can be entered as comma-separated names.',
+            ],
             [
                 'id' => 'AUTO_LOCK_PROFILE',
                 'value' => 'true',
@@ -27,7 +33,7 @@ try {
             [
                 'id' => 'NEVER_CLEAR_RELATIONSHIP_DATA',
                 'value' => 'false',
-                'description' => 'Keep current relationships when loading an older game save. Off by default. Can retain relationships from later events; does not carry them between saved playthrough snapshots.',
+                'description' => 'Keep current relationships when loading an older game save. Off by default. Can retain relationships from later events; does not carry them between saved playthroughs.',
             ],
             [
                 'id' => 'PLAYER_FACTION_CUSTOM_NAME',
@@ -75,6 +81,11 @@ try {
                 'description' => 'Play TTS for when the selected player character speaks.',
             ],
             [
+                'id' => 'PLAYER_TTS_FILTER_PRESET',
+                'value' => 'none',
+                'description' => 'Fixed voice filter applied to the spoken dialogue of the player character.',
+            ],
+            [
                 'id' => 'ALWAYS_INSERT_RACE',
                 'value' => 'true',
                 'description' => 'When true, always inject world knowledge entries for detected speaker and nearby NPC races when matching topics exist.',
@@ -93,11 +104,6 @@ try {
                 'id' => 'TXTAI_URL',
                 'value' => 'http://127.0.0.1:8082',
                 'description' => 'MiniMe/TXT2VEC service base URL. Use the local DwemerDistro endpoint or a reachable remote service URL.',
-            ],
-            [
-                'id' => 'DYNAMIC_PROFILE_INTERVAL_HOURS',
-                'value' => '24',
-                'description' => 'In-game hours between dynamic profile refreshes for enabled NPCs. Allowed range: 1-720.',
             ],
         ];
 
@@ -157,6 +163,22 @@ function stobeFindSettingDescription(array $rows, string $id, string $default = 
     return $default;
 }
 
+function stobeFindSettingValue(array $rows, string $id, string $default = ''): string
+{
+    $needle = strtoupper(trim($id));
+    if ($needle === '') {
+        return $default;
+    }
+
+    foreach ($rows as $row) {
+        if (strtoupper(trim(strval($row['id'] ?? ''))) === $needle) {
+            return strval($row['value'] ?? $default);
+        }
+    }
+
+    return $default;
+}
+
 function stobeSettingsWebRoot(): string
 {
     $scriptPath = strval($_SERVER['SCRIPT_NAME'] ?? '');
@@ -190,6 +212,8 @@ function stobeHideFromGlobalSettingsUi(string $id): bool
     if ($idUpper === '') {
         return true;
     }
+
+    if (str_starts_with($idUpper, 'DYNAMIC_PROFILE_') || $idUpper === 'CONTEXT_HISTORY_DYNAMIC_PROFILE') return true;
 
     // Internal/system keys not meant for this page.
     if ($idUpper === 'ACTIVE_CAMPAIGN') {
@@ -227,6 +251,9 @@ function stobeSettingLooksBoolean(string $value): bool
 function stobeSettingType(string $id, string $value): string
 {
     $idUpper = strtoupper($id);
+    if ($idUpper === 'EVENT_TYPE_FILTER') {
+        return 'textarea';
+    }
     $presetRule = stobePresetCatalog('global')[$idUpper] ?? null;
     if ($presetRule !== null) {
         return $presetRule['type'] === 'enum' ? 'select' : $presetRule['type'];
@@ -234,7 +261,7 @@ function stobeSettingType(string $id, string $value): string
     if ($idUpper === 'TXTAI_URL') {
         return 'url';
     }
-    if ($idUpper === 'RECHAT_MODE') {
+    if ($idUpper === 'RECHAT_MODE' || $idUpper === 'PLAYER_TTS_FILTER_PRESET') {
         return 'select';
     }
     if ($idUpper === 'DYNAMIC_PROFILE_INTERVAL_HOURS') {
@@ -263,6 +290,19 @@ function stobeSettingType(string $id, string $value): string
 
 function stobeSettingSelectOptions(string $id): array
 {
+    if (strtoupper(trim($id)) === 'PLAYER_TTS_FILTER_PRESET') {
+        $options = [];
+        foreach (stobeUiVoiceFilterPresets() as $presetKey => $presetRow) {
+            $presetId = strval(is_array($presetRow) ? ($presetRow['id'] ?? $presetKey) : $presetKey);
+            $presetLabel = trim(strval(is_array($presetRow) ? ($presetRow['label'] ?? '') : ''));
+            if ($presetLabel === '') {
+                $presetLabel = $presetId === 'none' ? 'None (default)' : $presetId;
+            }
+            $options[$presetId] = $presetLabel;
+        }
+        return $options;
+    }
+
     return match (strtoupper(trim($id))) {
         'RECHAT_MODE' => [
             'tight' => 'Tight',
@@ -284,6 +324,9 @@ function stobeNormalizeSettingValue(string $id, string $rawValue, string $type):
         $lower = strtolower($value);
         return in_array($lower, ['1', 'true', 'yes', 'on'], true) ? 'true' : 'false';
     }
+    if (strtoupper(trim($id)) === 'PLAYER_TTS_FILTER_PRESET') {
+        return stobeUiNormalizeVoiceFilterPreset($value);
+    }
     if ($type === 'select') {
         $options = stobeSettingSelectOptions($id);
         $normalized = strtolower($value);
@@ -301,6 +344,9 @@ function stobeNormalizeSettingValue(string $id, string $rawValue, string $type):
 function stobeInferGroup(string $id): string
 {
     $idUpper = strtoupper($id);
+    if ($idUpper === 'EVENT_TYPE_FILTER') {
+        return 'Context';
+    }
 
     if (str_starts_with($idUpper, 'CORE_CONNECTOR_') || strpos($idUpper, 'API_KEY') !== false) {
         return 'LLM & API';
@@ -325,7 +371,7 @@ function stobeInferGroup(string $id): string
         || str_starts_with($idUpper, 'TALK_')
         || str_starts_with($idUpper, 'SHOUT_')
         || str_starts_with($idUpper, 'WHISPER_')
-        || in_array($idUpper, ['SPEAKER_RECHAT', 'ENFORCE_STRICT_RECHAT_RESPONSE', 'COMPACT_CHAT_HISTORY_ENABLED', 'SHORT_TERM_MEMORY_IN_COMPACT_CHAT', 'PROMPT_HEAD_MARKDOWN_ENABLED', 'PLAYER_DIALOGUE_AUDIO_ENABLED'], true)
+        || in_array($idUpper, ['SPEAKER_RECHAT', 'ENFORCE_STRICT_RECHAT_RESPONSE', 'COMPACT_CHAT_HISTORY_ENABLED', 'SHORT_TERM_MEMORY_IN_COMPACT_CHAT', 'PROMPT_HEAD_MARKDOWN_ENABLED', 'PLAYER_DIALOGUE_AUDIO_ENABLED', 'PLAYER_TTS_FILTER_PRESET'], true)
     ) {
         return 'Prompt & Rechat';
     }
@@ -357,6 +403,7 @@ function stobeGroupSortWeight(string $group): int
         'Memory' => 10,
         'Core' => 20,
         'Bored Event' => 30,
+        'Context' => 45,
         'World Knowledge' => 50,
         'LLM & API' => 70,
         'Other' => 80,
@@ -372,7 +419,7 @@ function stobeSettingHelpText(string $id, string $storedDescription): string
         'COMPACT_CHAT_HISTORY_ENABLED' => 'Use compact text instead of separate messages for conversation history. Does not affect the Narrator.',
         'SHORT_TERM_MEMORY_IN_COMPACT_CHAT' => 'When compact chat history is on, allow short-term memory summaries for NPCs that have it enabled. Plain (non-compact) history is unaffected.',
         'PROMPT_HEAD_MARKDOWN_ENABLED' => 'Use Markdown headings instead of XML tags for all prompt sections.',
-        'NEVER_CLEAR_RELATIONSHIP_DATA' => 'Keep current relationships when loading an older game save. Off by default. Can retain relationships from later events; does not carry them between saved playthrough snapshots.',
+        'NEVER_CLEAR_RELATIONSHIP_DATA' => 'Keep current relationships when loading an older game save. Off by default. Can retain relationships from later events; does not carry them between saved playthroughs.',
     ];
 
     $idUpper = strtoupper(trim($id));
@@ -410,6 +457,7 @@ function stobePrettySettingLabel(string $id): string
         'SHORT_TERM_MEMORY_IN_COMPACT_CHAT' => 'Short-Term Memory in Compact Chat',
         'PROMPT_HEAD_MARKDOWN_ENABLED' => 'Compact Prompt Info',
         'PLAYER_DIALOGUE_AUDIO_ENABLED' => 'Speak Player Dialogue',
+        'PLAYER_TTS_FILTER_PRESET' => 'Player Voice Filter',
         'PROMPT_HEAD' => 'Prompt Head',
         'EMOTEMOODS' => 'Emote Moods',
         'ROLEPLAY_INSTRUCTIONS' => 'Roleplay Instructions',
@@ -440,6 +488,7 @@ function stobeIconForSetting(string $id): string
         'SHORT_TERM_MEMORY_IN_COMPACT_CHAT' => '🧠',
         'PROMPT_HEAD_MARKDOWN_ENABLED' => '🧾',
         'PLAYER_DIALOGUE_AUDIO_ENABLED' => '🔊',
+        'PLAYER_TTS_FILTER_PRESET' => '🎚️',
         'MEMORY_ENABLED' => '🧠',
         'MEMORY_AUTO_CREATE_SUMMARY_INTERVAL' => '⏱️',
         'TXTAI_URL' => '🔗',
@@ -602,6 +651,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $statusMessage = $savedCount > 0 ? ('Saved ' . $savedCount . ' setting(s).') : 'No changes detected.';
 }
 
+// Player Voice Filter samples are attributed to the configured player character.
+$playerVoiceFilterSpeaker = trim(stobeFindSettingValue($settingsRows, 'PLAYER_NAME', ''));
+
 $grouped = [];
 foreach ($settingsRows as $row) {
     $id = strval($row['id'] ?? '');
@@ -642,6 +694,7 @@ foreach ($grouped as $groupName => $rows) {
             'PLAYER_FACTION_CUSTOM_NAME' => 4,
             'PLAYER_FACTION_PROMPT' => 5,
             'PLAYER_DIALOGUE_AUDIO_ENABLED' => 5,
+            'PLAYER_TTS_FILTER_PRESET' => 6,
             'DYNAMIC_PROFILE_INTERVAL_HOURS' => 6,
             'HTTP_TIMEOUT' => 99,
             'MEMORY_ENABLED' => 0,
@@ -687,6 +740,7 @@ $groupTabs = [
     'Bored Event' => 'ai-memory',
     'Other' => 'ai-memory',
     'World Knowledge' => 'context-knowledge',
+    'Context' => 'context-knowledge',
     'LLM & API' => 'global-connectors',
 ];
 
@@ -709,6 +763,7 @@ if (isset($grouped['LLM & API'])) {
     <link rel="icon" type="image/x-icon" href="/StobeServer/ui/images/favicon.ico">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="css/main.css">
+    <?php stobeUiVoiceFilterStylesheet($webRoot); ?>
     <?php if (!$isEmbed): ?>
         <link rel="stylesheet" href="css/navbar.css">
     <?php endif; ?>
@@ -1053,7 +1108,16 @@ if (isset($grouped['LLM & API'])) {
                 text-align: left;
             }
         }
-    </style>
+    .event-type-toggles { display: grid; width: 100%; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 12px; margin-bottom: 10px; }
+.event-type-toggles label { display: flex; min-height: 30px; align-items: center; gap: 7px; color: #ddd; cursor: pointer; overflow-wrap: anywhere; min-width: 0; }
+.event-type-toggles label:focus-within { outline: 2px solid #d4a44a; outline-offset: 2px; }
+.event-type-toggles input { flex-shrink: 0; accent-color: #d4a44a; }
+.event-type-editor { flex: 1; min-width: 0; width: 100%; }
+.event-type-editor > label { display: block; margin-bottom: 5px; }
+.provider-body .event-type-editor textarea { min-height: 60px; }
+.event-type-editor p { font-size: 12px; color: #bbb; margin: 6px 0; }
+
+</style>
 </head>
 <body>
 <?php if (!$isEmbed): ?>
@@ -1127,6 +1191,7 @@ if (isset($grouped['LLM & API'])) {
                                 $label = stobePrettySettingLabel($id);
                                 $checked = in_array(strtolower(trim($value)), ['true', '1', 'yes', 'on'], true);
                                 $isDynamicProfileInterval = strtoupper(trim($id)) === 'DYNAMIC_PROFILE_INTERVAL_HOURS';
+                                $isPlayerVoiceFilter = strtoupper(trim($id)) === 'PLAYER_TTS_FILTER_PRESET';
                             ?>
                             <div
                                 class="provider-card"
@@ -1155,6 +1220,21 @@ if (isset($grouped['LLM & API'])) {
                                 </div>
                                 <div class="provider-body">
                                     <?php if ($type === 'bool'): ?>
+                                    <?php elseif ($isPlayerVoiceFilter): ?>
+                                        <?php stobeUiRenderVoiceFilterField([
+                                            'select_id' => $inputId,
+                                            'select_name' => 'settings[' . $id . ']',
+                                            'selected' => $value,
+                                            'web_root' => $webRoot,
+                                            'aria_label' => $label,
+                                            'hint_tag' => 'div',
+                                            'hint_class' => '',
+                                            'variant' => 'gold',
+                                            'play_title' => $playerVoiceFilterSpeaker !== ''
+                                                ? 'Play a sample of ' . $playerVoiceFilterSpeaker . ' with this voice filter'
+                                                : 'Play a player voice sample with this filter',
+                                            'speaker' => $playerVoiceFilterSpeaker,
+                                        ]); ?>
                                     <?php elseif ($type === 'select'): ?>
                                         <?php $selectOptions = stobeSettingSelectOptions($id); ?>
                                         <select id="<?= h($inputId) ?>" name="settings[<?= h($id) ?>]">
@@ -1192,6 +1272,13 @@ if (isset($grouped['LLM & API'])) {
                                     <?php if ($warning !== ''): ?>
                                         <div class="setting-warning"><?= h($warning) ?></div>
                                     <?php endif; ?>
+                                    <?php if ($isPlayerVoiceFilter): ?>
+                                        <div class="provider-description">
+                                            <?= $playerVoiceFilterSpeaker !== ''
+                                                ? 'Presets are fixed and cannot be edited. Samples use ' . h($playerVoiceFilterSpeaker) . '.'
+                                                : 'Presets are fixed and cannot be edited. Samples use the current player character.' ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -1209,6 +1296,64 @@ if (isset($grouped['LLM & API'])) {
     </form>
 
     <script>
+// Enhance the existing CSV field so the existing settings form share one value.
+document.querySelectorAll('textarea[name="settings[EVENT_TYPE_FILTER]"]').forEach((storage, index) => {
+    const choices = ["chat", "inputtext", "ginputtext", "infoaction", "death", "limb_loss", "itemfound", "quest", "rpg_lvlup", "combatend", "combatendmighty", "goodnight", "goodmorning", "injection"];
+    const parse = (value) => [...new Set(String(value).split(',').map((type) => type.trim().toLowerCase()).filter(Boolean))];
+    const editor = document.createElement('div');
+    editor.className = 'event-type-editor';
+    const hint = document.createElement('p');
+    hint.id = 'event-type-help-' + index;
+    hint.textContent = 'Checked types are excluded from AI context. Uncheck to include them. Save All applies your changes.';
+    const toggles = document.createElement('div');
+    toggles.className = 'event-type-toggles';
+    toggles.setAttribute('role', 'group');
+    toggles.setAttribute('aria-label', 'Event types to exclude');
+    toggles.setAttribute('aria-describedby', hint.id);
+    const customLabel = document.createElement('label');
+    customLabel.htmlFor = 'event-type-custom-' + index;
+    customLabel.textContent = 'Custom event types to exclude';
+    const custom = document.createElement('textarea');
+    custom.id = customLabel.htmlFor;
+    custom.rows = 2;
+    custom.placeholder = 'my_custom_event, another_event';
+    custom.readOnly = storage.readOnly;
+    const customHint = document.createElement('p');
+    customHint.id = 'event-type-custom-help-' + index;
+    customHint.textContent = 'Separate names with commas. Types do not need to appear in the log first.';
+    custom.setAttribute('aria-describedby', customHint.id);
+    const checkboxes = choices.map((type) => {
+        const label = document.createElement('label');
+        const labels = {"chat": "Dialogue", "inputtext": "Player Dialogue", "ginputtext": "Group Dialogue", "infoaction": "Actions", "death": "Death", "limb_loss": "Limb Loss", "itemfound": "Item Pickups", "quest": "Quests", "rpg_lvlup": "Level Up", "combatend": "Combat Ended", "combatendmighty": "Major Combat Ended", "goodnight": "Going to Sleep", "goodmorning": "Waking Up", "injection": "Injected Context"};
+        label.title = type;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = type;
+        checkbox.disabled = storage.readOnly;
+        label.append(checkbox, document.createTextNode(labels[type] || type.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())));
+        toggles.append(label);
+        return checkbox;
+    });
+    const readStorage = () => {
+        const selected = parse(storage.value);
+        checkboxes.forEach((checkbox) => { checkbox.checked = selected.includes(checkbox.value); });
+        custom.value = selected.filter((type) => !choices.includes(type)).join(', ');
+    };
+    const writeStorage = () => {
+        storage.value = parse([...checkboxes.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value), custom.value].join(', ')).join(', ');
+    };
+    toggles.addEventListener('change', writeStorage);
+    custom.addEventListener('input', writeStorage);
+    // Move a manually entered built-in name to its checkbox after editing.
+    custom.addEventListener('change', () => { writeStorage(); readStorage(); });
+    storage.addEventListener('change', readStorage);
+    storage.form?.addEventListener('reset', () => setTimeout(readStorage, 0));
+    readStorage();
+    editor.append(hint, toggles, customLabel, custom, customHint);
+    storage.before(editor);
+    storage.hidden = true;
+});
+
     (() => {
         const storageKey = 'stobe-global-settings-tab';
         const tabs = Array.from(document.querySelectorAll('[data-settings-tab]'));

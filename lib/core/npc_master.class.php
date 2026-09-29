@@ -1,5 +1,7 @@
 <?php
 
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'tts_filter_presets.php';
+
 /**
  * Legacy-style NPC master adapter.
  * Exposes Herika-era method names while using Stobe core_npc data helpers.
@@ -12,6 +14,64 @@ class NpcMaster
     public function __construct()
     {
         $this->db = $GLOBALS['db'];
+    }
+
+    // Plugin state uses NPC IDs and a separate namespace from core profile data.
+    private function validatePluginDataTarget(int $npcId, string $pluginId): void
+    {
+        if ($npcId <= 0 || !preg_match('/^[a-z][a-z0-9_-]{0,63}$/D', $pluginId)) {
+            throw new InvalidArgumentException('A positive NPC ID and a lowercase plugin ID are required.');
+        }
+    }
+
+    public function getPluginData(int $npcId, string $pluginId): ?array
+    {
+        $this->validatePluginDataTarget($npcId, $pluginId);
+        $row = $this->db->fetchOne(
+            'SELECT plugin_extended_data -> $2::text AS plugin_data
+             FROM core_npc_master WHERE id = $1',
+            [$npcId, $pluginId]
+        );
+        if (!isset($row['plugin_data'])) {
+            return null;
+        }
+        $data = json_decode($row['plugin_data'], false, 512, JSON_THROW_ON_ERROR);
+        if (!$data instanceof stdClass) {
+            throw new UnexpectedValueException('Stored plugin data must be a JSON object.');
+        }
+        // Preserve nested JSON objects and arrays when callers read and write a namespace.
+        return get_object_vars($data);
+    }
+
+    // Replace only this plugin's object in one UPDATE; concurrent plugins retain their keys.
+    public function setPluginData(int $npcId, string $pluginId, array $data): bool
+    {
+        $this->validatePluginDataTarget($npcId, $pluginId);
+        foreach (array_keys($data) as $key) {
+            if (!is_string($key)) {
+                throw new InvalidArgumentException('Plugin data must have string object keys.');
+            }
+        }
+        $json = json_encode((object) $data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $row = $this->db->fetchOne(
+            'UPDATE core_npc_master
+             SET plugin_extended_data = jsonb_set(plugin_extended_data, ARRAY[$2::text], $3::jsonb, true)
+             WHERE id = $1 RETURNING id',
+            [$npcId, $pluginId, $json]
+        );
+        return isset($row['id']);
+    }
+
+    public function deletePluginData(int $npcId, string $pluginId): bool
+    {
+        $this->validatePluginDataTarget($npcId, $pluginId);
+        $row = $this->db->fetchOne(
+            'UPDATE core_npc_master
+             SET plugin_extended_data = plugin_extended_data - $2::text
+             WHERE id = $1 RETURNING id',
+            [$npcId, $pluginId]
+        );
+        return isset($row['id']);
     }
 
     public function getLastError(): string
@@ -152,6 +212,14 @@ class NpcMaster
 
         if (array_key_exists('metadata', $input)) {
             $mapped['metadata'] = self::parseJsonValue($input['metadata']);
+            $storedPreset = stobeTtsFilterPresetFromMetadata($mapped['metadata']);
+            $mapped['metadata'] = stobeMergeTtsFilterPresetIntoMetadata($mapped['metadata'], $storedPreset);
+        }
+        if (array_key_exists('tts_filter_preset', $input)) {
+            $mapped['metadata'] = stobeMergeTtsFilterPresetIntoMetadata(
+                $mapped['metadata'] ?? [],
+                $input['tts_filter_preset']
+            );
         }
         if (array_key_exists('extended_data', $input)) {
             $mapped['extended_data'] = self::parseJsonValue($input['extended_data']);
@@ -244,6 +312,7 @@ class NpcMaster
                     n.voiceid,
                     n.metadata,
                     n.extended_data,
+                    n.plugin_extended_data,
                     n.gender,
                     n.race,
                     COALESCE(NULLIF(n.metadata->>'storage_id', ''), NULLIF(n.metadata->>'refid', ''), '') AS refid,

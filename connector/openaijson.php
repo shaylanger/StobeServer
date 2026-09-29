@@ -1,4 +1,6 @@
 <?php
+require_once dirname(__DIR__) . '/lib/stobe_interaction.php';
+
 
 /**
  * OpenAI-compatible LLM connector.
@@ -669,6 +671,7 @@ function stobeRecordAuditRequest(array $entry): void {
 }
 
 function callLLM(array $messages, array $config, array $meta = []): string|false {
+    stobeInteractionRequire();
     $apiKey = $config['api_key'] ?? '';
     $baseUrl = rtrim($config['base_url'] ?? '', '/');
     $model = $config['model'] ?? '';
@@ -784,6 +787,7 @@ function callLLM(array $messages, array $config, array $meta = []): string|false
     ]);
 
     $response = curl_exec($ch);
+    stobeInteractionRequire();
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
     curl_close($ch);
@@ -822,6 +826,7 @@ function callLLM(array $messages, array $config, array $meta = []): string|false
                 CURLOPT_TIMEOUT => $timeoutSeconds,
             ]);
             $response = curl_exec($retryCh);
+            stobeInteractionRequire();
             $httpCode = curl_getinfo($retryCh, CURLINFO_HTTP_CODE);
             $curlError = curl_error($retryCh);
             curl_close($retryCh);
@@ -1018,6 +1023,7 @@ function callLLMStream(
     callable $onTextDelta,
     array $meta = []
 ): string|false {
+    stobeInteractionRequire();
     $apiKey = $config['api_key'] ?? '';
     $baseUrl = rtrim($config['base_url'] ?? '', '/');
     $model = $config['model'] ?? '';
@@ -1156,6 +1162,7 @@ function callLLMStream(
         &$nativeFinishReason,
         $onTextDelta
     ): int {
+        if (!stobeInteractionAllowed()) return 0;
         $rawStream .= $data;
         $streamBuffer .= $data;
 
@@ -1254,6 +1261,7 @@ function callLLMStream(
         ]);
 
         $execResultLocal = curl_exec($ch);
+        stobeInteractionRequire();
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         curl_close($ch);

@@ -1,12 +1,31 @@
 <?php
 /**
- * StobeServer Playthrough Manager.
- * Schema-clone snapshot manager with rollback autosnapshot visibility.
+ * StobeServer Playthrough Saves.
+ * Schema-clone playthrough manager with rollback automatic playthrough save visibility.
  */
+
+// Shared "Playthrough Saves" fragment mode. The Dwemer Dashboard includes this
+// page in-process and renders its controls inside the shared shell, so only the
+// document chrome and asset URLs adapt while server-owned operations stay here.
+$ptmFragment = defined('DWEMER_STORAGE_FRAGMENT') && DWEMER_STORAGE_FRAGMENT === true;
+if (!$ptmFragment) {
+    // Shared compatibility policy lives in one place: redirect a bookmarked view,
+    // refuse stale writes, and stay standalone when the Dashboard is absent.
+    $ptmRouteHelper = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'lib'
+        . DIRECTORY_SEPARATOR . 'storage_manager_route.php';
+    if (is_file($ptmRouteHelper)) {
+        require_once $ptmRouteHelper;
+        dwemerStorageRedirect('stobe', 'manage');
+    }
+}
+
+if (session_status() === PHP_SESSION_NONE) session_start();
+if (empty($_SESSION['ptm_csrf'])) $_SESSION['ptm_csrf'] = bin2hex(random_bytes(32));
+$csrfToken = (string)$_SESSION['ptm_csrf'];
 
 $path = dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR;
 require_once($path . 'lib/bootstrap.php');
-require_once($path . 'debug/db_updates.php');
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') require_once($path . 'debug/db_updates.php');
 require_once($path . 'lib/playthrough_storage.php');
 
 function h(mixed $value): string
@@ -38,7 +57,7 @@ function boolish(mixed $value): bool
     return in_array($normalized, ['1', 'true', 't', 'yes', 'on'], true);
 }
 
-function decodeSnapshotMemberNames(mixed $value): array
+function decodePlaythroughMemberNames(mixed $value): array
 {
     if (is_array($value)) {
         $rawItems = $value;
@@ -77,7 +96,7 @@ function decodeSnapshotMemberNames(mixed $value): array
     return array_values($members);
 }
 
-$isEmbedded = (isset($_GET['embed']) && strval($_GET['embed']) === '1');
+$isEmbedded = $ptmFragment || (isset($_GET['embed']) && strval($_GET['embed']) === '1');
 
 $status = '';
 $statusClass = '';
@@ -86,29 +105,31 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $action = trim(strval($_POST['action'] ?? ''));
     $profileId = intval($_POST['profile_id'] ?? 0);
 
-    if ($action === 'create_snapshot') {
+    if ($action === 'create_playthrough') {
         $name = trim(strval($_POST['name'] ?? ''));
         $notes = trim(strval($_POST['notes'] ?? ''));
-        $result = stobePlaythroughCreateSchemaSnapshot($name, $notes, [
+        $result = stobePlaythroughCreate($name, $notes, [
             'mark_active' => false,
             'storage_type' => 'schema',
             'game' => 'Kenshi',
         ]);
         if (boolish($result['success'] ?? false)) {
             $statusClass = 'success';
-            $status = 'Snapshot created: ' . strval($result['name'] ?? '') . ' (ID ' . strval(intval($result['id'] ?? 0)) . ')';
+            $status = 'Playthrough Save created: ' . strval($result['name'] ?? '') . ' (ID ' . strval(intval($result['id'] ?? 0)) . ')';
         } else {
             $statusClass = 'error';
-            $status = 'Snapshot creation failed: ' . strval($result['error'] ?? 'unknown');
+            $status = 'Could not create Playthrough Save: ' . strval($result['error'] ?? 'unknown');
         }
     } elseif ($action === 'switch_profile' && $profileId > 0) {
         $result = stobePlaythroughSwitchToProfile($profileId, true);
         if (boolish($result['success'] ?? false)) {
             $statusClass = 'success';
             $autosaveId = intval($result['autosave_id'] ?? 0);
-            $status = 'Profile copied to public schema successfully.';
+            $status = !empty($result['runtime_ready'])
+                ? 'Playthrough Save restored. Background processing refreshed. Load the matching Kenshi save.'
+                : 'Playthrough Save restored. Warning: background processing could not be confirmed. Restart the Stobe server before loading the matching Kenshi save.';
             if ($autosaveId > 0) {
-                $status .= ' Autosave snapshot ID: ' . $autosaveId . '.';
+                $status .= ' Before-Switch Save ID: ' . $autosaveId . '.';
             }
         } else {
             $statusClass = 'error';
@@ -118,7 +139,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $result = stobePlaythroughDeleteProfile($profileId);
         if (boolish($result['success'] ?? false)) {
             $statusClass = 'success';
-            $status = 'Snapshot deleted.';
+            $status = 'Playthrough Save deleted.';
         } else {
             $statusClass = 'error';
             $status = 'Delete failed: ' . strval($result['error'] ?? 'unknown');
@@ -126,8 +147,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
-$profiles = stobePlaythroughListProfiles(1000);
-$activeName = stobePlaythroughCurrentActiveProfileName();
+// API callers stop before rendering or loading the legacy playthrough list.
+if (defined('DWEMER_STORAGE_ACTIONS_ONLY')) {
+    return ['ok' => $statusClass === 'success', 'message' => $status];
+}
+$profiles = stobePlaythroughListProfiles(1000, false);
+$activeName = stobePlaythroughCurrentActiveProfileName(false);
 
 $lastSeenGamets = intval(getConfOpt('PLAYTHROUGH_LAST_SEEN_GAMETS', '0'));
 $lastRollbackGamets = intval(getConfOpt('PLAYTHROUGH_LAST_ROLLBACK_GAMETS', '0'));
@@ -143,17 +168,34 @@ if ($webRoot === '/') {
     $webRoot = '';
 }
 $webRoot = rtrim($webRoot, '/');
+if ($ptmFragment) {
+    // The shared page lives under a different path, so assets need this
+    // server's own web root instead of a document-relative URL.
+    $webRoot = DWEMER_STORAGE_FRAGMENT_WEBROOT;
+    foreach ([
+        'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
+        $webRoot . '/ui/css/main.css',
+    ] as $ptmStyleHref) {
+        if (function_exists('dwemer_storage_fragment_style')) {
+            dwemer_storage_fragment_style($ptmStyleHref);
+        } else {
+            echo '<link rel="stylesheet" href="' . h($ptmStyleHref) . '">';
+        }
+    }
+}
 ?>
+<?php if (!$ptmFragment): ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Playthrough Manager</title>
-    <link rel="icon" type="image/x-icon" href="/StobeServer/ui/images/favicon.ico">
+    <title>Playthrough Saves</title>
+    <link rel="icon" type="image/x-icon" href="<?= h($webRoot) ?>/ui/images/favicon.ico">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="css/main.css">
-    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="<?= h($webRoot) ?>/ui/css/main.css">
+    <link rel="stylesheet" href="<?= h($webRoot) ?>/ui/css/navbar.css">
+<?php endif; ?>
     <style>
         main {
             padding-top: <?= $isEmbedded ? '20px' : '96px' ?>;
@@ -356,8 +398,10 @@ $webRoot = rtrim($webRoot, '/');
             text-align: center;
         }
     </style>
+<?php if (!$ptmFragment): ?>
 </head>
 <body>
+<?php endif; ?>
 <?php if (!$isEmbedded): ?>
     <?php include(__DIR__ . DIRECTORY_SEPARATOR . 'tmpl' . DIRECTORY_SEPARATOR . 'navbar.php'); ?>
 <?php endif; ?>
@@ -365,8 +409,8 @@ $webRoot = rtrim($webRoot, '/');
 <main class="container-fluid">
     <div class="indent5">
         <div class="panel" style="margin-bottom: 12px;">
-            <h1>Playthrough Manager</h1>
-            <p class="subtitle">Schema-clone snapshots for StobeServer timelines and rollback safety. STOBE rollback autosnapshot threshold is set to 1 Kenshi day.</p>
+            <?php if ($ptmFragment): ?><h2>Playthrough Saves</h2><?php else: ?><h1>Playthrough Saves</h1><?php endif; ?>
+            <p class="subtitle">Save and restore STOBE data. Use each Playthrough Save with its matching Kenshi save.</p>
             <?php if ($status !== ''): ?>
                 <div class="status <?= h($statusClass) ?>"><?= h($status) ?></div>
             <?php endif; ?>
@@ -374,18 +418,18 @@ $webRoot = rtrim($webRoot, '/');
 
         <div class="page-grid">
             <section class="panel">
-                <h2>Create Snapshot</h2>
+                <h2>New Playthrough Save</h2>
                 <form method="post" autocomplete="off">
-                    <input type="hidden" name="action" value="create_snapshot">
+                    <input type="hidden" name="action" value="create_playthrough">
                     <div class="mb-3">
-                        <label class="form-label" for="name">Snapshot Name</label>
-                        <input class="form-control" id="name" name="name" maxlength="220" placeholder="Manual Snapshot">
+                        <label class="form-label" for="name">Save name</label>
+                        <input class="form-control" id="name" name="name" maxlength="220" placeholder="e.g., Before a big battle">
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="notes">Notes</label>
                         <textarea class="form-control" id="notes" name="notes" rows="4" placeholder="Optional notes"></textarea>
                     </div>
-                    <button class="btn btn-stobe w-100" type="submit">Save Snapshot</button>
+                    <button class="btn btn-stobe w-100" type="submit">New Playthrough Save</button>
                 </form>
 
                 <hr style="border-color: rgba(230,183,108,.25)">
@@ -425,14 +469,14 @@ $webRoot = rtrim($webRoot, '/');
                         <div class="meta-value">Kenshi</div>
                     </div>
                 </div>
-                <div class="small-muted">Switching copies the selected snapshot into <code>public</code>. Current public state is autosaved first.</div>
+                <div class="small-muted">Before restoring, STOBE saves your current progress as a new Before-Switch Save.</div>
             </section>
 
             <section class="panel">
-                <h2>Stored Snapshots</h2>
+                <h2>Playthrough Saves</h2><button type="button" class="ptx-import">Import save</button>
                 <div class="table-wrap">
                     <?php if (count($profiles) === 0): ?>
-                        <div class="empty">No snapshots found yet.</div>
+                        <div class="empty">No Playthrough Saves yet.</div>
                     <?php else: ?>
                         <table>
                             <thead>
@@ -454,17 +498,17 @@ $webRoot = rtrim($webRoot, '/');
                                     <?php
                                         $id = intval($row['id'] ?? 0);
                                         $isActive = boolish($row['is_active'] ?? false);
-                                        $snapshotName = strval($row['name'] ?? '');
-                                        $snapshotNameDisplay = preg_replace('/^Dragon Break\\s*\\(/i', 'STOBE Rollback (', $snapshotName, 1);
-                                        if (!is_string($snapshotNameDisplay) || $snapshotNameDisplay === '') {
-                                            $snapshotNameDisplay = $snapshotName;
+                                        $playthroughName = strval($row['name'] ?? '');
+                                        $playthroughNameDisplay = preg_replace('/^Dragon Break\\s*\\(/i', 'Automatic Playthrough Save (', $playthroughName, 1);
+                                        if (!is_string($playthroughNameDisplay) || $playthroughNameDisplay === '') {
+                                            $playthroughNameDisplay = $playthroughName;
                                         }
                                         $createdAt = trim(strval($row['created_at'] ?? ''));
                                         $sizeBytes = intval($row['size_bytes'] ?? 0);
                                         $lastGamets = intval($row['last_gamets'] ?? 0);
                                         $eventCount = intval($row['eventlog_count'] ?? 0);
                                         $oghmaCount = intval($row['oghma_count'] ?? 0);
-                                        $playerFactionMembers = decodeSnapshotMemberNames($row['player_faction_members'] ?? '[]');
+                                        $playerFactionMembers = decodePlaythroughMemberNames($row['player_faction_members'] ?? '[]');
                                         $storageType = trim(strval($row['storage_type'] ?? 'schema'));
                                         $schemaName = trim(strval($row['schema_name'] ?? ''));
                                         $schemaNameDisplay = $schemaName;
@@ -480,7 +524,7 @@ $webRoot = rtrim($webRoot, '/');
                                     <tr>
                                         <td><?= $id ?></td>
                                         <td>
-                                            <strong><?= h($snapshotNameDisplay) ?></strong>
+                                            <strong><?= h($playthroughNameDisplay) ?></strong>
                                             <?php if ($isActive): ?>
                                                 <span class="badge-active">ACTIVE</span>
                                             <?php endif; ?>
@@ -513,13 +557,13 @@ $webRoot = rtrim($webRoot, '/');
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <div class="action-stack">
-                                                <form method="post" onsubmit="return confirm('Set this snapshot as active playthrough? Current public state will be auto-saved first.');">
+                                            <div class="action-stack"><button type="button" class="ptx-download" data-profile-id="<?= $id ?>">Download</button>
+                                                <form method="post" onsubmit="return confirm('Restore this Playthrough Save? Stop Kenshi first. STOBE makes a new Before-Switch Save of your current progress, then restores this save. Load the matching Kenshi save afterwards.');">
                                                     <input type="hidden" name="action" value="switch_profile">
                                                     <input type="hidden" name="profile_id" value="<?= $id ?>">
-                                                    <button class="btn btn-sm btn-stobe" type="submit">Set Active Playthrough</button>
+                                                    <button class="btn btn-sm btn-stobe" type="submit">Restore</button>
                                                 </form>
-                                                <form method="post" onsubmit="return confirm('Delete this snapshot and its schema? This cannot be undone.');">
+                                                <form method="post" onsubmit="return confirm('Permanently delete this Playthrough Save? This cannot be undone.');">
                                                     <input type="hidden" name="action" value="delete_profile">
                                                     <input type="hidden" name="profile_id" value="<?= $id ?>">
                                                     <button class="btn btn-sm btn-danger-soft" type="submit">Delete</button>
@@ -535,9 +579,10 @@ $webRoot = rtrim($webRoot, '/');
             </section>
         </div>
     </div>
-</main>
+<?php include __DIR__ . '/tmpl/playthrough_transfer_controls.php'; include __DIR__ . '/tmpl/playthrough_save_controls.php'; ?></main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<?php if (!$ptmFragment): ?>
 </body>
 </html>
-
+<?php endif; ?>

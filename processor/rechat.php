@@ -32,6 +32,8 @@ if (!$storeIncomingEvent) {
     storeEvent($eventType, $timestamp, $gamets, $eventData);
 }
 
+if (!stobeInteractionAllowed()) { echo 'ok'; return; }
+
 $campaign = 'Default';
 $requestMode = strtolower(trim(strval($_GET['mode'] ?? '')));
 if ($requestMode === 'whisper' || $requestMode === 'narrator') {

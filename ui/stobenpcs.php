@@ -21,6 +21,7 @@ $CONF_SAMPLE_VARS=extract_assignments("$enginePath/lib/bootstrap.php");
 //function renderSelect($obj, $fieldName, $labelText, $selectedValue = "") 
 //function include from below file
 include(__DIR__."/tmpl/ui_utils.php");
+include_once(__DIR__."/tmpl/voice_filter_field.php");
 
 // Determine web root and include site chrome like world_knowledge_upload
 $scriptPath = $_SERVER['SCRIPT_NAME'];
@@ -140,6 +141,70 @@ function stobeUiSyncShortTermMemoryPostMetadata(): void
     }
     $meta = stobeUiApplyShortTermMemoryOverrides($meta, $_POST);
     $_POST['metadata'] = json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+}
+
+/**
+ * Read the stored voice-filter preset out of an NPC metadata array.
+ * Tolerates legacy casing variants of the key.
+ */
+function stobeUiReadTtsFilterPresetFromMetadata(mixed $metadataValue): string
+{
+    $meta = is_array($metadataValue) ? $metadataValue : json_decode(strval($metadataValue), true);
+    if (!is_array($meta)) {
+        return 'none';
+    }
+    foreach ($meta as $metaKey => $metaValue) {
+        if (strcasecmp(strval($metaKey), 'tts_filter_preset') === 0) {
+            return stobeUiNormalizeVoiceFilterPreset($metaValue);
+        }
+    }
+    return 'none';
+}
+
+/**
+ * Merge the posted Voice Filter dropdown into an NPC metadata array.
+ * The dropdown is the only editor for this key, so "none" removes the override
+ * and every other key in the metadata payload is left untouched.
+ */
+function stobeUiApplyTtsFilterPresetOverride(array $meta, array $post): array
+{
+    if (!array_key_exists('tts_filter_preset', $post)) {
+        return $meta;
+    }
+    foreach (array_keys($meta) as $metaKey) {
+        if (strcasecmp(strval($metaKey), 'tts_filter_preset') === 0) {
+            unset($meta[$metaKey]);
+        }
+    }
+    $presetId = stobeUiNormalizeVoiceFilterPreset($post['tts_filter_preset']);
+    if ($presetId !== 'none') {
+        $meta['tts_filter_preset'] = $presetId;
+    }
+    return $meta;
+}
+
+/**
+ * Apply the Voice Filter dropdown to $_POST['metadata'] for the plain
+ * (non-AJAX) create/update submits, which post the metadata textarea as-is.
+ */
+function stobeUiSyncTtsFilterPresetPostMetadata(): void
+{
+    if (!array_key_exists('tts_filter_preset', $_POST)) {
+        return;
+    }
+    $meta = [];
+    $postedMeta = isset($_POST['metadata']) ? trim((string)$_POST['metadata']) : '';
+    if ($postedMeta !== '') {
+        $decoded = json_decode($postedMeta, true);
+        if (is_array($decoded)) {
+            $meta = $decoded;
+        } else {
+            // Unparseable metadata: leave it untouched rather than dropping data.
+            return;
+        }
+    }
+    $meta = stobeUiApplyTtsFilterPresetOverride($meta, $_POST);
+    $_POST['metadata'] = json_encode((object)$meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 }
 
 function stobeUiResolveIndividualMemoryEnabled(array $extended): bool
@@ -1073,6 +1138,7 @@ if (!function_exists('stobeUiSortNpcRows')) {
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["create"])) {
     $relationshipSave = stobeUiPrepareRelationshipSavePayload();
     stobeUiSyncShortTermMemoryPostMetadata();
+    stobeUiSyncTtsFilterPresetPostMetadata();
     if (stobeUiAutoLockProfileEnabled()) {
         $_POST['lock_profile'] = 1;
     }
@@ -1090,6 +1156,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["create"])) {
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["update"])) {
     $relationshipSave = stobeUiPrepareRelationshipSavePayload();
     stobeUiSyncShortTermMemoryPostMetadata();
+    stobeUiSyncTtsFilterPresetPostMetadata();
     if (stobeUiAutoLockProfileEnabled()) {
         $_POST['lock_profile'] = 1;
     }
@@ -1171,6 +1238,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["inline_update_npc"]))
                 }
             }
             $meta = stobeUiApplyShortTermMemoryOverrides($meta, $_POST);
+            $meta = stobeUiApplyTtsFilterPresetOverride($meta, $_POST);
             $_POST['metadata'] = json_encode($meta);
         } catch (Throwable $e) {
             if (!isset($_POST['metadata']) || trim((string)$_POST['metadata']) === '') {
@@ -2578,7 +2646,7 @@ if (typeof window.consolidation !== 'function') { window.consolidation = functio
 <script>
 (function(){
     const fieldSections = {
-        general: new Set(['npc_name','profile_id','lock_profile','npc_favorite','gender','race','base','refid','oghma_knowledge_tags','worldknowledge_tags','world_knowledge_tags','voiceid','faction','dynamic_profile','middle_term_enabled','short_term_memory_enabled','short_term_memory_max','individual_memory_enabled','auto_diary_enabled','auto_diary_wait_enabled','salutation_after_a_while','prompt_head']),
+        general: new Set(['npc_name','profile_id','lock_profile','npc_favorite','gender','race','base','refid','oghma_knowledge_tags','worldknowledge_tags','world_knowledge_tags','voiceid','tts_filter_preset','faction','dynamic_profile','middle_term_enabled','short_term_memory_enabled','short_term_memory_max','individual_memory_enabled','auto_diary_enabled','auto_diary_wait_enabled','salutation_after_a_while','prompt_head']),
         bios: new Set(['core','npc_static_bio','appearance','personality','occupation','skills','speechstyle','goals']),
         relationships: new Set(['relationships','relationships_jsonb','middle_term_latest']),
         info: new Set(['emote_moods','metadata','extended_data'])
@@ -2752,6 +2820,22 @@ if (typeof window.consolidation !== 'function') { window.consolidation = functio
             <label for="voiceid">Voice ID</label>
             <input type="text" id="voiceid" name="voiceid" placeholder="malenord" value="<?= htmlspecialchars($editItem["voiceid"] ?? "") ?>">
             <small class="hint">Voice ID for TTS.</small>
+        </div>
+
+        <div class="form-item">
+            <label for="tts_filter_preset">Voice Filter</label>
+            <?php stobeUiRenderVoiceFilterField([
+                'select_id' => 'tts_filter_preset',
+                'select_name' => 'tts_filter_preset',
+                'selected' => stobeUiReadTtsFilterPresetFromMetadata(is_array($editItem) ? ($editItem['metadata'] ?? '') : ''),
+                'web_root' => $webRoot,
+                'hint' => 'Audio effect applied to everything this NPC says. Presets are fixed and cannot be edited.',
+                'hint_tag' => 'small',
+                'hint_class' => 'hint',
+                'play_title' => 'Play a sample of this NPC voice with this filter',
+                'profile_select_id' => 'profile_id',
+                'voice_input_id' => 'voiceid',
+            ]); ?>
         </div>
 
         <div class="form-item">

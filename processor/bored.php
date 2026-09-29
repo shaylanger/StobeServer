@@ -166,6 +166,18 @@ if ($listener === '') {
     return;
 }
 
+if ($forceDirectorMode) {
+    require_once dirname(__DIR__) . '/lib/director_scene.php';
+    try {
+        stobeGenerateDirectorScene($candidateNames, $speakerNpc, $listener,
+            (string)($_GET['direction'] ?? ''), (int)$gamets);
+    } catch (Throwable $error) {
+        stobeLogWarn('Director scene failed', ['error' => $error->getMessage()]);
+        echo 'error';
+    }
+    return;
+}
+
 $cuePool = [
     'comment on the current location',
     'remark on the weather or atmosphere',

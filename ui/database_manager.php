@@ -4,6 +4,21 @@
  * Stobe-native replacement of Herika import_db style manager.
  */
 
+// Shared "Playthrough Management" fragment mode. The Dwemer Dashboard includes this
+// page in-process and renders its controls inside the shared shell, so only the
+// document chrome and asset URLs change. Every action handler below is untouched.
+$dbmFragment = defined('DWEMER_STORAGE_FRAGMENT') && DWEMER_STORAGE_FRAGMENT === true;
+if (!$dbmFragment) {
+    // Shared compatibility policy lives in one place: redirect a bookmarked view,
+    // refuse stale writes, and stay standalone when the Dashboard is absent.
+    $dbmRouteHelper = dirname(__DIR__) . DIRECTORY_SEPARATOR . "lib"
+        . DIRECTORY_SEPARATOR . "storage_manager_route.php";
+    if (is_file($dbmRouteHelper)) {
+        require_once $dbmRouteHelper;
+        dwemerStorageRedirect("stobe", "databases");
+    }
+}
+
 $path = dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR;
 require_once($path . "lib/bootstrap.php");
 
@@ -102,6 +117,11 @@ function listBackups(string $backupDir): array
 
 function databaseManagerUrl(bool $embedded): string
 {
+    // In shared mode every action link must stay on the central route so the
+    // mod and task selection survive downloads, deletes and redirects.
+    if (defined("DWEMER_STORAGE_FRAGMENT") && DWEMER_STORAGE_FRAGMENT === true) {
+        return (string)DWEMER_STORAGE_FRAGMENT_ROUTE;
+    }
     $url = "database_manager.php";
     if ($embedded) {
         $url .= "?embed=1";
@@ -146,7 +166,17 @@ function resolveBackupFilePath(string $backupDir, string $manualBackupDir, strin
 }
 
 $db = $GLOBALS["db"];
-$isEmbedded = (isset($_GET["embed"]) && strval($_GET["embed"]) === "1");
+$isEmbedded = $dbmFragment || (isset($_GET["embed"]) && strval($_GET["embed"]) === "1");
+$dbmWebRoot = "/StobeServer";
+if ($dbmFragment) {
+    $dbmWebRoot = (string)DWEMER_STORAGE_FRAGMENT_WEBROOT;
+} else {
+    $dbmScriptPath = str_replace(DIRECTORY_SEPARATOR, "/", (string)($_SERVER["SCRIPT_NAME"] ?? ""));
+    $dbmUiPos = strpos($dbmScriptPath, "/ui/");
+    if ($dbmUiPos !== false) {
+        $dbmWebRoot = rtrim(substr($dbmScriptPath, 0, $dbmUiPos), "/");
+    }
+}
 $message = "";
 $messageType = "info";
 
@@ -154,10 +184,10 @@ $messageType = "info";
 $rootPath = dirname(__DIR__);
 $backupDir = $rootPath . DIRECTORY_SEPARATOR . "data" . DIRECTORY_SEPARATOR . "db_backups";
 $manualBackupDir = $rootPath . DIRECTORY_SEPARATOR . "ui" . DIRECTORY_SEPARATOR . "data" . DIRECTORY_SEPARATOR . "manualbackup";
-if (!is_dir($backupDir)) {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !is_dir($backupDir)) {
     @mkdir($backupDir, 0775, true);
 }
-if (!is_dir($manualBackupDir)) {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !is_dir($manualBackupDir)) {
     @mkdir($manualBackupDir, 0775, true);
 }
 
@@ -200,11 +230,12 @@ if (isset($_GET["action"]) && $_GET["action"] === "delete_backup" && isset($_GET
 }
 
 // POST actions.
-$dbHost = "localhost";
-$dbPort = "5432";
-$dbName = "stobe";
-$dbUser = "dwemer";
-$dbPass = "dwemer";
+$backupConfig = stobePlaythroughDbConfig();
+$dbHost = $backupConfig['host'];
+$dbPort = $backupConfig['port'];
+$dbName = $backupConfig['dbname'];
+$dbUser = $backupConfig['user'];
+$dbPass = $backupConfig['password'];
 
 if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
     $action = trim(strval($_POST["action"] ?? ""));
@@ -228,86 +259,34 @@ if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
             $message = "Backup failed. " . implode(" | ", array_slice($out, 0, 3));
             $messageType = "error";
         }
-    } elseif ($action === "restore_uploaded_backup") {
-        $upload = $_FILES["restore_file"] ?? null;
-        if (is_array($upload) && intval($upload["error"] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-            $name = basename(strval($upload["name"] ?? "restore.sql"));
-            if (!preg_match('/\.sql(\.gz)?$/i', $name)) {
-                $message = "Only .sql or .sql.gz files are allowed.";
-                $messageType = "error";
-            } else {
-                $tmp = strval($upload["tmp_name"] ?? "");
-                $storeName = "upload_restore_" . gmdate("Ymd_His") . "_" . preg_replace('/[^a-zA-Z0-9._-]/', '_', $name);
-                $storePath = $backupDir . DIRECTORY_SEPARATOR . $storeName;
-                if (@move_uploaded_file($tmp, $storePath)) {
-                    if (preg_match('/\.gz$/i', $storePath)) {
-                        $cmd = "gunzip -c " . escapeshellarg($storePath)
-                            . " | PGPASSWORD=" . escapeshellarg($dbPass)
-                            . " psql -h " . escapeshellarg($dbHost)
-                            . " -p " . escapeshellarg($dbPort)
-                            . " -U " . escapeshellarg($dbUser)
-                            . " -d " . escapeshellarg($dbName);
-                    } else {
-                        $cmd = "PGPASSWORD=" . escapeshellarg($dbPass)
-                            . " psql -h " . escapeshellarg($dbHost)
-                            . " -p " . escapeshellarg($dbPort)
-                            . " -U " . escapeshellarg($dbUser)
-                            . " -d " . escapeshellarg($dbName)
-                            . " -f " . escapeshellarg($storePath);
-                    }
-                    $out = [];
-                    $code = 1;
-                    if (runShellCommand($cmd, $out, $code)) {
-                        $message = "Restore completed from: " . $name;
-                        $messageType = "ok";
-                    } else {
-                        $message = "Restore failed. " . implode(" | ", array_slice($out, 0, 3));
-                        $messageType = "error";
-                    }
-                } else {
-                    $message = "Failed to store uploaded file.";
-                    $messageType = "error";
+    } elseif (in_array($action, ['restore_uploaded_backup', 'restore_server_backup', 'restore_prepared_backup'], true)) {
+        try {
+            require_once $rootPath . '/lib/storage_backup_validation.php';
+            $restorePath = null;
+            if ($action === 'restore_prepared_backup') {
+                if (!defined('DWEMER_STORAGE_RESTORE_FILE')) throw new RuntimeException('A verified restore preview is required.');
+                $restorePath = DWEMER_STORAGE_RESTORE_FILE;
+            } elseif ($action === 'restore_uploaded_backup') {
+                $upload = $_FILES['restore_file'] ?? null;
+                if (!is_array($upload) || (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                    throw new RuntimeException('Choose a complete .sql or .sql.gz backup.');
                 }
-            }
-        } else {
-            $message = "No restore file uploaded.";
-            $messageType = "error";
-        }
-    } elseif ($action === "restore_server_backup") {
-        $fileInfo = resolveBackupFilePath(
-            $backupDir,
-            $manualBackupDir,
-            strval($_POST["restore_source"] ?? "db_backups"),
-            strval($_POST["restore_server_file"] ?? "")
-        );
-        if (!$fileInfo["ok"]) {
-            $message = "Selected server backup file was not found.";
-            $messageType = "error";
-        } else {
-            if (preg_match('/\.gz$/i', $fileInfo["full"])) {
-                $cmd = "gunzip -c " . escapeshellarg($fileInfo["full"])
-                    . " | PGPASSWORD=" . escapeshellarg($dbPass)
-                    . " psql -h " . escapeshellarg($dbHost)
-                    . " -p " . escapeshellarg($dbPort)
-                    . " -U " . escapeshellarg($dbUser)
-                    . " -d " . escapeshellarg($dbName);
+                $name = basename((string)$upload['name']);
+                if (!preg_match('/\\.sql(\\.gz)?$/i', $name)) throw new RuntimeException('Only .sql and .sql.gz backups are supported.');
+                $restorePath = $backupDir . '/upload_restore_' . gmdate('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $name);
+                if (!move_uploaded_file($upload['tmp_name'], $restorePath)) throw new RuntimeException('Could not store the uploaded backup.');
             } else {
-                $cmd = "PGPASSWORD=" . escapeshellarg($dbPass)
-                    . " psql -h " . escapeshellarg($dbHost)
-                    . " -p " . escapeshellarg($dbPort)
-                    . " -U " . escapeshellarg($dbUser)
-                    . " -d " . escapeshellarg($dbName)
-                    . " -f " . escapeshellarg($fileInfo["full"]);
+                $fileInfo = resolveBackupFilePath($backupDir, $manualBackupDir,
+                    (string)($_POST['restore_source'] ?? 'db_backups'), (string)($_POST['restore_server_file'] ?? ''));
+                if (!$fileInfo['ok']) throw new RuntimeException('Choose a valid server backup.');
+                $restorePath = $fileInfo['full'];
             }
-            $out = [];
-            $code = 1;
-            if (runShellCommand($cmd, $out, $code)) {
-                $message = "Restore completed from server file: " . $fileInfo["file"];
-                $messageType = "ok";
-            } else {
-                $message = "Server restore failed. " . implode(" | ", array_slice($out, 0, 3));
-                $messageType = "error";
-            }
+            $restore = stobeRestoreScopedBackup($restorePath, stobePlaythroughDbConfig());
+            $message = $restore['message'];
+            $messageType = $restore['ok'] ? 'ok' : 'error';
+        } catch (Throwable $e) {
+            $message = $e->getMessage();
+            $messageType = 'error';
         }
     } elseif ($action === "vacuum_analyze") {
         if (safeExec($db, "VACUUM ANALYZE")) {
@@ -346,7 +325,7 @@ if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
             $messageType = "error";
         }
     } elseif ($action === "reindex_database") {
-        if (safeExec($db, "REINDEX DATABASE " . $dbName)) {
+        if (safeExec($db, 'REINDEX DATABASE "' . str_replace('"', '""', $dbName) . '"')) {
             $message = "REINDEX DATABASE completed.";
             $messageType = "ok";
         } else {
@@ -385,6 +364,10 @@ if (($_SERVER["REQUEST_METHOD"] ?? "GET") === "POST") {
     }
 }
 
+// Keep API results separate from the standalone database manager layout.
+if (defined('DWEMER_STORAGE_ACTIONS_ONLY')) {
+    return ['ok' => $messageType === 'ok', 'message' => $message];
+}
 $dbSizeRow = safeFetchOne($db, "SELECT pg_database_size($1) AS size_bytes", [$dbName]);
 $dbSizeBytes = intval($dbSizeRow["size_bytes"] ?? 0);
 
@@ -440,16 +423,26 @@ usort($serverRestoreFiles, static function ($a, $b) {
 
 $baseActionUrl = databaseManagerUrl($isEmbedded);
 $baseActionSep = (strpos($baseActionUrl, "?") !== false) ? "&" : "?";
+if ($dbmFragment) {
+    $dbmStyleHref = $dbmWebRoot . "/ui/css/main.css";
+    if (function_exists("dwemer_storage_fragment_style")) {
+        dwemer_storage_fragment_style($dbmStyleHref);
+    } else {
+        echo '<link rel="stylesheet" href="' . h($dbmStyleHref) . '">';
+    }
+}
 ?>
+<?php if (!$dbmFragment): ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Manager</title>
-    <link rel="icon" type="image/x-icon" href="/StobeServer/ui/images/favicon.ico">
-    <link rel="stylesheet" href="css/main.css">
-    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="icon" type="image/x-icon" href="<?= h($dbmWebRoot) ?>/ui/images/favicon.ico">
+    <link rel="stylesheet" href="<?= h($dbmWebRoot) ?>/ui/css/main.css">
+    <link rel="stylesheet" href="<?= h($dbmWebRoot) ?>/ui/css/navbar.css">
+<?php endif; ?>
     <style>
         main {
             padding-top: <?= $isEmbedded ? "20px" : "120px" ?>;
@@ -460,7 +453,7 @@ $baseActionSep = (strpos($baseActionUrl, "?") !== false) ? "&" : "?";
 
         @font-face {
             font-family: "MagicCards";
-            src: url("css/font/MailartRubberstamp-Regular.otf") format("opentype");
+            src: url("<?php echo h($dbmFragment ? DWEMER_STORAGE_FRAGMENT_WEBROOT . '/ui/css/font/MailartRubberstamp-Regular.otf' : 'css/font/MailartRubberstamp-Regular.otf'); ?>") format("opentype");
             font-weight: normal;
             font-style: normal;
         }
@@ -640,15 +633,17 @@ $baseActionSep = (strpos($baseActionUrl, "?") !== false) ? "&" : "?";
             }
         }
     </style>
+<?php if (!$dbmFragment): ?>
 </head>
 <body>
+<?php endif; ?>
 <?php if (!$isEmbedded): ?>
 <?php include(__DIR__ . DIRECTORY_SEPARATOR . "tmpl" . DIRECTORY_SEPARATOR . "navbar.php"); ?>
 <?php endif; ?>
 
 <main class="container-fluid">
     <div class="panel">
-        <h1>Database Manager</h1>
+        <?php if ($dbmFragment): ?><h2>STOBE database tools</h2><?php else: ?><h1>Database Manager</h1><?php endif; ?>
         <p class="help">High-level controls for backup, restore, maintenance, and versioning of the <code>stobe</code> database.</p>
         <div class="link-row">
             <a class="btn-base btn-primary" href="/pgAdmin/" target="_blank" rel="noopener noreferrer">Open pgAdmin</a>
@@ -819,6 +814,7 @@ $baseActionSep = (strpos($baseActionUrl, "?") !== false) ? "&" : "?";
         </section>
     </div>
 </main>
+<?php if (!$dbmFragment): ?>
 </body>
 </html>
-
+<?php endif; ?>

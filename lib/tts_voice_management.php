@@ -6,6 +6,7 @@ function stobeVoiceProviderNormalize(string $provider): string
     return match ($provider) {
         'pockettts', 'pocket-tts', 'pocket_tts' => 'pocket_tts',
         'xtts', 'xtts-fastapi' => 'xtts',
+        'higgs' => 'higgs',
         'chatterbox' => 'chatterbox',
         'omnivoice' => 'omnivoice',
         'cartesia' => 'cartesia',
@@ -22,7 +23,8 @@ function stobeVoiceProviderNormalizeId(string $voiceId): string
 
 function stobeVoiceProviderIsAudioCpp(string $provider, string $endpoint): bool
 {
-    return stobeVoiceProviderNormalize($provider) === 'pocket_tts'
+    return stobeVoiceProviderNormalize($provider) === 'higgs'
+        || stobeVoiceProviderNormalize($provider) === 'pocket_tts'
         && (preg_match('/\:8086(?:\/|$)/', $endpoint) === 1 || str_contains($endpoint, '/v1/audio/speech'));
 }
 
@@ -41,6 +43,7 @@ function stobeVoiceProviderTarget(array $connector): array
     if ($endpoint === '' && !in_array($provider, ['cartesia', 'inworld'], true) && $provider !== '') {
         $endpoint = match ($provider) {
             'omnivoice' => 'http://127.0.0.1:8021',
+            'higgs' => 'http://127.0.0.1:8025',
             'chatterbox' => 'http://127.0.0.1:8023',
             'pocket_tts' => 'http://127.0.0.1:8024',
             default => 'http://127.0.0.1:8020',

@@ -181,25 +181,51 @@ if (!in_array($view, ["voices", "pronunciations"], true)) {
     $view = "voices";
 }
 $pronunciationDictionary = new TTSPronunciationDictionary();
+$higgsPreviewUrl = '';
+$higgsConnectors = [];
 $providerConnectors = [];
 $providerConnectorMap = [];
-foreach ($db->fetchAll(
-    "SELECT c.id, c.name, c.connector_type, c.base_url, c.config,
-            COALESCE(b.api_key, '') AS api_badge_key
-     FROM core_tts_connector c
-     LEFT JOIN core_api_badge b ON b.id = c.api_badge_id
-     ORDER BY c.is_default DESC, c.id ASC"
-) as $connectorRow) {
+foreach (getAllTtsConnectors() as $connectorRow) {
     $target = stobeVoiceProviderTarget($connectorRow);
     if ($target["provider"] === "") {
         continue;
     }
-    $providerConnectors[] = $target;
     $providerConnectorMap[intval($target["id"])] = $target;
+    if ($target['provider'] === 'higgs') {
+        $higgsConnectors[] = $target;
+    } else {
+        $providerConnectors[] = $target;
+    }
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    if (isset($_POST["pronunciation_action"])) {
+    // Preview a chosen Higgs connector without changing defaults or NPC profiles.
+    if (isset($_POST['higgs_preview'])) {
+        $connectorId = intval($_POST['connector_id'] ?? 0);
+        $voice = stobeVoiceProviderNormalizeId(strval($_POST['voiceid'] ?? ''));
+        $text = trim(strval($_POST['preview_text'] ?? ''));
+        $target = $providerConnectorMap[$connectorId] ?? [];
+        if (($target['provider'] ?? '') !== 'higgs' || $voice === '' || $text === '' || strlen($text) > 2000) {
+            $message = 'Select a Higgs connector, a voice, and preview text (up to 2000 characters).';
+            $messageType = 'err';
+        } elseif (in_array(strtolower(strval(parse_url($target['endpoint'], PHP_URL_HOST))), ['localhost', '127.0.0.1', '::1', '[::1]'], true)
+            && !is_readable(stobeFindVoiceSamplePath($voice))
+            && !is_readable('/home/dwemer/higgs-tts/voices/' . $voice . '.wav')) {
+            $message = 'The selected Higgs voice sample is unavailable. Upload it before previewing.';
+            $messageType = 'err';
+        } else {
+            @set_time_limit(150);
+            $connector = getTtsConnectorById($connectorId);
+            $result = stobeSynthesizeTtsFromConnector($connector, $text, $voice);
+            if (is_array($result) && !empty($result['audio_path'])) {
+                $higgsPreviewUrl = $webRoot . '/' . ltrim($result['audio_path'], '/') . '?ts=' . time();
+                $message = 'Higgs preview is ready. Your active connector has not changed.';
+            } else {
+                $message = 'Higgs could not generate speech. Check the service, connector, and selected voice sample.';
+                $messageType = 'err';
+            }
+        }
+    } elseif (isset($_POST["pronunciation_action"])) {
         $view = "pronunciations";
         $pronunciationAction = strtolower(stobe_voice_trim($_POST["pronunciation_action"] ?? ""));
         $pronunciationId = intval($_POST["pronunciation_id"] ?? 0);
@@ -793,6 +819,9 @@ if ($view === 'pronunciations') {
         }
         .provider-form .action-row { margin-bottom: 10px; }
         .provider-form label { margin-top: 0; }
+        .higgs-preview-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .higgs-preview-form .higgs-preview-text,
+        .higgs-preview-form .action-row { grid-column: 1 / -1; }
         .small-muted {
             color: #9fb1c9;
             font-size: 12px;
@@ -938,6 +967,43 @@ if ($view === 'pronunciations') {
                 <li>If a custom row exists in <code>core_voiceid_custom</code>, it overrides base <code>core_voiceid</code> for the same <code>voiceid</code>.</li>
             </ol>
             <p class="small-muted">Tip: use <code>sample_file</code> values that exist under <code>data/voices</code> for local sample preview and consistency.</p>
+        </div>
+
+        <div id="higgs-voices" class="content-section full-width-section">
+            <h2>Higgs TTS 3</h2>
+            <p class="small-muted">Higgs uses the samples in your voice library directly. Upload a sample above, then select its voice ID to preview it. Previewing does not change your active connector.</p>
+            <p class="small-muted">For a remote Higgs service, place the sample on that host with the same voice name. Upload / Rebuild and Remove Provider Copy do not apply to Higgs.</p>
+            <?php if (empty($higgsConnectors)): ?>
+                <p><a href="<?= h($webRoot . '/ui/tts_connectors.php') ?>">Add a Higgs TTS 3 connector</a> to preview voices here.</p>
+            <?php else: ?>
+                <form method="post" action="#higgs-voices" class="provider-form higgs-preview-form">
+                    <div>
+                        <label for="higgs-connector">Connector</label>
+                        <select id="higgs-connector" name="connector_id" required>
+                            <?php foreach ($higgsConnectors as $connector): ?>
+                                <option value="<?= h($connector['id']) ?>" <?= intval($_POST['connector_id'] ?? 0) === $connector['id'] ? 'selected' : '' ?>><?= h($connector['name'] ?: 'Higgs TTS 3') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="higgs-voice">Voice ID</label>
+                        <input type="text" id="higgs-voice" name="voiceid" list="higgs-voice-ids" value="<?= h($_POST['voiceid'] ?? $providerVoiceId) ?>" required>
+                    </div>
+                    <div class="higgs-preview-text">
+                        <label for="higgs-text">Preview text</label>
+                        <input type="text" id="higgs-text" name="preview_text" maxlength="2000" value="<?= h($_POST['preview_text'] ?? 'Welcome, traveler. Let us hear how this voice sounds.') ?>" required>
+                    </div>
+                    <div class="action-row"><button type="submit" name="higgs_preview" value="1" class="action-button">Preview Higgs Voice</button></div>
+                </form>
+                <datalist id="higgs-voice-ids">
+                    <?php foreach ($rows as $voiceRow): ?>
+                        <option value="<?= h($voiceRow['voiceid'] ?? '') ?>"></option>
+                    <?php endforeach; ?>
+                </datalist>
+                <?php if ($higgsPreviewUrl !== ''): ?>
+                    <audio controls autoplay preload="none" src="<?= h($higgsPreviewUrl) ?>"></audio>
+                <?php endif; ?>
+            <?php endif; ?>
         </div>
 
         <div id="provider-voices" class="content-section full-width-section">

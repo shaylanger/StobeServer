@@ -1,4 +1,9 @@
 <?php
+require_once __DIR__ . '/lib/stobe_interaction.php';
+stobeInteractionRequire();
+
+require_once __DIR__ . "/lib/playthrough_guard.php";
+pgr_http_preflight("chat_json");
 
 /**
  * JSON chat endpoint used by the in-game ChatMenu async pipeline.
@@ -179,6 +184,11 @@ $participantIdentities = extractParticipantIdentities([
     'nearby' => $nearby,
 ]);
 $ensureResult = ensureNpcProfilesFromParticipantIdentities($participantIdentities);
+
+// Profile discovery can include remote NPCs; only the supplied audience owns events.
+$GLOBALS['CACHE_PEOPLE'] = stobeAnnotatePeopleTokensWithNpcStates(
+    stobeEncodePeopleTokenList(stobeEventAudienceTokens($payload['people'] ?? []))
+);
 
 stobeLogInfo('JSON chat request received', [
     'target_npc' => $targetNpc,

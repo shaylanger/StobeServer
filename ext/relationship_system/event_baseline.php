@@ -119,23 +119,12 @@ if (!function_exists('stobeRelBaselineRowIncludesNpc')) {
         if ($safeNpc === '') {
             return false;
         }
-        $npcLower = strtolower($safeNpc);
-
-        $participants = stobeRelBaselineExtractParticipants($row);
-        foreach ($participants as $participant) {
-            if (strtolower(stobeRelBaselineNormalizeName($participant)) === $npcLower) {
+        foreach (stobeEventAudienceTokens($row['people'] ?? '') as $token) {
+            $identity = stobeExtractParticipantIdentityWithAwarenessState($token);
+            if (strcasecmp($identity['name'], $safeNpc) === 0
+                && !in_array($identity['state'], ['sleeping', 'unconscious', 'knocked_out'], true)) {
                 return true;
             }
-        }
-
-        $people = strval($row['people'] ?? '');
-        if ($people !== '' && stobeRelBaselineContainsWholeName($people, $safeNpc)) {
-            return true;
-        }
-
-        $data = strval($row['data'] ?? '');
-        if ($data !== '' && stobeRelBaselineContainsWholeName($data, $safeNpc)) {
-            return true;
         }
 
         return false;
@@ -228,17 +217,16 @@ if (!function_exists('stobeRelBuildEventBaseline')) {
         }
 
         $excludeTypes = "'prechat','setconf','status_msg','user_input','npc_snapshot','playerinfo'";
+        $params = [];
+        $audienceSql = stobeEventAudienceSql($safeNpc, $params);
         $rows = $db->fetchAll(
             "SELECT rowid, type, data, gamets, localts, ts, people, location
              FROM eventlog
              WHERE type NOT IN ({$excludeTypes})
-               AND (
-                    POSITION(LOWER($1) IN LOWER(COALESCE(people, ''))) > 0
-                    OR POSITION(LOWER($1) IN LOWER(COALESCE(data, ''))) > 0
-                   )
+               AND {$audienceSql}
              ORDER BY rowid DESC
              LIMIT " . intval($scanLimit),
-            [$safeNpc]
+            $params
         );
 
         $linesDesc = [];
@@ -247,9 +235,6 @@ if (!function_exists('stobeRelBuildEventBaseline')) {
         if (is_array($rows)) {
             foreach ($rows as $row) {
                 if (!is_array($row)) {
-                    continue;
-                }
-                if (!stobeRelBaselineRowIncludesNpc($row, $safeNpc)) {
                     continue;
                 }
 

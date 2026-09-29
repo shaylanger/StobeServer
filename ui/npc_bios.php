@@ -1,4 +1,5 @@
 <?php
+require_once dirname(__DIR__) . "/lib/tts_filter_presets.php";
 $enginePath = dirname(__DIR__) . DIRECTORY_SEPARATOR;
 require_once($enginePath . "lib" . DIRECTORY_SEPARATOR . "bootstrap.php");
 if (!isset($GLOBALS["db"]) || !($GLOBALS["db"] instanceof sql)) {
@@ -188,6 +189,12 @@ function npc_bios_read_uploaded_csv(string $tmpPath): array
         $rows[] = $row;
     }
     fclose($stream);
+    if (isset($map['tts_filter_preset'])) {
+        foreach ($rows as $row) {
+            try { stobeBiographyVoiceFilter($row[$map['tts_filter_preset']] ?? ''); }
+            catch (InvalidArgumentException $e) { return [false, $e->getMessage(), [], []]; }
+        }
+    }
     return [true, "", $map, $rows];
 }
 
@@ -240,7 +247,7 @@ $editToken = false;
 
 if (isset($_GET["action"]) && $_GET["action"] === "export_custom_bio_random") {
     $rows = $db->fetchAll(
-        "SELECT type AS stringid, name, description
+        "SELECT type AS stringid, name, description, tts_filter_preset
          FROM bio_random_custom
          ORDER BY LOWER(COALESCE(name, '')), LOWER(type)"
     );
@@ -248,12 +255,13 @@ if (isset($_GET["action"]) && $_GET["action"] === "export_custom_bio_random") {
     header("Content-Type: text/csv; charset=utf-8");
     header("Content-Disposition: attachment; filename=\"" . $filename . "\"");
     $out = fopen("php://output", "w");
-    fputcsv($out, ["stringid", "name", "description"]);
+    fputcsv($out, ["stringid", "name", "description", "tts_filter_preset"]);
     foreach ($rows as $row) {
         fputcsv($out, [
             strval($row["stringid"] ?? ""),
             strval($row["name"] ?? ""),
             strval($row["description"] ?? ""),
+            strval($row["tts_filter_preset"] ?? ""),
         ]);
     }
     fclose($out);
@@ -264,17 +272,17 @@ if (isset($_GET["action"]) && $_GET["action"] === "download_example_bio_random")
     header("Content-Type: text/csv; charset=utf-8");
     header("Content-Disposition: attachment; filename=\"example_bio_random.csv\"");
     $out = fopen("php://output", "w");
-    fputcsv($out, ["stringid", "name", "description"]);
-    fputcsv($out, ["backstory", "Nomadic Bandit", "A drifter hardened by hunger, dust storms, and broken alliances."]);
-    fputcsv($out, ["appearance", "Nomadic Bandit", "Sun-darkened skin, wind-burned cheeks, and a patched desert scarf."]);
-    fputcsv($out, ["goals", "Nomadic Bandit", "Secure food, avoid patrols, and survive the next raid."]);
+    fputcsv($out, ["stringid", "name", "description", "tts_filter_preset"]);
+    fputcsv($out, ["backstory", "Nomadic Bandit", "A drifter hardened by hunger, dust storms, and broken alliances.", ""]);
+    fputcsv($out, ["appearance", "Nomadic Bandit", "Sun-darkened skin, wind-burned cheeks, and a patched desert scarf.", ""]);
+    fputcsv($out, ["goals", "Nomadic Bandit", "Secure food, avoid patrols, and survive the next raid.", ""]);
     fclose($out);
     exit;
 }
 
 if (isset($_GET["action"]) && $_GET["action"] === "export_custom_bio_unique") {
     $rows = $db->fetchAll(
-        "SELECT type AS stringid, name, description
+        "SELECT type AS stringid, name, description, tts_filter_preset
          FROM bio_unique_custom
          ORDER BY LOWER(name), LOWER(type)"
     );
@@ -282,12 +290,13 @@ if (isset($_GET["action"]) && $_GET["action"] === "export_custom_bio_unique") {
     header("Content-Type: text/csv; charset=utf-8");
     header("Content-Disposition: attachment; filename=\"" . $filename . "\"");
     $out = fopen("php://output", "w");
-    fputcsv($out, ["stringid", "name", "description"]);
+    fputcsv($out, ["stringid", "name", "description", "tts_filter_preset"]);
     foreach ($rows as $row) {
         fputcsv($out, [
             strval($row["stringid"] ?? ""),
             strval($row["name"] ?? ""),
             strval($row["description"] ?? ""),
+            strval($row["tts_filter_preset"] ?? ""),
         ]);
     }
     fclose($out);
@@ -298,10 +307,10 @@ if (isset($_GET["action"]) && $_GET["action"] === "download_example_bio_unique")
     header("Content-Type: text/csv; charset=utf-8");
     header("Content-Disposition: attachment; filename=\"example_bio_unique.csv\"");
     $out = fopen("php://output", "w");
-    fputcsv($out, ["stringid", "name", "description"]);
-    fputcsv($out, ["personality", "Tinfist", "Measured, forceful, and deeply committed to anti-slavery ideals."]);
-    fputcsv($out, ["appearance", "Tinfist", "Heavy iron limbs and a battle-worn frame scarred by years of revolt."]);
-    fputcsv($out, ["goals", "Tinfist", "Break slave systems and protect those fleeing bondage."]);
+    fputcsv($out, ["stringid", "name", "description", "tts_filter_preset"]);
+    fputcsv($out, ["personality", "Tinfist", "Measured, forceful, and deeply committed to anti-slavery ideals.", ""]);
+    fputcsv($out, ["appearance", "Tinfist", "Heavy iron limbs and a battle-worn frame scarred by years of revolt.", ""]);
+    fputcsv($out, ["goals", "Tinfist", "Break slave systems and protect those fleeing bondage.", ""]);
     fclose($out);
     exit;
 }
@@ -336,6 +345,10 @@ if (isset($_GET["action"]) && $_GET["action"] === "download_example_rename_token
     exit;
 }
 
+if ($_SERVER["REQUEST_METHOD"] === "POST" && in_array($_POST['action'] ?? '', ['save_random', 'save_unique'], true)) {
+    try { stobeBiographyVoiceFilter($_POST['tts_filter_preset'] ?? null); }
+    catch (InvalidArgumentException $e) { http_response_code(400); echo h($e->getMessage()); exit; }
+}
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (isset($_POST["submit_csv_random"])) {
         $activeTab = "bio_random";
@@ -359,6 +372,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $type = strtolower(npc_bios_pick_csv($row, $map, ["type", "stringid", "baseid"], 0));
                         $name = npc_bios_pick_csv($row, $map, ["name"], 1);
                         $description = npc_bios_pick_csv($row, $map, ["description"], 2);
+                        $voiceFilter = stobeBiographyVoiceFilter(isset($map["tts_filter_preset"]) ? ($row[$map["tts_filter_preset"]] ?? "") : null);
                         $race = npc_bios_pick_csv($row, $map, ["race"]);
                         $gender = npc_bios_pick_csv($row, $map, ["gender"]);
                         $faction = npc_bios_pick_csv($row, $map, ["faction"]);
@@ -366,15 +380,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             continue;
                         }
                         $okUpsert = $db->exec(
-                            "INSERT INTO bio_random_custom (type, description, name, race, gender, faction)
-                             VALUES ($1, $2, $3, $4, $5, $6)
+                            "INSERT INTO bio_random_custom (type, description, name, race, gender, faction, tts_filter_preset)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7)
                              ON CONFLICT (type, description, name)
                              DO UPDATE SET
                                 race = EXCLUDED.race,
                                 gender = EXCLUDED.gender,
                                 faction = EXCLUDED.faction,
+                        tts_filter_preset = COALESCE(EXCLUDED.tts_filter_preset, bio_random_custom.tts_filter_preset),
                                 updated_at = NOW()",
-                            [$type, $description, $name, $race, $gender, $faction]
+                            [$type, $description, $name, $race, $gender, $faction, $voiceFilter]
                         );
                         if ($okUpsert !== false) {
                             $count++;
@@ -407,17 +422,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $type = strtolower(npc_bios_pick_csv($row, $map, ["type", "stringid", "baseid"], 0));
                         $name = npc_bios_pick_csv($row, $map, ["name"], 1);
                         $description = npc_bios_pick_csv($row, $map, ["description"], 2);
+                        $voiceFilter = stobeBiographyVoiceFilter(isset($map["tts_filter_preset"]) ? ($row[$map["tts_filter_preset"]] ?? "") : null);
                         if ($name === "" || !in_array($type, $validTypes, true) || $description === "") {
                             continue;
                         }
                         $okUpsert = $db->exec(
-                            "INSERT INTO bio_unique_custom (name, type, description)
-                             VALUES ($1, $2, $3)
+                            "INSERT INTO bio_unique_custom (name, type, description, tts_filter_preset)
+                             VALUES ($1, $2, $3, $4)
                              ON CONFLICT (name, type)
                              DO UPDATE SET
                                 description = EXCLUDED.description,
+                        tts_filter_preset = COALESCE(EXCLUDED.tts_filter_preset, bio_unique_custom.tts_filter_preset),
                                 updated_at = NOW()",
-                            [$name, $type, $description]
+                            [$name, $type, $description, $voiceFilter]
                         );
                         if ($okUpsert !== false) {
                             $count++;
@@ -500,6 +517,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $rowId = intval($_POST["row_id"] ?? 0);
         $type = strtolower(npc_bios_trim($_POST["type"] ?? ""));
         $description = npc_bios_trim($_POST["description"] ?? "");
+        $voiceFilter = stobeBiographyVoiceFilter($_POST["tts_filter_preset"] ?? null);
         $name = npc_bios_trim($_POST["name"] ?? "");
         $race = npc_bios_trim($_POST["race"] ?? "");
         $gender = npc_bios_trim($_POST["gender"] ?? "");
@@ -527,21 +545,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                          race = $4,
                          gender = $5,
                          faction = $6,
+                         tts_filter_preset = COALESCE($8, tts_filter_preset),
                          updated_at = NOW()
                      WHERE id = $7",
-                    [$type, $description, $name, $race, $gender, $faction, $rowId]
+                    [$type, $description, $name, $race, $gender, $faction, $rowId, $voiceFilter]
                 );
             } else {
                 $db->exec(
-                    "INSERT INTO bio_random_custom (type, description, name, race, gender, faction)
-                     VALUES ($1, $2, $3, $4, $5, $6)
+                    "INSERT INTO bio_random_custom (type, description, name, race, gender, faction, tts_filter_preset)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)
                      ON CONFLICT (type, description, name)
                      DO UPDATE SET
                         race = EXCLUDED.race,
                         gender = EXCLUDED.gender,
                         faction = EXCLUDED.faction,
+                        tts_filter_preset = COALESCE(EXCLUDED.tts_filter_preset, bio_random_custom.tts_filter_preset),
                         updated_at = NOW()",
-                    [$type, $description, $name, $race, $gender, $faction]
+                    [$type, $description, $name, $race, $gender, $faction, $voiceFilter]
                 );
             }
             header("Location: " . npc_bios_build_url(["tab" => "bio_random", "notice" => "saved_random"], $isEmbed));
@@ -561,6 +581,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $name = npc_bios_trim($_POST["name"] ?? "");
         $type = strtolower(npc_bios_trim($_POST["type"] ?? ""));
         $description = npc_bios_trim($_POST["description"] ?? "");
+        $voiceFilter = stobeBiographyVoiceFilter($_POST["tts_filter_preset"] ?? null);
 
         if ($name === "" || !in_array($type, $validTypes, true) || $description === "") {
             $message = "Name, type, and description are required for bio_unique.";
@@ -578,19 +599,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                      SET name = $1,
                          type = $2,
                          description = $3,
+                         tts_filter_preset = COALESCE($5, tts_filter_preset),
                          updated_at = NOW()
                      WHERE id = $4",
-                    [$name, $type, $description, $rowId]
+                    [$name, $type, $description, $rowId, $voiceFilter]
                 );
             } else {
                 $db->exec(
-                    "INSERT INTO bio_unique_custom (name, type, description)
-                     VALUES ($1, $2, $3)
+                    "INSERT INTO bio_unique_custom (name, type, description, tts_filter_preset)
+                     VALUES ($1, $2, $3, $4)
                      ON CONFLICT (name, type)
                      DO UPDATE SET
                         description = EXCLUDED.description,
+                        tts_filter_preset = COALESCE(EXCLUDED.tts_filter_preset, bio_unique_custom.tts_filter_preset),
                         updated_at = NOW()",
-                    [$name, $type, $description]
+                    [$name, $type, $description, $voiceFilter]
                 );
             }
             header("Location: " . npc_bios_build_url(["tab" => "bio_unique", "notice" => "saved_unique"], $isEmbed));
@@ -1367,6 +1390,14 @@ $tokenRows = $db->fetchAll(
                                 </div>
                                 <label>Description</label>
                                 <textarea name="description" required><?= h($editRandom["description"] ?? "") ?></textarea>
+                                <label for="random-voice-filter">Voice Filter</label>
+                                <select name="tts_filter_preset" id="random-voice-filter">
+                                    <option value="">Keep current / no preset</option>
+                                    <?php foreach (stobeTtsFilterPresetOptions() as $presetId => $preset): ?>
+                                    <option value="<?= h($presetId) ?>" <?= ($editRandom['tts_filter_preset'] ?? '') === $presetId ? 'selected' : '' ?>><?= h($preset['label']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small>New NPCs only. Unique presets win, then the first configured trait in the listed order. None disables filtering.</small>
                                 <small class="hint">Use <code>appearance</code> as the type to append this text to the generated NPC appearance.</small>
                             </div>
                             <div class="modal-footer">
@@ -1537,6 +1568,14 @@ $tokenRows = $db->fetchAll(
                                 </div>
                                 <label>Description</label>
                                 <textarea name="description" required><?= h($editUnique["description"] ?? "") ?></textarea>
+                                <label for="unique-voice-filter">Voice Filter</label>
+                                <select name="tts_filter_preset" id="unique-voice-filter">
+                                    <option value="">Keep current / no preset</option>
+                                    <?php foreach (stobeTtsFilterPresetOptions() as $presetId => $preset): ?>
+                                    <option value="<?= h($presetId) ?>" <?= ($editUnique['tts_filter_preset'] ?? '') === $presetId ? 'selected' : '' ?>><?= h($preset['label']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small>New NPCs only. Unique presets win, then the first configured trait in the listed order. None disables filtering.</small>
                                 <small class="hint">Use <code>appearance</code> as the type to append this text to the generated NPC appearance.</small>
                             </div>
                             <div class="modal-footer">

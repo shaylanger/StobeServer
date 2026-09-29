@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/tmpl/dynamic_profile_schedule.php';
 $enginePath = dirname(__DIR__) . DIRECTORY_SEPARATOR;
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'bootstrap.php');
 
@@ -60,6 +61,7 @@ function normalize_imported_fk_id(string $table, mixed $raw): ?int {
     return intval($row['id'] ?? 0) > 0 ? $value : null;
 }
 function apply_visual_metadata_merge(array $base, array $metaVis): array {
+    $base = array_replace($base, dps_policy(array_replace($base, $metaVis)));
     $intKeys = [
         'DIARY_DAYS',
         'AUTO_DIARY_MIN_EVENTS',
@@ -202,7 +204,7 @@ $profileSyncableMetadataKeys = [
     'DIARY_PROMPT', 'RECHAT_RESPONSES', 'RECHAT_PROBABILITY', 'BORED_EVENT_CHANCE', 'RELATIONSHIP_UPDATE_CHANCE',
     'CONTEXT_HISTORY', 'CONTEXT_HISTORY_DIARY', 'CONTEXT_HISTORY_DYNAMIC_PROFILE',
     'DIARY_DAYS', 'AUTO_DIARY_MIN_EVENTS', 'AUTO_DIARY_HOUR', 'DIARY_COOLDOWN',
-    'DYNAMIC_PROFILE_FIELDS',
+    'DYNAMIC_PROFILE_FIELDS', 'DYNAMIC_PROFILE_INTERVAL_DAYS', 'DYNAMIC_PROFILE_MIN_EVENTS', 'DYNAMIC_PROFILE_COOLDOWN_MINUTES',
 ];
 if ($isEmbed && !isset($_GET['embed'])) {
     $_GET['embed'] = '1';
@@ -1365,7 +1367,8 @@ body .profile-setting-sync-btn:hover { border-color:#e6b76c !important; backgrou
                                 </div>
                             </div>
                             <div class="provider-body">
-                                <div class="setting-desc">Pick which profile fields can be rewritten by dynamic profile generation.</div>
+                                <?php dps_render_controls($metaData); ?>
+                                <div class="setting-desc">Choose which fields can change.</div>
                                 <input type="hidden" name="meta_vis[DYNAMIC_PROFILE_FIELDS][]" value="">
                                 <div class="meta-fields">
                                     <?php foreach ($dynamicFieldOptions as $fieldName): ?>

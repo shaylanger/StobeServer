@@ -2849,6 +2849,15 @@ If the resulting summary would exceed roughly 25 bullet points, merge or general
             }
         });
 
+        $applyPatch('core_action', 202609040001, static function () use ($db): void {
+            $result = $db->exec("INSERT INTO core_action (command, action_name, description, is_activated, updated_at)
+                VALUES ('MOVE_TO', 'MoveTo', 'Move to the specified character, object, or known point and stop nearby.', TRUE, NOW())
+                ON CONFLICT (command) DO NOTHING");
+            if ($result === false) {
+                throw new RuntimeException('Could not register MoveTo.');
+            }
+        });
+
         try {
             $seededAddenda = stobeWorldStateSeedBuiltinAddenda();
             stobeLogInfo('World-state addenda seeded', ['rows' => $seededAddenda]);
@@ -2856,8 +2865,99 @@ If the resulting summary would exceed roughly 25 bullet points, merge or general
             stobeLogException($exception, 'World-state addendum seed failed');
         }
 
+        $applyPatch('biography_voice_filters', 202609180001, static function () use ($db): void {
+            if ($db->exec("ALTER TABLE bio_random ADD COLUMN IF NOT EXISTS tts_filter_preset TEXT") === false) throw new RuntimeException("Biography filter migration failed");
+            if ($db->exec("ALTER TABLE bio_random_custom ADD COLUMN IF NOT EXISTS tts_filter_preset TEXT") === false) throw new RuntimeException("Biography filter migration failed");
+            if ($db->exec("CREATE OR REPLACE VIEW combined_bio_random AS
+                 SELECT
+                    c.id,
+                    c.type,
+                    c.description,
+                    c.name,
+                    c.race,
+                    c.gender,
+                    c.faction,
+                    c.created_at,
+                    c.updated_at,
+                    c.is_enabled, c.tts_filter_preset
+                 FROM bio_random_custom c
+                 UNION ALL
+                 SELECT
+                    b.id,
+                    b.type,
+                    b.description,
+                    b.name,
+                    b.race,
+                    b.gender,
+                    b.faction,
+                    b.created_at,
+                    b.updated_at,
+                    b.is_enabled, b.tts_filter_preset
+                 FROM bio_random b
+                 LEFT JOIN bio_random_custom c
+                   ON LOWER(b.type) = LOWER(c.type)
+                  AND LOWER(b.description) = LOWER(c.description)
+                  AND LOWER(COALESCE(b.name, '')) = LOWER(COALESCE(c.name, ''))
+                 WHERE c.id IS NULL") === false) throw new RuntimeException("Biography filter view migration failed");
+            if ($db->exec("ALTER TABLE bio_unique ADD COLUMN IF NOT EXISTS tts_filter_preset TEXT") === false) throw new RuntimeException("Biography filter migration failed");
+            if ($db->exec("ALTER TABLE bio_unique_custom ADD COLUMN IF NOT EXISTS tts_filter_preset TEXT") === false) throw new RuntimeException("Biography filter migration failed");
+            if ($db->exec("CREATE OR REPLACE VIEW combined_bio_unique AS
+                 SELECT
+                    c.id,
+                    c.name,
+                    c.type,
+                    c.description,
+                    c.created_at,
+                    c.updated_at,
+                    c.is_enabled, c.tts_filter_preset
+                 FROM bio_unique_custom c
+                 UNION ALL
+                 SELECT
+                    b.id,
+                    b.name,
+                    b.type,
+                    b.description,
+                    b.created_at,
+                    b.updated_at,
+                    b.is_enabled, b.tts_filter_preset
+                 FROM bio_unique b
+                 LEFT JOIN bio_unique_custom c
+                   ON LOWER(b.name) = LOWER(c.name)
+                  AND LOWER(b.type) = LOWER(c.type)
+                 WHERE c.id IS NULL") === false) throw new RuntimeException("Biography filter view migration failed");
+        });
+
+        $applyPatch('npc_plugin_extended_data', 20260919001, static function () use ($db): void {
+            if (!$db->query(file_get_contents(dirname(__DIR__) . '/lib/core/database_schema/plugin_extended_data.sql'))) {
+                throw new RuntimeException('NPC plugin data migration failed.');
+            }
+        });
+
         stobeLogInfo('DB updates completed (release consolidator)');
     }
 }
 
 stobeRunDatabaseUpdates();
+
+
+// Install durable event accounting before refreshing the snapshot schema.
+if ($GLOBALS['db']->query(file_get_contents(dirname(__DIR__) . '/lib/dynamic_profile_scheduler.sql')) === false) {
+    throw new RuntimeException('Dynamic profile migration failed.');
+}
+
+// Keep the installed snapshot functions and pgAdmin comments aligned with the current table policy.
+require_once dirname(__DIR__) . '/lib/playthrough_schema.php';
+require_once dirname(__DIR__) . '/lib/playthrough_preferences.php';
+require_once dirname(__DIR__) . '/lib/playthrough_retention.php';
+$playthroughPolicyConn = ptp_connect();
+if ($playthroughPolicyConn) {
+    try {
+        // Upgrade existing metadata before the first save/import; fresh setup also uses this helper.
+        ptr_ensure_schema($playthroughPolicyConn);
+        if (!pts_update_playthrough_policy($playthroughPolicyConn)) {
+            Logger::error('Playthrough Save table policy update failed; retry the database update.');
+        }
+    } finally { pg_close($playthroughPolicyConn); }
+} else {
+    Logger::error('Cannot connect to update the Playthrough Save table policy.');
+}

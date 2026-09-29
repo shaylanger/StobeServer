@@ -109,9 +109,9 @@ $recovered = stobeRecoverSparsePeopleForCriticalEvent(
     '["Ruka"]'
 );
 ingressPeopleAssertSame(
-    '["Ruka|hand_100","Beep|hand_200"]',
+    '["Ruka"]',
     $recovered,
-    'death ingress should recover sparse people lists from recent matching participant context'
+    'death ingress must not borrow witnesses from a different event'
 );
 
 $nonDeath = stobeRecoverSparsePeopleForCriticalEvent(
@@ -125,4 +125,50 @@ ingressPeopleAssertSame(
     'non-death ingress should leave people lists unchanged'
 );
 
+// Exercise the same SQL predicate used by every NPC event consumer.
+$params = [];
+$predicate = stobeEventAudienceSql('Ruka', $params, ['Old Ruka'], ['metadata' => ['storage_id' => 'hand_100']]);
+$cases = [
+    ['["Ruka|100"]', true],
+    ['["Old Ruka|hand_100"]', true],
+    ['["Someone else|hand_100"]', true],
+    ['["Ruka|hand_999"]', false],
+    ['["Ruka Junior"]', false],
+    ['["Ruka"]', true],
+    ['|Ruka|Beep|', true],
+    ['|Ruka|100|Beep|200|', true],
+    ['["Ruka (sleeping)|hand_100"]', false],
+    ['["Ruka (knocked out)|100"]', false],
+    ['["Ruka (in combat)|100"]', true],
+    ['["Beep|200"]', false],
+    ['[]', false],
+    ['', false],
+    ['["Ruka', false],
+    ['["Ruka\\u0000"]', false],
+    ['["Ruka\\uD800"]', false],
+    ['["Ruka\\x"]', false],
+];
+foreach ($cases as [$people, $expected]) {
+    $row = $GLOBALS['db']->fetchOne(
+        'SELECT ' . $predicate . ' AS eligible FROM (SELECT $' . (count($params) + 1) . '::text AS people) AS sample',
+        array_merge($params, [$people])
+    );
+    ingressPeopleAssert(is_array($row), 'audience query must execute');
+    ingressPeopleAssert(($row['eligible'] === 't') === $expected, 'audience eligibility: ' . $people);
+}
+
+ingressPeopleResetEventlog();
+$GLOBALS['CACHE_PEOPLE'] = '["Burn"]';
+storeEvent('chat', time(), 888, 'Burn: Ruka is on the other side of the map.');
+ingressPeopleAssert(count(DataEventLog(10, 'Ruka')) === 0, 'a remote mention must not enter dialogue history');
+ingressPeopleAssert(count(stobeDynamicProfileFetchRecentContext('Ruka')) === 0, 'remote mentions must not update profiles');
+ingressPeopleAssert(stobeCountRelevantDiaryEventsForGametsRange('Ruka', 0, 1000) === 0, 'remote mentions must not trigger diaries');
+ingressPeopleAssert(count(stobeAutonomyPlannerRecentEvents(1000, 18, 'Ruka')) === 0, 'autonomy must not see remote events');
+require_once __DIR__ . '/../ext/relationship_system/event_baseline.php';
+ingressPeopleAssert(stobeRelBuildEventBaseline('Ruka')['event_count'] === 0, 'remote mentions must not enter relationship analysis');
+ingressPeopleAssert(!stobeRelBaselineRowIncludesNpc(['people' => '["Burn"]', 'data' => 'Burn: hello (talking to: Ruka)'], 'Ruka'), 'a parsed recipient cannot override the captured audience');
+ingressPeopleAssertSameList([], stobeRegularMemoryBuildPeopleNames('[]', 'Ruka', ''), 'memory must not invent ownership from text');
+ingressPeopleAssertSameList([], stobeRegularMemoryBuildPeopleNames('["Ruka (sleeping)|100"]', 'Ruka', ''), 'sleeping observers must not acquire memories');
+ingressPeopleAssertSameList(['Burn'], stobeRegularMemoryBuildPeopleNames('["Burn"]', 'Ruka', ''), 'only the captured audience can own memory');
+unset($GLOBALS['CACHE_PEOPLE']);
 echo "All ingress people regression tests passed.\n";

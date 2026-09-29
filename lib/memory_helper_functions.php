@@ -490,27 +490,24 @@ function stobeRegularMemoryBuildPeopleNames(string $peopleRaw, string $speaker, 
         $namesByKey[strtolower($name)] = $name;
     };
 
-    $addName($speaker);
-    $addName($target);
-
-    // Prefer direct conversation participants for stable grouping keys.
-    // Fallback to raw people roster only when speaker/target are unavailable.
-    if (count($namesByKey) === 0 && trim($peopleRaw) !== '') {
-        $decoded = json_decode($peopleRaw, true);
-        if (is_array($decoded)) {
-            foreach ($decoded as $entry) {
-                if (!is_scalar($entry) || $entry === null) {
-                    continue;
-                }
-                $addName(strval($entry));
-            }
-        } else {
-            $addName($peopleRaw);
+    $eligible = [];
+    foreach (stobeEventAudienceTokens($peopleRaw) as $token) {
+        $identity = stobeExtractParticipantIdentityWithAwarenessState($token);
+        if (in_array($identity['state'], ['sleeping', 'unconscious', 'knocked_out'], true)) {
+            continue;
+        }
+        $eligible[strtolower($identity['name'])] = $identity['name'];
+    }
+    foreach ([$speaker, $target] as $participant) {
+        $key = strtolower(normalizeParticipantNameToken($participant));
+        if (isset($eligible[$key])) {
+            $addName($eligible[$key]);
         }
     }
-
     if (count($namesByKey) === 0) {
-        return [];
+        foreach ($eligible as $name) {
+            $addName($name);
+        }
     }
 
     ksort($namesByKey);
@@ -2467,15 +2464,17 @@ function stobeRegularMemoryFetchContextTokens(string $npcName, int $limit = 5): 
         ? stobeBuildEventlogDeliveryVisibilitySql('eventlog')
         : '1=1';
 
+    $params = [];
+    $audienceSql = stobeEventAudienceSql($safeNpc, $params);
     $rows = $db->fetchAll(
         "SELECT data
          FROM eventlog
          WHERE type = 'chat'
            AND {$deliveryVisibilitySql}
-           AND LOWER(COALESCE(people, '')) LIKE LOWER($1)
+           AND {$audienceSql}
          ORDER BY gamets DESC
          LIMIT " . intval($limit),
-        ['%' . $safeNpc . '%']
+        $params
     );
 
     $tokens = [];
@@ -2695,17 +2694,19 @@ function stobeRegularMemoryGetGametsLimitFor(string $npcName): float
         $limit = 300;
     }
 
+    $params = [];
+    $audienceSql = stobeEventAudienceSql($safeNpc, $params);
     $row = $db->fetchOne(
         "SELECT (MAX(gamets) - MIN(gamets)) * 0.0000024 AS hour_threshold
          FROM (
              SELECT gamets
              FROM eventlog
              WHERE type = 'chat'
-               AND LOWER(COALESCE(people, '')) LIKE LOWER($1)
+               AND {$audienceSql}
              ORDER BY gamets DESC
              LIMIT " . intval($limit) . "
          ) AS recent_events",
-        ['%' . $safeNpc . '%']
+        $params
     );
 
     $hours = floatval($row['hour_threshold'] ?? 0.0);

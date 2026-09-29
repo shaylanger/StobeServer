@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/playthrough_runtime.php';
 
 /**
  * PostgreSQL database driver for StobeServer.
@@ -10,6 +11,7 @@ class sql {
     private string $lastError = '';
 
     public function __construct() {
+        ptr_runtime_enter();
         $host = trim(strval(getenv('STOBE_DB_HOST') ?: 'localhost'));
         $dbname = trim(strval(getenv('STOBE_DB_NAME') ?: 'stobe'));
         $user = trim(strval(getenv('STOBE_DB_USER') ?: 'dwemer'));
@@ -24,6 +26,11 @@ class sql {
         $this->conn = pg_connect(implode(' ', $connectionParts));
         if (!$this->conn) {
             throw new Exception("Database connection failed");
+        }
+        if ((isset($_SERVER['HTTP_X_STOBE_PLAYTHROUGH']) && basename($_SERVER['SCRIPT_FILENAME'] ?? '') !== 'playthrough_session.php')
+            || in_array(basename($_SERVER['SCRIPT_FILENAME'] ?? ''), ['main.php','gamedata.php'], true)) {
+            require_once __DIR__ . '/playthrough_switching.php';
+            pas_guard($this->conn, true);
         }
     }
 

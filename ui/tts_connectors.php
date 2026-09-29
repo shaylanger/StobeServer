@@ -14,12 +14,13 @@ function ttsSpecs(): array {
         'pocket_tts' => ['label' => 'Pocket TTS', 'local' => true],
         'xtts' => ['label' => 'XTTS', 'local' => true],
         'chatterbox' => ['label' => 'Chatterbox', 'local' => true],
+        'higgs' => ['label' => 'Higgs TTS 3', 'local' => true],
         'cartesia' => ['label' => 'Cartesia', 'local' => false],
         'inworld' => ['label' => 'Inworld', 'local' => false],
         'omnivoice' => ['label' => 'OmniVoice', 'local' => true],
     ];
 }
-function ttsDefaultUrl(string $service): string { return match ($service) { 'omnivoice' => 'http://127.0.0.1:8021', 'chatterbox' => 'http://127.0.0.1:8023', 'pocket_tts' => 'http://127.0.0.1:8024', 'xtts' => 'http://127.0.0.1:8020', default => '' }; }
+function ttsDefaultUrl(string $service): string { return match ($service) { 'omnivoice' => 'http://127.0.0.1:8021', 'higgs' => 'http://127.0.0.1:8025', 'chatterbox' => 'http://127.0.0.1:8023', 'pocket_tts' => 'http://127.0.0.1:8024', 'xtts' => 'http://127.0.0.1:8020', default => '' }; }
 function ttsOmniVoiceLanguageLabel(string $languageId): string {
     static $fallbackLabels = ['cs'=>'Czech','en'=>'English','es'=>'Spanish','ro'=>'Romanian','ru'=>'Russian','sk'=>'Slovak'];
     $languageId = strtolower(trim($languageId));
@@ -164,7 +165,7 @@ function ttsBuildFields(array $payload, ?array $existing): array {
     $cfg = ttsDefaultConfig($service);
     foreach (ttsCfg($existing['config'] ?? '{}') as $k => $v) $cfg[$k] = $v;
     $cfg['provider'] = $service;
-    foreach (['language','fallback_male','fallback_female','model_id','workspace'] as $k) if (array_key_exists($k, $payload)) $cfg[$k] = trim(strval($payload[$k]));
+    foreach (['language','fallback_male','fallback_female','model_id','workspace','accent'] as $k) if (array_key_exists($k, $payload)) $cfg[$k] = trim(strval($payload[$k]));
     foreach (['stream_chunk_size','top_k'] as $k) if (array_key_exists($k, $payload) && trim(strval($payload[$k])) !== '') $cfg[$k] = intval($payload[$k]);
     foreach (['temperature','speed','length_penalty','repetition_penalty','top_p'] as $k) if (array_key_exists($k, $payload) && trim(strval($payload[$k])) !== '') $cfg[$k] = floatval($payload[$k]);
     $cfg['api_badge_id'] = intval($payload['api_badge_id'] ?? ($cfg['api_badge_id'] ?? 0));
@@ -177,7 +178,7 @@ function ttsBuildFields(array $payload, ?array $existing): array {
         'is_default' => ttsBool($payload['is_default'] ?? ($existing['is_default'] ?? false)),
         'config' => $cfg,
     ];
-    if ($fields['base_url'] === '' && in_array($service, ['pocket_tts','xtts','chatterbox','omnivoice'], true)) $fields['base_url'] = ttsDefaultUrl($service);
+    if ($fields['base_url'] === '' && in_array($service, ['pocket_tts','xtts','chatterbox','omnivoice','higgs'], true)) $fields['base_url'] = ttsDefaultUrl($service);
     if ($existing && isset($existing['id'])) $fields['id'] = intval($existing['id']);
     return $fields;
 }
@@ -230,6 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save']) || isset($_P
         'fallback_male' => strval($_POST['fallback_male'] ?? ''),
         'fallback_female' => strval($_POST['fallback_female'] ?? ''),
         'model_id' => strval($_POST['model_id'] ?? ''),
+        'accent' => strval($_POST['accent'] ?? ''),
         'workspace' => strval($_POST['workspace'] ?? ''),
         'stream_chunk_size' => strval($_POST['stream_chunk_size'] ?? ''),
         'temperature' => strval($_POST['temperature'] ?? ''),
@@ -383,8 +385,23 @@ main{padding:10px 5px 5px}.layout{display:grid;grid-template-columns:minmax(240p
 <div id="row_model_workspace" class="grid2">
 <div>
 <label for="model_id">Model ID</label>
-<input id="model_id" type="text" name="model_id" value="<?= h(strval($cfg['model_id'] ?? '')) ?>">
-<div class="help">Provider model to use for synthesis (for example `sonic-3`, `inworld-tts-1`).</div>
+<input id="model_id" list="cartesia_models" type="text" name="model_id" value="<?= h(strval($cfg['model_id'] ?? '')) ?>">
+<datalist id="cartesia_models">
+<option value="sonic-3"><option value="sonic-3.5"><option value="sonic-3.6">
+<option value="sonic-3.5-2026-05-04"><option value="sonic-3.6-2026-08-27">
+</datalist>
+<datalist id="inworld_models">
+<option value="inworld-tts-2-flash">
+</datalist>
+<div class="help">Provider model, such as sonic-3.5, sonic-3.6, or inworld-tts-2-flash. Inworld Flash prioritizes speed. A dated snapshot pins a release.</div>
+</div>
+</div>
+
+<div id="row_cartesia_accent" class="grid2">
+<div>
+<label for="accent">Accent</label>
+<input id="accent" type="text" name="accent" value="<?= h(strval($cfg['accent'] ?? '')) ?>">
+<div class="help">Optional, Sonic 3.6 only. For multilingual voices, enter an accent ID supported by the selected voice, such as general-american or standard-hindi. Leave blank for the voice default. <a href="https://docs.cartesia.ai/build-with-cartesia/capability-guides/multilingual-voices" target="_blank" rel="noopener">Cartesia accent guide</a></div>
 </div>
 </div>
 
@@ -443,6 +460,8 @@ main{padding:10px 5px 5px}.layout{display:grid;grid-template-columns:minmax(240p
   const rowWorkspaceAuth = document.getElementById('row_workspace_auth');
   const rowUrl = document.getElementById('row_url');
   const rowModel = document.getElementById('row_model_workspace');
+  const rowAccent = document.getElementById('row_cartesia_accent');
+  const modelInput = document.getElementById('model_id');
   const rowLocal = document.getElementById('row_local_tuning');
   function applyService(s){
     if (!serviceInput) return;
@@ -454,6 +473,12 @@ main{padding:10px 5px 5px}.layout{display:grid;grid-template-columns:minmax(240p
     const showApiBadge = (s==='cartesia'||s==='inworld'||s==='chatterbox');
     if (rowLocal) rowLocal.style.display = local ? '' : 'none';
     if (rowModel) rowModel.style.display = cloud ? '' : 'none';
+    if (rowAccent) rowAccent.style.display = s === 'cartesia' ? '' : 'none';
+    if (modelInput) {
+      if (s === 'cartesia') modelInput.setAttribute('list', 'cartesia_models');
+      else if (inworld) modelInput.setAttribute('list', 'inworld_models');
+      else modelInput.removeAttribute('list');
+    }
     if (rowApiBadge) rowApiBadge.style.display = showApiBadge ? '' : 'none';
     if (rowNameBadge) rowNameBadge.style.gridTemplateColumns = showApiBadge ? '1fr 1fr' : '1fr';
     if (rowWorkspaceAuth) rowWorkspaceAuth.style.display = inworld ? '' : 'none';

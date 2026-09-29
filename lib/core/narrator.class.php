@@ -1,5 +1,7 @@
 <?php
 
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'tts_filter_presets.php';
+
 class Narrator
 {
     public const CANONICAL_NAME = 'The Narrator';
@@ -34,6 +36,7 @@ class Narrator
             'roleplay_name' => self::DEFAULT_ROLEPLAY_NAME,
             'profile_id' => strval($safeProfileId),
             'voiceid' => 'stobenarrator',
+            'tts_filter_preset' => 'none',
             'core' => "The Narrator is a male voice within the player's mind. His job is to help the player as they navigate the world of Kenshi. Provide unique insight and descriptions of what is going on in the world.",
             'background' => "A guiding voice that describes the world, events, and transitions. He is not a character, but a voice within the player's mind.",
             'personality' => 'Laid-back, observant, and friendly; describes scenes with calm confidence.',
@@ -228,6 +231,7 @@ class Narrator
             'roleplay_name' => $this->getRoleplayName(),
             'profile_id' => $resolvedProfileId,
             'voiceid' => $all['voiceid'] ?? $defaults['voiceid'],
+            'tts_filter_preset' => stobeNormalizeTtsFilterPresetId($all['tts_filter_preset'] ?? $defaults['tts_filter_preset']),
             'core' => $all['core'] ?? $defaults['core'],
             'npc_static_bio' => $all['background'] ?? $defaults['background'],
             'personality' => $all['personality'] ?? $defaults['personality'],

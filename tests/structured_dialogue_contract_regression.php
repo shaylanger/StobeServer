@@ -258,5 +258,38 @@ contractAssertTrue(stobeFindFastSentencePosition('Hello.') === 5, 'Completed fir
 contractAssertTrue(stobeFindFastSentencePosition('The price is 3.') === false, 'Partial decimal should stay buffered');
 $longClause = str_repeat('A natural opening phrase ', 4) . ', and the story continues without a period';
 contractAssertTrue(stobeFindFastSentencePosition($longClause) !== false, 'Long natural clause should flush early');
+// MoveTo must preserve exact identity and never accept invented coordinates.
+$moveScene = ['extended_data' => normalizeCoreNpcExtendedData([
+    'nearby_actors' => [['name' => 'Beep', 'refid' => 'hand_101']],
+    'nearby_items' => [['name' => 'Sword', 'refid' => 'hand_202']],
+    'points_of_interest' => [
+        ['name' => 'Gate', 'refid' => 'hand_303'],
+        ['name' => 'Gate', 'refid' => 'hand_304'],
+    ],
+])];
+contractAssertSame('MOVE_TO@hand_303', stobeBuildActionTagFromStructuredPayload('MoveTo', 'hand_303', '', ''), 'MoveTo uses target');
+contractAssertSame('', stobeBuildActionTagFromStructuredPayload('MoveTo', '', 'Gate', ''), 'MoveTo requires an explicit target');
+contractAssertSame('MOVE_TO@hand_303', normalizeActionTagToken('MoveTo@hand_303'), 'MoveTo aliases normalize');
+contractAssertSame('', normalizeActionTagToken('MoveTo@hand_303', ['allowlist' => ['FOLLOW']]), 'MoveTo respects the allowlist');
+contractAssertSame('MOVE_TO@ref;101;Beep', stobeTransformActionForDispatch('MOVE_TO@Beep', $moveScene), 'Named NPC resolves to identity');
+contractAssertSame('MOVE_TO@ref;202;Sword', stobeTransformActionForDispatch('MOVE_TO@hand_202', $moveScene), 'Ground object resolves');
+contractAssertSame('MOVE_TO@ref;304;Gate', stobeTransformActionForDispatch('MOVE_TO@hand_304', $moveScene), 'Duplicate object names retain identity');
+contractAssertTrue(str_starts_with(stobeTransformActionForDispatch('MOVE_TO@Gate', $moveScene), 'ROLEPLAY_ACTION@'), 'Ambiguous names fail');
+contractAssertTrue(str_starts_with(stobeTransformActionForDispatch('MOVE_TO@hand_999', $moveScene), 'ROLEPLAY_ACTION@'), 'Unknown references fail');
+contractAssertTrue(str_starts_with(stobeTransformActionForDispatch('MOVE_TO@point;1;2;3;here', $moveScene), 'ROLEPLAY_ACTION@'), 'Model coordinates fail');
+$_GET['initiator_sid'] = '404';
+contractAssertSame('MOVE_TO@ref;404;the speaker', stobeTransformActionForDispatch('MOVE_TO@player', $moveScene), 'Player alias binds the request initiator');
+unset($_GET['initiator_sid']);
+contractAssertTrue(str_starts_with(stobeTransformActionForDispatch('MOVE_TO@player', $moveScene), 'ROLEPLAY_ACTION@'), 'Missing initiator must not select another player');
+$db->exec('BEGIN');
+try {
+    $db->exec("INSERT INTO location_zones (zone_name, city_name, x, y, z) VALUES ('MoveTo Test Gate', 'MoveTo Test City', 10, 20, 30)");
+    contractAssertSame('MOVE_TO@point;10;20;30;MoveTo Test Gate', stobeTransformActionForDispatch('MOVE_TO@MoveTo Test Gate', $moveScene), 'Known point supplies server coordinates');
+    contractAssertTrue(str_starts_with(stobeTransformActionForDispatch('MOVE_TO@MoveTo Test', $moveScene), 'ROLEPLAY_ACTION@'), 'Partial location names must not silently choose a point');
+    $db->exec("INSERT INTO location_zones (zone_name, city_name, x, y, z) VALUES ('MoveTo Test Other Gate', 'MoveTo Test City', 40, 20, 30)");
+    contractAssertTrue(str_starts_with(stobeTransformActionForDispatch('MOVE_TO@MoveTo Test City', $moveScene), 'ROLEPLAY_ACTION@'), 'Ambiguous known points fail');
+} finally {
+    $db->exec('ROLLBACK');
+}
 
 echo "PASS: structured dialogue contract regression\n";

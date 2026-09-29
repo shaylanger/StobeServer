@@ -22,7 +22,7 @@ function ptStorageAssert(bool $condition, string $message): void
     }
 }
 
-function ptStorageConfSnapshot(string $id): array
+function ptStorageConfBackup(string $id): array
 {
     $db = $GLOBALS['db'];
     $row = $db->fetchOne('SELECT value FROM conf_opts WHERE id = $1 LIMIT 1', [$id]);
@@ -32,10 +32,10 @@ function ptStorageConfSnapshot(string $id): array
     return ['exists' => true, 'value' => strval($row['value'] ?? '')];
 }
 
-function ptStorageRestoreConf(string $id, array $snapshot): void
+function ptStorageRestoreConf(string $id, array $backup): void
 {
     $db = $GLOBALS['db'];
-    if (!($snapshot['exists'] ?? false)) {
+    if (!($backup['exists'] ?? false)) {
         $db->exec('DELETE FROM conf_opts WHERE id = $1', [$id]);
         return;
     }
@@ -45,7 +45,7 @@ function ptStorageRestoreConf(string $id, array $snapshot): void
          ON CONFLICT (id) DO UPDATE
          SET value = EXCLUDED.value,
              updated_at = NOW()',
-        [$id, strval($snapshot['value'] ?? '')]
+        [$id, strval($backup['value'] ?? '')]
     );
 }
 
@@ -55,6 +55,8 @@ function ptStorageCleanupProfiles(string $prefix): void
     foreach ($profiles as $profile) {
         $name = strval($profile['name'] ?? '');
         if (str_starts_with($name, $prefix)) {
+            // Only deactivate this test's fixture before removing its protected playthrough.
+            $GLOBALS['db']->exec('UPDATE stobe_meta.playthrough_profiles SET is_active=false WHERE id=$1 AND name=$2', [intval($profile['id'] ?? 0), $name]);
             stobePlaythroughDeleteProfile(intval($profile['id'] ?? 0));
         }
     }
@@ -109,7 +111,7 @@ $baseName = $prefix . '_Profile';
 $trackedConfKeys = ['PLAYER_SQUADS', 'SQUAD_ALPHA', 'SQUAD_BETA'];
 $confBackup = [];
 foreach ($trackedConfKeys as $trackedKey) {
-    $confBackup[$trackedKey] = ptStorageConfSnapshot($trackedKey);
+    $confBackup[$trackedKey] = ptStorageConfBackup($trackedKey);
 }
 
 $createdProfileIds = [];
@@ -129,6 +131,10 @@ try {
     ptStorageAssert(stobePlaythroughEnsureMetaSchemaOnDemand(), 'playthrough meta schema should be creatable on demand');
     $adminConn = stobePlaythroughConnectAdmin();
     ptStorageAssert($adminConn !== false, 'playthrough admin connection should succeed');
+    $nestedConn = stobePlaythroughConnectAdmin();
+    ptStorageAssert($nestedConn !== false && $nestedConn !== $adminConn, 'nested autosave must own a separate admin connection');
+    pg_close($nestedConn);
+    ptStorageAssert(pg_query($adminConn, 'SELECT 1') !== false, 'closing an autosave connection must leave the restore connection usable');
     @pg_close($adminConn);
 
     stobeAutonomyEnsureSchema();
@@ -146,67 +152,67 @@ try {
         [$autonomyDecisionId]
     );
 
-    $first = stobePlaythroughCreateSchemaSnapshot($baseName, 'first snapshot', [
+    $first = stobePlaythroughCreate($baseName, 'first playthrough', [
         'mark_active' => true,
         'player_name' => 'UT Player',
         'game' => 'Kenshi',
     ]);
-    ptStorageAssert(boolval($first['success'] ?? false), 'first playthrough snapshot should be created');
-    ptStorageAssert(intval($first['id'] ?? 0) > 0, 'first snapshot should return a profile id');
-    ptStorageAssert(trim(strval($first['schema_name'] ?? '')) !== '', 'first snapshot should return a schema name');
+    ptStorageAssert(boolval($first['success'] ?? false), 'first playthrough should be created');
+    ptStorageAssert(intval($first['id'] ?? 0) > 0, 'first playthrough should return a profile id');
+    ptStorageAssert(trim(strval($first['schema_name'] ?? '')) !== '', 'first playthrough should return a schema name');
     $createdProfileIds[] = intval($first['id'] ?? 0);
     $createdSchemas[] = strval($first['schema_name'] ?? '');
 
-    ptStorageAssert(ptStorageSchemaExists(strval($first['schema_name'] ?? '')), 'first snapshot schema should exist');
-    $snapshotViews = $db->fetchOne(
+    ptStorageAssert(ptStorageSchemaExists(strval($first['schema_name'] ?? '')), 'first playthrough schema should exist');
+    $playthroughViews = $db->fetchOne(
         'SELECT count(*) AS count FROM pg_views WHERE schemaname = $1',
         [strval($first['schema_name'])]
     );
-    ptStorageAssert(intval($snapshotViews['count'] ?? -1) === 0, 'snapshot views must not retain references to live tables');
+    ptStorageAssert(intval($playthroughViews['count'] ?? -1) === 0, 'playthrough views must not retain references to live tables');
     ptStorageAssert(
         ptStorageSchemaContainsValue(strval($first['schema_name'] ?? ''), 'autonomy_decision', 'decision_id', $autonomyDecisionId),
-        'playthrough snapshot should clone autonomy decision rows'
+        'playthrough should clone autonomy decision rows'
     );
     ptStorageAssert(
         ptStorageSchemaContainsValue(strval($first['schema_name'] ?? ''), 'autonomy_pilot_step', 'decision_id', $autonomyDecisionId),
-        'playthrough snapshot should clone autonomy pilot rows'
+        'playthrough should clone autonomy pilot rows'
     );
 
     $firstProfile = stobePlaythroughGetProfileById(intval($first['id'] ?? 0));
-    ptStorageAssert(is_array($firstProfile), 'first snapshot profile should be queryable');
-    ptStorageAssert(stobePlaythroughToBool($firstProfile['is_active'] ?? false), 'first snapshot should be marked active');
-    ptStorageAssert(strval($firstProfile['player_name'] ?? '') === 'UT Player', 'first snapshot should persist explicit player name');
+    ptStorageAssert(is_array($firstProfile), 'first playthrough profile should be queryable');
+    ptStorageAssert(stobePlaythroughToBool($firstProfile['is_active'] ?? false), 'first playthrough should be marked active');
+    ptStorageAssert(strval($firstProfile['player_name'] ?? '') === 'UT Player', 'first playthrough should persist explicit player name');
     $storedMembers = json_decode(strval($firstProfile['player_faction_members'] ?? '[]'), true);
-    ptStorageAssert(is_array($storedMembers), 'first snapshot should store player faction member JSON');
-    ptStorageAssert($storedMembers === ['Agnu', 'Beep', 'Ruka'], 'first snapshot should persist normalized player faction members');
-    ptStorageAssert(stobePlaythroughCurrentActiveProfileName() === strval($first['name'] ?? ''), 'active profile helper should resolve first snapshot name');
+    ptStorageAssert(is_array($storedMembers), 'first playthrough should store player faction member JSON');
+    ptStorageAssert($storedMembers === ['Agnu', 'Beep', 'Ruka'], 'first playthrough should persist normalized player faction members');
+    ptStorageAssert(stobePlaythroughCurrentActiveProfileName() === strval($first['name'] ?? ''), 'active profile helper should resolve first playthrough name');
 
-    $second = stobePlaythroughCreateSchemaSnapshot($baseName, 'second snapshot', [
+    $second = stobePlaythroughCreate($baseName, 'second playthrough', [
         'mark_active' => false,
         'player_name' => 'UT Player',
         'game' => 'Kenshi',
     ]);
-    ptStorageAssert(boolval($second['success'] ?? false), 'second playthrough snapshot should be created');
-    ptStorageAssert(intval($second['id'] ?? 0) > 0, 'second snapshot should return a profile id');
-    ptStorageAssert(strval($second['name'] ?? '') !== strval($first['name'] ?? ''), 'duplicate snapshot names should be made unique');
+    ptStorageAssert(boolval($second['success'] ?? false), 'second playthrough should be created');
+    ptStorageAssert(intval($second['id'] ?? 0) > 0, 'second playthrough should return a profile id');
+    ptStorageAssert(strval($second['name'] ?? '') !== strval($first['name'] ?? ''), 'duplicate playthrough names should be made unique');
     $createdProfileIds[] = intval($second['id'] ?? 0);
     $createdSchemas[] = strval($second['schema_name'] ?? '');
 
     $profileIds = ptStorageProfileIdSet(stobePlaythroughListProfiles(100));
-    ptStorageAssert(isset($profileIds[intval($first['id'] ?? 0)]), 'profile listing should include first snapshot');
-    ptStorageAssert(isset($profileIds[intval($second['id'] ?? 0)]), 'profile listing should include second snapshot');
-    ptStorageAssert(stobePlaythroughCurrentActiveProfileName() === strval($first['name'] ?? ''), 'creating inactive snapshot should not replace active profile');
+    ptStorageAssert(isset($profileIds[intval($first['id'] ?? 0)]), 'profile listing should include first playthrough');
+    ptStorageAssert(isset($profileIds[intval($second['id'] ?? 0)]), 'profile listing should include second playthrough');
+    ptStorageAssert(stobePlaythroughCurrentActiveProfileName() === strval($first['name'] ?? ''), 'creating inactive playthrough should not replace active profile');
 
     $deleteSecond = stobePlaythroughDeleteProfile(intval($second['id'] ?? 0));
-    ptStorageAssert(boolval($deleteSecond['success'] ?? false), 'second snapshot should be deletable');
-    ptStorageAssert(stobePlaythroughGetProfileById(intval($second['id'] ?? 0)) === false, 'deleted second snapshot should no longer resolve');
-    ptStorageAssert(!ptStorageSchemaExists(strval($second['schema_name'] ?? '')), 'deleted second snapshot schema should be dropped');
+    ptStorageAssert(boolval($deleteSecond['success'] ?? false), 'second playthrough should be deletable');
+    ptStorageAssert(stobePlaythroughGetProfileById(intval($second['id'] ?? 0)) === false, 'deleted second playthrough should no longer resolve');
+    ptStorageAssert(!ptStorageSchemaExists(strval($second['schema_name'] ?? '')), 'deleted second playthrough schema should be dropped');
 
     $deleteFirst = stobePlaythroughDeleteProfile(intval($first['id'] ?? 0));
-    ptStorageAssert(boolval($deleteFirst['success'] ?? false), 'first snapshot should be deletable');
-    ptStorageAssert(stobePlaythroughGetProfileById(intval($first['id'] ?? 0)) === false, 'deleted first snapshot should no longer resolve');
-    ptStorageAssert(!ptStorageSchemaExists(strval($first['schema_name'] ?? '')), 'deleted first snapshot schema should be dropped');
-    ptStorageAssert(stobePlaythroughCurrentActiveProfileName() === '', 'active profile helper should be empty after deleting active snapshot');
+    ptStorageAssert(!boolval($deleteFirst['success'] ?? false), 'loaded playthrough must not be deletable');
+    ptStorageAssert(is_array(stobePlaythroughGetProfileById(intval($first['id'] ?? 0))), 'protected playthrough metadata should remain');
+    ptStorageAssert(ptStorageSchemaExists(strval($first['schema_name'] ?? '')), 'protected playthrough schema should remain');
+    ptStorageAssert(stobePlaythroughCurrentActiveProfileName() === strval($first['name'] ?? ''), 'rejected deletion must preserve the loaded marker');
 
     echo 'All playthrough storage regression tests passed.' . PHP_EOL;
 } finally {

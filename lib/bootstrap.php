@@ -8,6 +8,8 @@
  * compatibility shims used by legacy Herika-style pages.
  */
 
+require_once __DIR__ . '/stobe_interaction.php';
+
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
@@ -80,6 +82,7 @@ require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'utils_game_timestamp.p
 require_once($enginePath . 'tts' . DIRECTORY_SEPARATOR . 'tts-pockettts.php');
 require_once($enginePath . 'tts' . DIRECTORY_SEPARATOR . 'tts-xtts.php');
 require_once($enginePath . 'tts' . DIRECTORY_SEPARATOR . 'tts-chatterbox.php');
+require_once($enginePath . 'tts' . DIRECTORY_SEPARATOR . 'tts-higgs.php');
 require_once($enginePath . 'tts' . DIRECTORY_SEPARATOR . 'tts-omnivoice.php');
 require_once($enginePath . 'tts' . DIRECTORY_SEPARATOR . 'tts-cartesia.php');
 require_once($enginePath . 'tts' . DIRECTORY_SEPARATOR . 'tts-inworld.php');
@@ -105,7 +108,7 @@ require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'autonomy_planner_funct
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'autonomy_helper_functions.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'playthrough_schema.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'playthrough_storage.php');
-require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'playthrough_snapshot.php');
+require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'playthrough_autosave.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'playthrough_rollback.php');
 
 if (!function_exists('extract_assignments')) {

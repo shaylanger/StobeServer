@@ -2,7 +2,7 @@
 
 require_once(__DIR__ . DIRECTORY_SEPARATOR . 'logger.php');
 require_once(__DIR__ . DIRECTORY_SEPARATOR . 'settings.php');
-require_once(__DIR__ . DIRECTORY_SEPARATOR . 'playthrough_snapshot.php');
+require_once(__DIR__ . DIRECTORY_SEPARATOR . 'playthrough_autosave.php');
 
 function stobePlaythroughRollbackToleranceGamets(): int
 {
@@ -561,6 +561,7 @@ function stobePlaythroughMapHistoryRowToCoreNpcFields(array $historyRow): array
         'gender' => strval($historyRow['gender'] ?? ''),
         'profile_id' => (($historyRow['profile_id'] ?? '') === '' ? null : intval($historyRow['profile_id'])),
         'extended_data' => normalizeJsonString(normalizeCoreNpcExtendedData($historyRow['extended_data'] ?? '{}')),
+        'plugin_extended_data' => $historyRow['plugin_extended_data'] ?? '{}',
         'md5' => strval($historyRow['md5'] ?? ''),
         'gamets_last_updated' => intval($historyRow['gamets_last_updated'] ?? 0),
         'bounty' => stobeNormalizeBountyJsonString($historyRow['bounty'] ?? '{}'),
@@ -702,6 +703,7 @@ function stobePlaythroughRestoreNpcFromHistory(int $npcId, array $historyRow, ?b
         'gender' => ['value' => $fields['gender'], 'type' => 'text'],
         'profile_id' => ['value' => $fields['profile_id'], 'type' => 'int_or_null'],
         'extended_data' => ['value' => $fields['extended_data'], 'type' => 'json'],
+        'plugin_extended_data' => ['value' => $fields['plugin_extended_data'], 'type' => 'json'],
         'md5' => ['value' => $fields['md5'], 'type' => 'text'],
         'gamets_last_updated' => ['value' => intval($fields['gamets_last_updated']), 'type' => 'int'],
         'bounty' => ['value' => $fields['bounty'], 'type' => 'json'],
@@ -839,6 +841,7 @@ function stobePlaythroughFindHistoryRowForNpcIdentityAtCutoff(int $cutoffGamets,
             profile_id,
             dynamic_profile,
             extended_data,
+            plugin_extended_data,
             md5,
             gamets_last_updated,
             bounty,
@@ -914,6 +917,7 @@ function stobePlaythroughRestoreUnlockedNpcs(int $cutoffGamets): array
             profile_id,
             dynamic_profile,
             extended_data,
+            plugin_extended_data,
             md5,
             gamets_last_updated,
             bounty,
@@ -1629,6 +1633,7 @@ function stobePlaythroughTryAutoLoadOnRollback(
 
 function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $eventType = ''): array
 {
+    if (!empty($GLOBALS['pgr_skip_rollback'])) return ['triggered'=>false,'reason'=>'snapshot_failed'];
     $incoming = stobeGametsNormalize($incomingGamets);
     $event = strtolower(trim($eventType));
 
@@ -1640,7 +1645,7 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
         return ['triggered' => false, 'reason' => 'no_gamets'];
     }
 
-    $lastSeen = intval(getConfOpt('PLAYTHROUGH_LAST_SEEN_GAMETS', '0'));
+    $lastSeen = max(intval(getConfOpt('PLAYTHROUGH_LAST_SEEN_GAMETS', '0')), (int)($GLOBALS['pgr_operation']['state']['previous'] ?? 0));
     if ($lastSeen <= 0) {
         stobePlaythroughRecordLastSeenGamets($incoming);
         return ['triggered' => false, 'reason' => 'seeded'];
@@ -1684,7 +1689,7 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
     }
 
     try {
-        $latestLastSeen = intval(getConfOpt('PLAYTHROUGH_LAST_SEEN_GAMETS', '0'));
+        $latestLastSeen = max(intval(getConfOpt('PLAYTHROUGH_LAST_SEEN_GAMETS', '0')), (int)($GLOBALS['pgr_operation']['state']['previous'] ?? 0));
         if ($latestLastSeen <= 0) {
             stobePlaythroughRecordLastSeenGamets($incoming);
             return ['triggered' => false, 'reason' => 'seeded_after_lock'];
@@ -1709,7 +1714,7 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
             'prune_enabled' => stobePlaythroughPruneOnRollbackEnabled(),
         ]);
 
-        $autoLoad = stobePlaythroughTryAutoLoadOnRollback($incoming, $latestLastSeen, $event);
+        $autoLoad = !empty($GLOBALS['pgr_operation']) ? ['switched'=>false] : stobePlaythroughTryAutoLoadOnRollback($incoming, $latestLastSeen, $event);
         if (boolval($autoLoad['switched'] ?? false)) {
             setConfOpt('PLAYTHROUGH_LAST_ROLLBACK_GAMETS', strval($incoming), true);
             setConfOpt('PLAYTHROUGH_LAST_ROLLBACK_TS', strval(time()), true);
@@ -1725,7 +1730,7 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
             return [
                 'triggered' => true,
                 'autoload_switched' => true,
-                'snapshot_id' => intval($autoLoad['profile_id'] ?? 0),
+                'playthrough_id' => intval($autoLoad['profile_id'] ?? 0),
                 'delta_gamets' => $rollbackDelta,
                 'delta_days' => $rollbackDays,
                 'pruned' => stobePlaythroughZeroPruneCounts(),
@@ -1734,7 +1739,8 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
             ];
         }
 
-        $snapshotId = stobeDragonBreakSnapshotIfNeeded($latestLastSeen, $incoming);
+        $playthroughId = stobeDragonBreakPlaythroughIfNeeded($latestLastSeen, $incoming);
+        if ($playthroughId < 0) return ['triggered'=>false,'reason'=>'snapshot_failed'];
         $pruneEnabled = stobePlaythroughPruneOnRollbackEnabled();
         $pruneCounts = $pruneEnabled
             ? stobePlaythroughPruneFutureTimeline($incoming)
@@ -1768,9 +1774,11 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
             stobeDynamicProfileMarkLoadGrace(time(), $grace, 'playthrough_rollback');
         }
 
+        if (!pgr_complete(empty($restoreCounts['errors']) && empty($volatileStateCounts['errors']))) return ['triggered'=>false,'reason'=>'rollback_failed'];
+
         stobeLogInfo('PLAYTHROUGH: Rollback completed', [
             'event_type' => $event,
-            'snapshot_id' => $snapshotId,
+            'playthrough_id' => $playthroughId,
             'incoming_gamets' => $incoming,
             'last_seen_gamets' => $latestLastSeen,
             'delta_gamets' => $rollbackDelta,
@@ -1784,7 +1792,7 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
 
         return [
             'triggered' => true,
-            'snapshot_id' => $snapshotId,
+            'playthrough_id' => $playthroughId,
             'delta_gamets' => $rollbackDelta,
             'delta_days' => $rollbackDays,
             'prune_enabled' => $pruneEnabled,
@@ -1793,6 +1801,10 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
             'queues_cleared' => $queueCounts,
         ];
     } catch (Throwable $exception) {
+        if (!empty($GLOBALS['pgr_operation'])) {
+            pgr_fail($exception->getMessage());
+            return ['triggered'=>false,'reason'=>'rollback_failed'];
+        }
         stobeLogException($exception, 'PLAYTHROUGH: Rollback handling failed', [
             'event_type' => $event,
             'incoming_gamets' => $incoming,

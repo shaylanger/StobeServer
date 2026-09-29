@@ -1,4 +1,6 @@
 <?php
+// Dynamic profile scheduling is configured by web profiles; old client writes are ignored.
+
 
 /**
  * StobeServer - conf_opts endpoint.
@@ -46,6 +48,11 @@ if ($id === '') {
     stobeLogWarn('conf_opts rejected: missing id');
     http_response_code(400);
     echo json_encode(["error" => "Missing id"]);
+    exit;
+}
+
+if (str_starts_with(strtoupper($id), 'DYNAMIC_PROFILE_')) {
+    echo json_encode(['status'=>'ok', 'id'=>$id, 'changed'=>false, 'message'=>'Configure Dynamic Profiles in web Profiles.']);
     exit;
 }
 

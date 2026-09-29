@@ -22,14 +22,32 @@ if (!function_exists('stobeSynthesizeViaCartesia')) {
         $speedRaw = $runtime['connector_config']['speed'] ?? 'normal';
         $speed = is_numeric($speedRaw) ? max(0.5, min(1.5, floatval($speedRaw))) : trim(strval($speedRaw));
 
-        $payload = json_encode([
+        $data = [
             'model_id' => trim(strval($runtime['model_id'] ?? 'sonic-3')),
             'transcript' => $speechText,
             'voice' => ['mode' => 'id', 'id' => $voiceId],
             'language' => strtolower(trim(strval($runtime['language'] ?? 'en'))),
             'output_format' => ['container' => 'wav', 'encoding' => 'pcm_s16le', 'sample_rate' => 22050],
             'speed' => $speed,
-        ], JSON_UNESCAPED_UNICODE);
+        ];
+        // New models use the current API; keep legacy model requests unchanged.
+        $modelId = $data['model_id'];
+        $modernModel = preg_match('/^sonic-3\.[56](?:$|-)/', $modelId) === 1;
+        $apiVersion = '2024-11-13';
+        if ($modernModel) {
+            $apiVersion = '2026-08-14';
+            $data['voice'] = $voiceId;
+            unset($data['speed']);
+            $speedPresets = ['slowest' => 0.6, 'slow' => 0.8, 'normal' => 1.0, 'fast' => 1.2, 'fastest' => 1.5];
+            $data['generation_config'] = ['speed' => is_numeric($speed)
+                ? max(0.6, min(1.5, floatval($speed)))
+                : ($speedPresets[$speed] ?? 1.0)];
+            $accent = trim(strval($runtime['connector_config']['accent'] ?? ''));
+            if ($accent !== '' && preg_match('/^sonic-3\.6(?:$|-)/', $modelId) === 1) {
+                $data['accent'] = $accent;
+            }
+        }
+        $payload = json_encode($data, JSON_UNESCAPED_UNICODE);
         if (!is_string($payload) || $payload === '') {
             return false;
         }
@@ -40,8 +58,8 @@ if (!function_exists('stobeSynthesizeViaCartesia')) {
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $payload,
             CURLOPT_HTTPHEADER => [
-                'X-API-Key: ' . $apiKey,
-                'Cartesia-Version: 2024-11-13',
+                ($modernModel ? 'Authorization: Bearer ' : 'X-API-Key: ') . $apiKey,
+                'Cartesia-Version: ' . $apiVersion,
                 'Content-Type: application/json',
             ],
             CURLOPT_TIMEOUT => 60,

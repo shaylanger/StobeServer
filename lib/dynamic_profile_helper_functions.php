@@ -5,7 +5,7 @@
  *
  * Behavior:
  * - Periodically refreshes enabled NPC profile fields via LLM.
- * - Interval is controlled by the DYNAMIC_PROFILE_INTERVAL_HOURS global setting.
+ * - Scheduling is owned by dynamic_profile_scheduler.php and web profile metadata.
  * - Interval uses Kenshi in-game gamets, not wall-clock time.
  * - Per-NPC real-time cooldown prevents bursty refresh loops.
  * - Respects NPC/profile layered setting DYNAMIC_PROFILE_ENABLED.
@@ -587,6 +587,9 @@ function stobeDynamicProfileFetchRecentContext(string $npcName, int $limit = 30)
         ? stobeBuildEventlogDeliveryVisibilitySql('eventlog')
         : '1=1';
 
+    $params = [];
+    $audienceSql = stobeEventAudienceSql($safeNpcName, $params);
+
     return $db->fetchAll(
         "SELECT rowid AS id, type, data, gamets, localts, ts, people, location
          FROM eventlog
@@ -599,13 +602,10 @@ function stobeDynamicProfileFetchRecentContext(string $npcName, int $limit = 30)
              'infoloc'
          )
            AND {$deliveryVisibilitySql}
-           AND (
-                LOWER(COALESCE(people, '')) LIKE LOWER($1)
-                OR LOWER(COALESCE(data, '')) LIKE LOWER($1)
-           )
+           AND {$audienceSql}
          ORDER BY rowid DESC
          LIMIT " . intval($limit),
-        ['%' . $safeNpcName . '%']
+        $params
     );
 }
 
@@ -1038,7 +1038,20 @@ function stobeDynamicProfileGenerateUpdates(string $npcName, array $npcData, str
     ];
 }
 
-function stobeMaybeRunDynamicProfileCycle(
+// Legacy callers use the same server scheduler; foreground requests never generate automatically.
+function stobeMaybeRunDynamicProfileCycle(string $eventType, int $timestamp, int $gamets, string $eventData = ''): void {
+    if (PHP_SAPI !== 'cli') return;
+    require_once __DIR__ . '/dynamic_profile_scheduler.php';
+    dps_run();
+    stobeLifelikeIdentityCycle($eventType, $timestamp, $gamets, $eventData);
+}
+
+/**
+ * Lifelike identity bootstrap (deep identity text + identity matrix) for NPCs the
+ * player actually deals with. Runs from the background manager after the
+ * upstream profile scheduler; regular profile refreshes are left to that scheduler.
+ */
+function stobeLifelikeIdentityCycle(
     string $eventType,
     int $timestamp,
     int $gamets,
@@ -1111,7 +1124,7 @@ function stobeMaybeRunDynamicProfileCycle(
                 && !(function_exists('npcIsAnimal') && npcIsAnimal($npcData))
                 && $matrixRetryReady;
 
-            $regularDue = stobeDynamicProfileNpcDue($npcName, $gamets, $intervalHours);
+            $regularDue = false; // regular profile updates run in dynamic_profile_scheduler.php
             if ($regularDue && !$matrixRelevantNpc) {
                 $regularDue = false;
             }

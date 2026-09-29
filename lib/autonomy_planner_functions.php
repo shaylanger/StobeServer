@@ -136,13 +136,15 @@ function stobeAutonomyPlannerRecentActors(int $gameTs, int $limit = 30): array
     return array_values($names);
 }
 
-function stobeAutonomyPlannerRecentEvents(int $gameTs, int $limit = 18): array
+function stobeAutonomyPlannerRecentEvents(int $gameTs, int $limit = 18, string $npcName = ""): array
 {
+    $params = [$gameTs];
+    $audienceSql = stobeEventAudienceSql($npcName, $params);
     $rows = $GLOBALS['db']->fetchAll(
         "SELECT type, data, people, location, gamets
-         FROM eventlog WHERE gamets <= $1
+         FROM eventlog WHERE gamets <= $1 AND {$audienceSql}
          ORDER BY gamets DESC, rowid DESC LIMIT " . max(1, min(50, $limit)),
-        [$gameTs]
+        $params
     );
     return array_map(static function (array $row): array {
         return [
@@ -551,7 +553,7 @@ function stobeAutonomyPlannerContext(array $session, array $snapshot, array $all
         'directive' => strval($session['long_term_directive'] ?? ''),
         'persistent_goal' => $session['current_goal'] ?? [],
         'snapshot' => $snapshot,
-        'recent_events' => stobeAutonomyPlannerRecentEvents(intval($snapshot['game_ts'] ?? 0)),
+        'recent_events' => stobeAutonomyPlannerRecentEvents(intval($snapshot['game_ts'] ?? 0), 18, strval($npc['name'] ?? '')),
         'recent_autonomy' => array_map(static fn(array $event): array => [
             'event_type' => strval($event['event_type'] ?? ''),
             'command' => strval($event['command'] ?? ''),

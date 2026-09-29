@@ -28,3 +28,5 @@
 *.swp
 *.swo
 *.log
+
+/conf/stobe_interaction/

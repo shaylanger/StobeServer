@@ -133,7 +133,8 @@ function stobeBuildDiaryHistoryTextForGametsRange(
     $limit = max(1, min(400, $historyLimit));
     $db = $GLOBALS["db"];
     $excludeSql = stobeAutoDiaryEventTypeSqlList(stobeAutoDiaryRelevantEventExcludeTypes());
-    $like = '%' . $safeNpcName . '%';
+    $params = [$startGamets, $endGamets];
+    $audienceSql = stobeEventAudienceSql($safeNpcName, $params);
     $deliveryVisibilitySql = function_exists('stobeBuildEventlogDeliveryVisibilitySql')
         ? stobeBuildEventlogDeliveryVisibilitySql('eventlog')
         : '1=1';
@@ -144,10 +145,10 @@ function stobeBuildDiaryHistoryTextForGametsRange(
            AND gamets <= $2
            AND LOWER(COALESCE(type, '')) NOT IN ($excludeSql)
            AND {$deliveryVisibilitySql}
-           AND (people LIKE $3 OR data LIKE $3)
+           AND {$audienceSql}
          ORDER BY COALESCE(NULLIF(localts, 0), ts, 0) ASC, ts ASC, rowid ASC
          LIMIT " . intval($limit),
-        [$startGamets, $endGamets, $like]
+        $params
     );
     $rows = stobeFilterNarratorRowsForContext($rows, $safeNpcName, 'diary');
     if (count($rows) === 0) {
@@ -180,7 +181,8 @@ function stobeCountRelevantDiaryEventsForGametsRange(string $npcName, int $start
 
     $db = $GLOBALS["db"];
     $excludeSql = stobeAutoDiaryEventTypeSqlList(stobeAutoDiaryRelevantEventExcludeTypes());
-    $like = '%' . $safeNpcName . '%';
+    $params = [$startGamets, $endGamets];
+    $audienceSql = stobeEventAudienceSql($safeNpcName, $params);
     $deliveryVisibilitySql = function_exists('stobeBuildEventlogDeliveryVisibilitySql')
         ? stobeBuildEventlogDeliveryVisibilitySql('eventlog')
         : '1=1';
@@ -191,8 +193,8 @@ function stobeCountRelevantDiaryEventsForGametsRange(string $npcName, int $start
            AND gamets <= $2
            AND LOWER(COALESCE(type, '')) NOT IN ($excludeSql)
            AND {$deliveryVisibilitySql}
-           AND (people LIKE $3 OR data LIKE $3)",
-        [$startGamets, $endGamets, $like]
+           AND {$audienceSql}",
+        $params
     );
 
     return intval($row['total'] ?? 0);

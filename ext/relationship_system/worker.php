@@ -149,6 +149,7 @@ function processOneBatch() {
 }
 
 if ($daemon) {
+    ptr_runtime_ready('relationship');
     // Daemon mode - run continuously
     Logger::info("[REL-WORKER] Running in daemon mode, interval: {$interval}s, PID: " . getmypid());
 
@@ -157,6 +158,7 @@ if ($daemon) {
 
     $iteration = 0;
     while (true) {
+        ptr_runtime_refresh_worker();
         $iteration++;
         @file_put_contents($logFile, date('[Y-m-d H:i:s]') . " DAEMON: Iteration {$iteration} starting\n", FILE_APPEND);
 
@@ -167,12 +169,18 @@ if ($daemon) {
             // If we processed something, check again immediately
             // Otherwise wait the interval
             if ($processed === 0) {
-                sleep($interval);
+                for ($wait = 0; $wait < $interval; $wait++) {
+                    ptr_runtime_refresh_worker();
+                    sleep(1);
+                }
             }
         } catch (Exception $e) {
             @file_put_contents($logFile, date('[Y-m-d H:i:s]') . " DAEMON: Exception: " . $e->getMessage() . "\n", FILE_APPEND);
             Logger::error("[REL-WORKER] Error: " . $e->getMessage());
-            sleep($interval * 2); // Wait longer on error
+            for ($wait = 0; $wait < $interval * 2; $wait++) {
+                ptr_runtime_refresh_worker();
+                sleep(1);
+            } // Wait longer on error
         }
     }
 } else {
