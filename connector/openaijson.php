@@ -84,6 +84,42 @@ function stobeConnectorUsesReasoning(string $model, array $connectorConfig): boo
 }
 
 /**
+ * NPC dialogue is latency-sensitive: route OpenRouter to the providers measured fastest for the
+ * model (a stable provider also keeps its prompt cache warm). Fallbacks stay allowed.
+ * DeepSeek V4 Flash, 2026-09-29 benchmark: Alibaba 1.8-4 s per reply, Mancer/StreamLake 2-7 s,
+ * the rest 7-25 s or unable to serve the JSON-schema request.
+ */
+function stobeApplyOpenRouterProviderPin(array &$payload, string $connectorType, string $model): void {
+    if ($connectorType !== 'openrouterjson' || isset($payload['provider'])) {
+        return;
+    }
+    $pins = [
+        'z-ai/glm-5.2' => ['deepinfra'],
+        'deepseek/deepseek-v4-flash' => ['alibaba/fp8', 'mancer/fp8', 'streamlake/fp8'],
+    ];
+    $key = preg_replace('/:(nitro|floor)$/', '', strtolower(trim($model)));
+    if (isset($pins[$key])) {
+        $payload['provider'] = ['order' => $pins[$key], 'allow_fallbacks' => true];
+    }
+}
+
+/**
+ * Mid-fight chat skips reasoning (COMBAT_FAST_REPLIES). Other NPC chat gets a reasoning budget
+ * (CHAT_REASONING_MAX_TOKENS, default 300, 0 = no cap): DeepSeek ignores "effort", and uncapped
+ * it sometimes thinks 1,000+ tokens (13 s) on one line. Background calls keep full reasoning.
+ */
+function stobeReasoningPayload(array $meta): array {
+    if (!empty($GLOBALS['STOBE_REASONING_OFF'])) {
+        return ['enabled' => false, 'exclude' => true];
+    }
+    $cap = 0;
+    if (strval($meta['event_type'] ?? '') === 'chat') {
+        $cap = function_exists('getSetting') ? intval(getSetting('CHAT_REASONING_MAX_TOKENS', '300')) : 300;
+    }
+    return $cap > 0 ? ['max_tokens' => $cap, 'exclude' => true] : ['exclude' => true];
+}
+
+/**
  * Hidden reasoning shares max_tokens with the visible reply. Reserve headroom so
  * a long think cannot starve the JSON reply (finish_reason=length, empty content).
  */
@@ -709,20 +745,10 @@ function callLLM(array $messages, array $config, array $meta = []): string|false
 
     stobeApplyConnectorExtraPayload($payload, $connectorConfig, false);
 
-    // NPC dialogue is latency-sensitive. Keep the model/context unchanged, but
-    // prefer a stable low-latency provider so GLM's repeated prompt prefix can hit its cache.
-    if (
-        $connectorType === 'openrouterjson'
-        && strtolower(trim(strval($model))) === 'z-ai/glm-5.2'
-        && !isset($payload['provider'])
-    ) {
-        $payload['provider'] = ['order' => ['deepinfra'], 'allow_fallbacks' => true];
-    }
+    stobeApplyOpenRouterProviderPin($payload, strval($connectorType), strval($model));
 
     if ($usesReasoning) {
-        $payload['reasoning'] = !empty($GLOBALS['STOBE_REASONING_OFF'])
-            ? ['enabled' => false, 'exclude' => true]
-            : ['exclude' => true];
+        $payload['reasoning'] = stobeReasoningPayload($meta);
     }
 
     $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -1079,19 +1105,10 @@ function callLLMStream(
 
     stobeApplyConnectorExtraPayload($payload, $connectorConfig, true);
 
-    // See non-streaming path above. Keeping the provider stable also improves prompt-cache reuse.
-    if (
-        $connectorType === 'openrouterjson'
-        && strtolower(trim(strval($model))) === 'z-ai/glm-5.2'
-        && !isset($payload['provider'])
-    ) {
-        $payload['provider'] = ['order' => ['deepinfra'], 'allow_fallbacks' => true];
-    }
+    stobeApplyOpenRouterProviderPin($payload, strval($connectorType), strval($model));
 
     if ($usesReasoning) {
-        $payload['reasoning'] = !empty($GLOBALS['STOBE_REASONING_OFF'])
-            ? ['enabled' => false, 'exclude' => true]
-            : ['exclude' => true];
+        $payload['reasoning'] = stobeReasoningPayload($meta);
     }
 
     $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
