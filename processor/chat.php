@@ -1136,6 +1136,16 @@ if (!$narratorMode && empty($manualActionActive) && strcasecmp($speaker, $player
 }
 $negotiationActive = !$narratorMode && strcasecmp($speaker, $playerName) === 0
     && stobeDealShouldNegotiate($targetNpc, $npcData, $message);
+// The player accepting the NPC's own last offer binds the NPC to it.
+if ($negotiationActive && function_exists('stobeNegPlayerAcceptsOfferNote')) {
+    $acceptNote = stobeNegPlayerAcceptsOfferNote($targetNpc, $message);
+    if ($acceptNote !== '') {
+        $messages[] = ['role' => 'user', 'content' => '[' . $acceptNote . ']'];
+    }
+}
+// Mid-fight replies skip the model's hidden reasoning step (setting COMBAT_FAST_REPLIES).
+$GLOBALS['STOBE_REASONING_OFF'] = is_array($npcData) && stobeNpcIsInCombat($npcData)
+    && (function_exists('getSettingBool') ? getSettingBool('COMBAT_FAST_REPLIES', true) : true);
 $negotiationKind = $negotiationActive ? stobeDealKindFor($npcData) : '';
 // Speech is held back only while terms can still be agreed; an agreed deal that is
 // just being carried out streams normally (no added latency).
@@ -1276,6 +1286,16 @@ if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
         $responseActions = stobeNegAttachPendingForChat($targetNpc, $responseActions);
     } catch (Throwable $negAttachError) {
         stobeLogWarn('Negotiation dispatch attach failed', ['npc'=>$targetNpc, 'error'=>$negAttachError->getMessage()]);
+    }
+}
+// An NPC attacking the player over a private matter keeps it one-on-one.
+if (!$narratorMode && function_exists('stobeNegRegisterPersonalFight') && is_array($npcData) && !npcIsInPlayerFaction($npcData)) {
+    foreach ($responseActions as $responseAction) {
+        if (preg_match('/^ATTACK@(.+)$/i', strval($responseAction), $attackMatch)
+            && strcasecmp(normalizeParticipantNameToken($attackMatch[1]), $playerName) === 0) {
+            try { stobeNegRegisterPersonalFight($targetNpc, $npcData, strval($responseText ?? '')); } catch (Throwable $e) {}
+            break;
+        }
     }
 }
 

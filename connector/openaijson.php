@@ -720,7 +720,9 @@ function callLLM(array $messages, array $config, array $meta = []): string|false
     }
 
     if ($usesReasoning) {
-        $payload['reasoning'] = ['exclude' => true];
+        $payload['reasoning'] = !empty($GLOBALS['STOBE_REASONING_OFF'])
+            ? ['enabled' => false, 'exclude' => true]
+            : ['exclude' => true];
     }
 
     $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -1087,7 +1089,9 @@ function callLLMStream(
     }
 
     if ($usesReasoning) {
-        $payload['reasoning'] = ['exclude' => true];
+        $payload['reasoning'] = !empty($GLOBALS['STOBE_REASONING_OFF'])
+            ? ['enabled' => false, 'exclude' => true]
+            : ['exclude' => true];
     }
 
     $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

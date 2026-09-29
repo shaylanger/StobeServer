@@ -180,7 +180,9 @@ function stobeNegParseHandover(string $message, string $npc, string $player): ar
         }
     }
     if (!$isHandover || ($cats <= 0 && count($items) === 0)) {
-        if ($cue && ($owed > 0 || count(stobeNegPlayerOwedItems($npc)) > 0)) {
+        // "Here's the extra one thousand" with no deal on record still must not read as paid.
+        if ($cue && ($owed > 0 || count(stobeNegPlayerOwedItems($npc)) > 0
+            || preg_match('/\b(\d{1,9}|cats?|money|payment|cash|the rest|what i owe)\b/', $text))) {
             return ['reason'=>'claimed_nothing_moved'] + $none;
         }
         return $none;

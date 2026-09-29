@@ -55,7 +55,10 @@ function stobeDealValidate(array $deal): array {
         if ($kind === 'RELEASE_PRISONER' && trim(strval($term['subject'] ?? '')) === '') {
             return ['ok'=>false, 'error'=>'missing_prisoner'];
         }
-        if (isset($term['when']) && !in_array(strval($term['when']), ['now','after_player'], true)) {
+        if (isset($term['when']) && strval($term['when']) === 'after_npc' && $by !== 'player') {
+            return ['ok'=>false, 'error'=>'invalid_when'];
+        }
+        if (isset($term['when']) && !in_array(strval($term['when']), ['now','after_player','after_npc'], true)) {
             return ['ok'=>false, 'error'=>'invalid_when'];
         }
     }
@@ -270,7 +273,7 @@ function stobeDealPromptBlock(string $npc, array $npcData, string $playerMessage
         . " For ACCEPT, COUNTER or PROPOSE, put a JSON array of concrete obligations in deal_terms. Example: "
         . '[{"kind":"GIVE_CATS","by":"player","to":"npc","amount":100},{"kind":"STOP_ATTACK","by":"npc","target":"player"}]'
         . " Allowed kinds: " . stobeDealTermKindsText() . "."
-        . " Items use \"item\" and optional \"quantity\"; add \"when\":\"after_player\" to your own terms that you only perform once the player has delivered. If the player offers to heal, bandage or patch you up, that is their term: kind FIRST_AID, by player, target npc. To hand over something you are wearing, use GIVE_ITEM (it comes off and goes to them); UNEQUIP_ITEM only takes it off and you keep it. When you agree to take something off, put something on or hand something over, use the concrete kind (UNEQUIP_ITEM, EQUIP_ITEM, GIVE_ITEM with the exact item name), never PROMISE; PROMISE is only for things the game cannot carry out. Bets and anything that depends on an outcome that has not happened yet (\"if you win\", \"if I lose\") must be a PROMISE term with that condition in its text, never a transfer. If an item is offered or demanded only generically, use item \"drink\" or \"food\" (any drink/food then counts); if a specific item is named (\"bread\"), use that exact name.";
+        . " Items use \"item\" and optional \"quantity\"; add \"when\":\"after_player\" to your own terms that you only perform once the player has delivered. Always write sides as \"player\" and \"npc\" (never names). When the player pays in parts (\"half now, half later\"), make one GIVE_CATS term per part and add \"when\":\"after_npc\" to the part paid after you deliver; your own delivery then waits only for the first part. If the player accepts your last offer, ACCEPT exactly those terms; never raise the price after they agreed. A fight having started does not mean anyone is hurt: only mention wounds the condition data shows. If the player offers to heal, bandage or patch you up, that is their term: kind FIRST_AID, by player, target npc. To hand over something you are wearing, use GIVE_ITEM (it comes off and goes to them); UNEQUIP_ITEM only takes it off and you keep it. When you agree to take something off, put something on or hand something over, use the concrete kind (UNEQUIP_ITEM, EQUIP_ITEM, GIVE_ITEM with the exact item name), never PROMISE; PROMISE is only for things the game cannot carry out. Bets and anything that depends on an outcome that has not happened yet (\"if you win\", \"if I lose\") must be a PROMISE term with that condition in its text, never a transfer. If an item is offered or demanded only generically, use item \"drink\" or \"food\" (any drink/food then counts); if a specific item is named (\"bread\"), use that exact name.";
     if (in_array($kind, ['combat','surrender'], true)) {
         $rules .= " An accepted or countered combat deal must include your STOP_ATTACK.";
     }
@@ -319,7 +322,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
         $terms = json_decode(strval($open['terms'] ?? '[]'), true); // "deal" = the terms on the table
     }
     if (!is_array($terms)) return ['ok'=>false,'error'=>'invalid_terms_json'];
-    $terms = stobeDealNormalizeConditionalTerms(array_values(array_filter($terms, 'is_array')));
+    $terms = stobeDealNormalizeConditionalTerms(array_values(array_filter($terms, 'is_array')), $npc, $player);
     $terms = stobeDealPromoteClothingPromises($terms, $npcData);
     if ($open !== null) $kind = strval($open['kind'] ?? $kind) ?: $kind;
     if (in_array($kind, ['combat','surrender'], true)) {
@@ -411,18 +414,39 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
  * cannot be carried out by the game, so they are recorded as PROMISE terms instead
  * of being executed immediately.
  */
-function stobeDealNormalizeConditionalTerms(array $terms): array {
+function stobeDealNormalizeConditionalTerms(array $terms, string $npc = '', string $player = ''): array {
     $out = [];
+    $side = static function ($value) use ($npc, $player): string {
+        $v = strtolower(trim(strval($value)));
+        $base = static fn(string $n): string => strtolower(trim(preg_replace('/\s*\[[^\]]*\]\s*/u', ' ', $n) ?? $n));
+        if (in_array($v, ['player', 'you', 'the player'], true) || ($player !== '' && $v === $base($player))) return 'player';
+        if (in_array($v, ['npc', 'me', 'myself', 'self', 'i'], true) || ($npc !== '' && $v === $base($npc))) return 'npc';
+        return strval($value);
+    };
     foreach ($terms as $term) {
+        // Models often write names ("Shay", "Slant") where the ledger expects player/npc.
+        foreach (['by', 'to', 'target'] as $field) {
+            if (isset($term[$field])) $term[$field] = $side($term[$field]);
+        }
         $condition = trim(strval($term['condition'] ?? ''));
         $when = strtolower(trim(strval($term['when'] ?? '')));
+        if ($when !== '' && preg_match('/^(now|immediate(ly)?|up[_ ]?front|first|right[_ ]?(now|away)|at[_ ]once|before|today|on[_ ]the[_ ]spot)$/', $when)) {
+            $when = 'now';
+            $term['when'] = 'now';
+        }
+        // "Half now, half later": the player's later installment is due after the NPC delivers.
+        if (($term['by'] ?? '') === 'player' && $condition === '' && $when !== '' && !in_array($when, ['now', 'after_npc'], true)
+            && !preg_match('/\b(if|unless|lose|lost|win|won|bet|should|in case)\b/', str_replace('_', ' ', $when))) {
+            $when = 'after_npc';
+            $term['when'] = 'after_npc';
+        }
         // "after payment", "once paid", "on delivery" all mean: after the player's side.
         if ($when !== '' && preg_match('/^(after|on|once|upon|when)[_ ]?(the[_ ]?)?(player|payment|paid|pay|delivery|delivered|receipt|received|drink|food|item|cats|money)/', $when)) {
             $when = 'after_player';
             $term['when'] = 'after_player';
         }
         $kind = strval($term['kind'] ?? '');
-        if ($kind !== 'PROMISE' && $kind !== 'STOP_ATTACK' && ($condition !== '' || !in_array($when, ['', 'now', 'after_player'], true))) {
+        if ($kind !== 'PROMISE' && $kind !== 'STOP_ATTACK' && ($condition !== '' || !in_array($when, ['', 'now', 'after_player', 'after_npc'], true))) {
             $what = strtolower(str_replace('_', ' ', $kind));
             if (isset($term['amount'])) $what .= ' ' . intval($term['amount']) . ' Cats';
             if (!empty($term['item'])) $what .= ' ' . strval($term['item']);

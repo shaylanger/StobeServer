@@ -89,6 +89,9 @@ try {
         stobeMaybeRunRegularMemoryCycle($tickEventType, $tickTimestamp, $tickGamets, $tickPayload);
     }
     stobeBackgroundRecordTick($tickGamets);
+    if (function_exists('stobeLifelikeIdentityCycle')) {
+        stobeLifelikeIdentityCycle($tickEventType, $tickTimestamp, $tickGamets, $tickPayload);
+    }
     stobeBackgroundRecordTick($tickGamets);
     if (function_exists('stobeMaybeRunAutoDiaryCycle')) {
         stobeMaybeRunAutoDiaryCycle($tickTimestamp, $tickGamets);
