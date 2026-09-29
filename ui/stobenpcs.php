@@ -3240,6 +3240,105 @@ if (typeof window.consolidation !== 'function') { window.consolidation = functio
         </div>
         <?php endif; ?>
 
+        <?php if ($editItem): ?>
+        <div class="form-item span-2" id="npc-work-goals-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                <label style="margin:0;">Goals / Tasks</label>
+                <button type="button" id="npc_work_goals_refresh" class="prompt-head-copy-btn">Refresh</button>
+            </div>
+            <small class="hint">Persistent STOBE production and task goals for this NPC. Read-only debug view; updates automatically while this profile is open.</small>
+            <div id="npc_work_goals_meta" style="font-size:11px;color:#9fb1c9;">Loading...</div>
+            <div id="npc_work_goals_list" style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+                <div style="color:#9fb1c9;">Loading work goals...</div>
+            </div>
+        </div>
+        <script>
+        (function(){
+            const root = document.getElementById('npc-work-goals-section');
+            const list = document.getElementById('npc_work_goals_list');
+            const meta = document.getElementById('npc_work_goals_meta');
+            const btn = document.getElementById('npc_work_goals_refresh');
+            const npcName = <?= json_encode(strval($editItem['npc_name'] ?? '')) ?>;
+            if (!root || !list || !npcName) return;
+
+            function esc(v){
+                return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({
+                    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+                }[c]));
+            }
+            function badge(status){
+                const s = String(status || 'ACTIVE').toUpperCase();
+                let bg = '#3a3a3a', fg = '#e9efff', border = '#5a5a5a';
+                if (s === 'ACTIVE') { bg='#183a25'; fg='#79e39a'; border='#2f8050'; }
+                else if (s === 'COMPLETE') { bg='#1d334a'; fg='#8bc7ff'; border='#3c6f9f'; }
+                else if (s === 'BLOCKED') { bg='#4a2525'; fg='#ff9e9e'; border='#944848'; }
+                else if (s === 'CANCELLED') { bg='#3e3420'; fg='#e8c67a'; border='#7b6637'; }
+                else if (s === 'PAUSED') { bg='#30343a'; fg='#c5cfdd'; border='#596474'; }
+                else if (s === 'WAITING_APPROVAL') { bg='#4a3a17'; fg='#ffd879'; border='#9a782d'; }
+                return '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;background:'+bg+';color:'+fg+';border:1px solid '+border+';">'+esc(s)+'</span>';
+            }
+            function render(goals){
+                if (!Array.isArray(goals) || goals.length === 0) {
+                    list.innerHTML = '<div style="border:1px solid #4a4a4a;border-radius:8px;padding:10px;background:#1a1a1a;color:#9fb1c9;">No work goals for this NPC yet.</div>';
+                    return;
+                }
+                list.innerHTML = goals.map(g => {
+                    const qty = Math.max(0, Number(g.quantity || 0));
+                    const done = Math.max(0, Number(g.completed || 0));
+                    const pct = qty > 0 ? Math.max(0, Math.min(100, Math.round((done / qty) * 100))) : 0;
+                    const dest = String(g.destination_name || '').trim();
+                    const target = String(g.target_name || '').trim();
+                    const kind = String(g.kind || g.goal_type || '').trim();
+                    const step = String(g.current_step || '').trim();
+                    const reason = String(g.reason || '').trim();
+                    const cap = Math.max(0, Number(g.max_spend || 0));
+                    const spent = Math.max(0, Number(g.spent || 0));
+                    const progressText = qty > 0 ? (done+' / '+qty) : (done > 0 ? String(done)+' done' : 'open-ended');
+                    return '<div style="border:1px solid #4a4a4a;border-radius:8px;padding:10px;background:#1a1a1a;">'
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
+                        + '<div><div style="font-size:10px;color:#e6b76c;font-weight:800;letter-spacing:.5px;">'+esc(kind.replaceAll('_',' '))+'</div>'
+                        + '<div style="font-weight:800;color:#e9efff;">'+esc(g.item_name || kind || 'Goal')+' <span style="color:#9fb1c9;font-weight:600;">'+esc(progressText)+'</span></div></div>'
+                        + badge(g.status)
+                        + '</div>'
+                        + (qty > 0 ? '<div style="height:7px;background:#292929;border:1px solid #444;border-radius:999px;overflow:hidden;margin-top:8px;"><div style="height:100%;width:'+pct+'%;background:#e6b76c;"></div></div>' : '')
+                        + (target ? '<div style="margin-top:7px;font-size:12px;color:#cfd9ea;"><strong style="color:#e6b76c;">Target/filter:</strong> '+esc(target)+'</div>' : '')
+                        + (dest ? '<div style="margin-top:5px;font-size:12px;color:#cfd9ea;"><strong style="color:#e6b76c;">Destination:</strong> '+esc(dest)+'</div>' : '')
+                        + (cap > 0 ? '<div style="margin-top:5px;font-size:12px;color:#ffd879;"><strong>Trade:</strong> '+spent+' / '+cap+' Cats cap</div>' : (spent > 0 ? '<div style="margin-top:5px;font-size:12px;color:#ffd879;"><strong>Trade:</strong> '+spent+' Cats</div>' : ''))
+                        + (step ? '<div style="margin-top:5px;font-size:12px;color:#cfd9ea;"><strong style="color:#e6b76c;">Current step:</strong> '+esc(step)+'</div>' : '')
+                        + (reason ? '<div style="margin-top:5px;font-size:12px;color:#ffaaaa;"><strong>Reason/blocker:</strong> '+esc(reason)+'</div>' : '')
+                        + '<div style="margin-top:6px;font-size:10px;color:#6f7f93;">Goal ID: '+esc(g.goal_id || '')+'</div>'
+                        + '</div>';
+                }).join('');
+            }
+            let busy = false;
+            async function load(){
+                if (busy) return;
+                busy = true;
+                if (btn) btn.disabled = true;
+                try {
+                    const res = await fetch('api/stobe_work_goals.php?name=' + encodeURIComponent(npcName) + '&_=' + Date.now(), {cache:'no-store'});
+                    const j = await res.json();
+                    if (!j || !j.ok) throw new Error((j && j.error) || 'Failed to load work goals');
+                    render(j.goals || []);
+                    if (meta) meta.textContent = 'Last refreshed: ' + new Date().toLocaleTimeString();
+                } catch (e) {
+                    list.innerHTML = '<div style="border:1px solid #744;border-radius:8px;padding:10px;background:#2a1717;color:#ffaaaa;">Could not load work goals: '+esc(e && e.message ? e.message : e)+'</div>';
+                    if (meta) meta.textContent = 'Refresh failed';
+                } finally {
+                    busy = false;
+                    if (btn) btn.disabled = false;
+                }
+            }
+            if (btn) btn.addEventListener('click', load);
+            load();
+            const timer = setInterval(() => {
+                if (!document.body.contains(root)) { clearInterval(timer); return; }
+                if (document.visibilityState === 'visible') load();
+            }, 3000);
+        })();
+        </script>
+        <?php endif; ?>
+
         <div class="form-item span-2">
             <label for="metadata">Metadata (JSON)</label>
             <textarea id="metadata" name="metadata" placeholder="{}"><?= htmlspecialchars($editItem["metadata"] ?? "") ?></textarea>

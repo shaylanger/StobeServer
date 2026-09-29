@@ -426,6 +426,43 @@ $resolvedInitiatorName = $resolveParticipantName(
 );
 $audienceNames = stobeNormalizeRechatActorList(array_values($conversationScopeNames));
 
+/*
+ * A direct player -> NPC chat already produced its NPC reply in chat.php.
+ * Do not let the follow-up rechat daemon turn that private exchange into an
+ * unsolicited nearby-NPC group conversation. Ambient NPC-initiated chatter is
+ * unaffected, and forced limb-loss reactions are still allowed through.
+ */
+$initiatorIsPlayer = false;
+if ($resolvedInitiatorName !== '') {
+    $initiatorNpcData = getNpcData($resolvedInitiatorName);
+    if (is_array($initiatorNpcData)) {
+        $initiatorMetadataRaw = $initiatorNpcData['metadata'] ?? [];
+        $initiatorMetadata = is_array($initiatorMetadataRaw)
+            ? $initiatorMetadataRaw
+            : json_decode(strval($initiatorMetadataRaw), true);
+        if (is_array($initiatorMetadata)) {
+            $initiatorIsPlayer = strtolower(trim(strval($initiatorMetadata['type'] ?? ''))) === 'player';
+        }
+    }
+}
+if (
+    $forcedResponder === ''
+    && $resolvedInitiatorName !== ''
+    && (
+        $initiatorIsPlayer
+        || ($playerName !== '' && strcasecmp($resolvedInitiatorName, $playerName) === 0)
+    )
+) {
+    stobeLogInfo('Rechat stopped after direct player conversation', [
+        'initiator' => $resolvedInitiatorName,
+        'previous_speaker' => $previousSpeaker,
+        'previous_target' => $previousTarget,
+        'requested_depth' => $requestedDepth,
+    ]);
+    echo "ok";
+    return;
+}
+
 $speakerNpcData = getNpcData($previousSpeaker);
 $speakerEnvironment = $extractEnvironment($speakerNpcData, $previousSpeaker);
 $maxRoundsForDepth = getNpcProfileIntegerSetting(
@@ -771,18 +808,20 @@ if (!$hasLimbLossSpecialContext && stobeIsStrictRechatResponseEnabled()) {
     $strictRechatListener = $previousSpeaker;
 }
 
-$systemPrompt = stobeBuildGameTimePromptBlock($gamets, is_array($npcData) ? $npcData : [])
-    . "\n\n"
-    . buildRechatSystemPrompt(
-        $respondingNpc,
-        is_array($npcData) ? $npcData : [],
-        $previousSpeaker,
-        $previousMessage,
-        $previousTarget,
-        intval($gamets),
-        $rechatSpecialContext,
-        $strictRechatListener
-    );
+$systemPrompt = buildRechatSystemPrompt(
+    $respondingNpc,
+    is_array($npcData) ? $npcData : [],
+    $previousSpeaker,
+    $previousMessage,
+    $previousTarget,
+    intval($gamets),
+    $rechatSpecialContext,
+    $strictRechatListener
+);
+$gameTimePrompt = stobeBuildGameTimePromptBlock($gamets, is_array($npcData) ? $npcData : []);
+if ($gameTimePrompt !== '') {
+    $systemPrompt .= "\n\n" . $gameTimePrompt;
+}
 $nearbyPartyPrompt = stobeBuildNearbyPlayerFactionPartyPrompt($npcData, $respondingNpc);
 if ($nearbyPartyPrompt !== '') {
     $systemPrompt .= "\n\n" . $nearbyPartyPrompt;

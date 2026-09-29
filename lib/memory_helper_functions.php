@@ -1001,6 +1001,85 @@ function stobeRegularMemoryFetchLatestCompletedSummary(string $peopleKey, int $b
     return trim(sanitizeForKenshi(strval($prevRow['summary'] ?? '')));
 }
 
+function stobeRegularMemoryNormalizePackedForLlm(string $packed): string
+{
+    $chunks = preg_split('/\n\s*\n/u', trim($packed)) ?: [];
+    $out = [];
+    $seenSpeech = [];
+    $lastKey = '';
+    $lastIndex = -1;
+    $repeatCount = 1;
+
+    foreach ($chunks as $chunk) {
+        $line = trim(preg_replace('/\s+/u', ' ', strval($chunk)) ?? strval($chunk));
+        if ($line === '') {
+            continue;
+        }
+        $eventType = 'memory';
+        $content = $line;
+        if (preg_match('/^\[([^\]@]+)(?:\s+@[^\]]+)?\]\s*(.*)$/iu', $line, $m) === 1) {
+            $eventType = strtolower(trim(strval($m[1] ?? 'memory')));
+            $content = trim(strval($m[2] ?? ''));
+        }
+        $contentKey = strtolower(trim(preg_replace('/\s+/u', ' ', $content) ?? $content));
+        if (in_array($eventType, ['chat', 'inputtext', 'inputtext_s'], true)) {
+            if (isset($seenSpeech[$contentKey])) {
+                continue;
+            }
+            $seenSpeech[$contentKey] = true;
+        }
+        $key = $eventType . '|' . $contentKey;
+        if ($lastIndex >= 0 && $key === $lastKey) {
+            $repeatCount++;
+            $out[$lastIndex] = '[' . $eventType . '] ' . $content . ' (repeated ' . $repeatCount . ' times)';
+            continue;
+        }
+        $repeatCount = 1;
+        $lastKey = $key;
+        $out[] = '[' . $eventType . '] ' . $content;
+        $lastIndex = count($out) - 1;
+    }
+    return implode("\n\n", $out);
+}
+
+function stobeRegularMemoryDeterministicRoutineSummary(string $packed, string $previousSummary = ''): string
+{
+    $chunks = preg_split('/\n\s*\n/u', trim($packed)) ?: [];
+    if (count($chunks) === 0) {
+        return '';
+    }
+    $routineTypes = ['healing', 'eat', 'item_pickup', 'looting', 'location', 'build', 'dismantle', 'lockpicked', 'lockpiked'];
+    $unique = [];
+    foreach ($chunks as $chunk) {
+        $line = trim(strval($chunk));
+        if ($line === '') {
+            continue;
+        }
+        if (preg_match('/^\[([^\]]+)\]\s*(.*)$/iu', $line, $m) !== 1) {
+            return '';
+        }
+        $eventType = strtolower(trim(strval($m[1] ?? '')));
+        if (!in_array($eventType, $routineTypes, true)) {
+            return '';
+        }
+        $content = trim(strval($m[2] ?? ''));
+        $key = $eventType . '|' . strtolower($content);
+        $unique[$key] = '[' . $eventType . '] ' . $content;
+    }
+    if ((count($chunks) < 4 && preg_match('/\(repeated\s+[4-9][0-9]*\s+times\)/i', $packed) !== 1) || count($unique) > 3) {
+        return '';
+    }
+    $routine = 'Recent routine events: ' . implode('; ', array_values($unique)) . '.';
+    $previous = trim($previousSummary);
+    if ($previous !== '') {
+        if (stripos($previous, $routine) !== false) {
+            return truncatePromptValue($previous, 3500);
+        }
+        return truncatePromptValue($previous . ' ' . $routine, 3500);
+    }
+    return truncatePromptValue($routine, 3500);
+}
+
 function stobeRegularMemoryGenerateSummaryFromPacked(
     string $peopleKey,
     string $packedMessage,
@@ -1008,9 +1087,19 @@ function stobeRegularMemoryGenerateSummaryFromPacked(
     int $gametsStart = 0,
     int $gametsEnd = 0
 ): string {
-    $packed = trim($packedMessage);
+    $packed = stobeRegularMemoryNormalizePackedForLlm($packedMessage);
     if ($packed === '') {
         return '';
+    }
+
+    $deterministicRoutine = stobeRegularMemoryDeterministicRoutineSummary($packed, $previousSummary);
+    if ($deterministicRoutine !== '') {
+        stobeLogDebug('Regular memory routine pack compacted without LLM', [
+            'people' => $peopleKey,
+            'packed_length' => strlen($packed),
+            'summary_length' => strlen($deterministicRoutine),
+        ]);
+        return $deterministicRoutine;
     }
 
     $peopleLabel = stobeRegularMemoryPeopleLabel($peopleKey);
@@ -1018,11 +1107,15 @@ function stobeRegularMemoryGenerateSummaryFromPacked(
         $peopleLabel = '(unknown group)';
     }
 
-    $defaultSystemPrompt = "Focus on key events, tagging characters, locations, and factions accurately. "
-        . "Ensure memories align and maintain chronological order while foreshadowing future arcs.";
+    $defaultSystemPrompt = "Create selective long-term memory for Kenshi characters. "
+        . "Preserve events that would actually matter later: deaths, severe injuries, rescues, betrayals, recruitment or departures, relationship changes, promises and plans, debts, arguments, discoveries, important trades or gifts, faction encounters, major travel milestones, personal revelations, repeated preferences, fears, goals, and emotionally unusual moments. "
+        . "Preserve who was involved and where it happened when that place matters. Keep unresolved plans, promises, grudges, obligations, and goals explicit so they can be recalled later. "
+        . "Compress or omit routine greetings, repetitive small talk, ordinary status spam, repeated movement updates, and mundane events unless repetition itself establishes a habit or preference. "
+        . "Do not make every event equally important. Maintain chronological continuity, never invent events, and do not foreshadow events that have not happened.";
     $systemPrompt = function_exists('stobeGetPromptTemplateValue')
         ? stobeGetPromptTemplateValue('regular_memory_summarizer', $defaultSystemPrompt)
         : $defaultSystemPrompt;
+    $systemPrompt = rtrim($systemPrompt) . "\n\nMemory selection rules: preserve emotionally significant/unusual events, relationship changes, deaths, injuries, rescues, betrayals, promises, plans, obligations, arguments, discoveries, meaningful gifts/trades, faction encounters, important places, personal revelations, repeated preferences/habits, fears and goals. Keep unresolved commitments explicit. Compress routine greetings, repetitive small talk, ordinary status/movement spam and low-value repetition unless repetition itself is meaningful. Never invent events or future outcomes.";
 
     $userPrompt = "<regular_memory_request>\n"
         . "  <people>" . (function_exists('stobePromptXmlEscape') ? stobePromptXmlEscape($peopleLabel) : $peopleLabel) . "</people>\n";
@@ -1050,7 +1143,7 @@ function stobeRegularMemoryGenerateSummaryFromPacked(
     }
     $escapedPacked = function_exists('stobePromptXmlEscape') ? stobePromptXmlEscape($packed) : $packed;
     $userPrompt .= "  <packed_events>{$escapedPacked}</packed_events>\n"
-        . "  <instruction>Create an updated concise memory summary for future retrieval. Keep chronology using memory_window and event order, and never include raw gamets or numeric timestamp IDs in the summary text.</instruction>\n"
+        . "  <instruction>Create an updated selective memory summary for future retrieval. Keep durable personal facts, relationship changes, important places, unresolved plans/promises, injuries, conflicts, rescues, losses, discoveries, and meaningful preferences. Compress routine or repetitive chatter aggressively. Keep chronology using memory_window and event order, and never include raw gamets or numeric timestamp IDs in the summary text.</instruction>\n"
         . "</regular_memory_request>";
 
     $enginePath = $GLOBALS["ENGINE_PATH"] ?? dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR;
@@ -1611,11 +1704,13 @@ function stobeRegularMemoryGenerateIndividualSummary(array $npcRow, array $globa
     }
 
     $bioContext = stobeRegularMemoryBuildIndividualBioContext($npcRow);
-    $defaultSystemPrompt = "You are writing an individual memory bank summary for NPC {$npcName} in Kenshi roleplay.\n"
-        . "Write from {$npcName}'s viewpoint and values.\n"
-        . "Only include events where {$npcName} is directly involved.\n"
-        . "Focus on durable continuity: relationships, conflicts, injuries, objectives, and unresolved tensions.\n"
-        . "Do not invent events. Ignore engine/system noise.\n"
+    $defaultSystemPrompt = "You are writing an individual long-term memory bank for NPC {$npcName} in Kenshi roleplay.\n"
+        . "Write from {$npcName}'s viewpoint, personality, values, fears, preferences, and relationships.\n"
+        . "Only include events where {$npcName} is directly involved or that materially affect them.\n"
+        . "Be selective. Preserve emotionally significant or unusual events, relationship changes, injuries, rescues, betrayals, losses, promises, plans, debts, arguments, discoveries, meaningful gifts/trades, faction experiences, important places, personal revelations, and repeated behavior that establishes a preference or habit.\n"
+        . "Keep unresolved goals, promises, obligations, grudges, fears, and plans explicit until later events resolve them. Preserve useful place associations such as what happened in a town or region when it could produce a future callback.\n"
+        . "Compress ordinary greetings, repetitive small talk, routine travel/status updates, and low-value repetition unless the repetition itself becomes personally meaningful.\n"
+        . "Do not invent events, feelings, relationships, or outcomes. Ignore engine/system noise.\n"
         . "Character reference:\n{$bioContext}\n\n"
         . "Output plain text only.";
     $systemPrompt = function_exists('stobeGetPromptTemplateValue')

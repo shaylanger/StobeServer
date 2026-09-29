@@ -76,6 +76,19 @@ function stobeDecodeConnectorConfig(mixed $rawConfig): array {
     return is_array($decoded) ? $decoded : [];
 }
 
+/** Reasoning is on when the model name says so or the connector is flagged reasoning_model. */
+function stobeConnectorUsesReasoning(string $model, array $connectorConfig): bool {
+    return stobeIsReasoningModel($model) || !empty($connectorConfig['reasoning_model']);
+}
+
+/**
+ * Hidden reasoning shares max_tokens with the visible reply. Reserve headroom so
+ * a long think cannot starve the JSON reply (finish_reason=length, empty content).
+ */
+function stobeReasoningAwareMaxTokens(int $configured, bool $usesReasoning): int {
+    return $usesReasoning ? $configured + 1200 : $configured;
+}
+
 function stobeDecodeConnectorMetadata(array $connectorConfig): array {
     $metadata = $connectorConfig['metadata'] ?? [];
     if (is_array($metadata)) {
@@ -680,6 +693,8 @@ function callLLM(array $messages, array $config, array $meta = []): string|false
         'stream' => false,
     ];
 
+    $usesReasoning = stobeConnectorUsesReasoning(strval($model), $connectorConfig);
+    $maxTokens = stobeReasoningAwareMaxTokens(intval($maxTokens), $usesReasoning);
     if (stobeIsOpenAiModel($model)) {
         $payload['max_completion_tokens'] = intval($maxTokens);
     } else {
@@ -691,7 +706,17 @@ function callLLM(array $messages, array $config, array $meta = []): string|false
 
     stobeApplyConnectorExtraPayload($payload, $connectorConfig, false);
 
-    if (stobeIsReasoningModel($model)) {
+    // NPC dialogue is latency-sensitive. Keep the model/context unchanged, but
+    // prefer a stable low-latency provider so GLM's repeated prompt prefix can hit its cache.
+    if (
+        $connectorType === 'openrouterjson'
+        && strtolower(trim(strval($model))) === 'z-ai/glm-5.2'
+        && !isset($payload['provider'])
+    ) {
+        $payload['provider'] = ['order' => ['deepinfra'], 'allow_fallbacks' => true];
+    }
+
+    if ($usesReasoning) {
         $payload['reasoning'] = ['exclude' => true];
     }
 
@@ -1032,6 +1057,8 @@ function callLLMStream(
         'stream' => true,
     ];
 
+    $usesReasoning = stobeConnectorUsesReasoning(strval($model), $connectorConfig);
+    $maxTokens = stobeReasoningAwareMaxTokens(intval($maxTokens), $usesReasoning);
     if (stobeIsOpenAiModel($model)) {
         $payload['max_completion_tokens'] = intval($maxTokens);
     } else {
@@ -1044,7 +1071,16 @@ function callLLMStream(
 
     stobeApplyConnectorExtraPayload($payload, $connectorConfig, true);
 
-    if (stobeIsReasoningModel($model)) {
+    // See non-streaming path above. Keeping the provider stable also improves prompt-cache reuse.
+    if (
+        $connectorType === 'openrouterjson'
+        && strtolower(trim(strval($model))) === 'z-ai/glm-5.2'
+        && !isset($payload['provider'])
+    ) {
+        $payload['provider'] = ['order' => ['deepinfra'], 'allow_fallbacks' => true];
+    }
+
+    if ($usesReasoning) {
         $payload['reasoning'] = ['exclude' => true];
     }
 
@@ -1369,6 +1405,20 @@ function callLLMStream(
             'status' => 'error',
             'error' => $streamFailure,
         ]);
+        if (empty($meta['__stobe_length_retry'])
+            && strpos($streamFailure, 'length') !== false
+            && trim($fullContent) === '') {
+            // Nothing reached the caller, so one retry with more room cannot duplicate speech.
+            $retryConfig = $config;
+            $retryConfig['max_tokens'] = max(256, intval($config['max_tokens'] ?? 2048)) * 2;
+            $retryMeta = $meta;
+            $retryMeta['__stobe_length_retry'] = true;
+            stobeLogWarn('LLM stream hit length limit with no content; retrying once', [
+                'model' => $model,
+                'retry_max_tokens' => $retryConfig['max_tokens'],
+            ]);
+            return callLLMStream($messages, $retryConfig, $onTextDelta, $retryMeta);
+        }
         return false;
     }
 

@@ -41,6 +41,12 @@ set_time_limit(1200);
 
 $GLOBALS["runid"] = uniqid("run_", false);
 
+// First game event after Chatterbox starts: warm its voice pipeline in the background
+// so the player's first line does not pay the ~17 s cold start.
+if (function_exists('stobeChatterboxWarmupMaybe')) {
+    stobeChatterboxWarmupMaybe();
+}
+
 if (!function_exists('stobeAppendSttLog')) {
     function stobeAppendSttLog(array $payload): void
     {
@@ -225,6 +231,11 @@ stobeLogInfo('Game event received', [
     'data_preview' => $eventDataPreview,
 ]);
 
+// Urgent world events can interrupt currently-playing casual speech immediately.
+if (function_exists('stobeLifelikeSignalForIncomingEvent')) {
+    stobeLifelikeSignalForIncomingEvent(strval($eventType), strval($eventData), strval($incomingPeople));
+}
+
 if ($eventType === 'inputtext_s') {
     $speaker = '';
     $text = trim(strval($eventData));
@@ -327,6 +338,19 @@ try {
             stobeLogWarn('Unhandled event type stored only', ['event_type' => $eventType]);
             echo "ok";
             break;
+    }
+
+    // Once the event has been persisted/processed, meaningful aftermath can
+    // provoke contextual NPC initiative through Stobe's existing bored-event path.
+    if (function_exists('stobeLifelikeSignalForCompletedEvent')) {
+        stobeLifelikeSignalForCompletedEvent(strval($eventType), strval($eventData), strval($incomingPeople));
+    }
+    if (function_exists('stobeNegTickThrottled')) {
+        try {
+            stobeNegTickThrottled(strval($eventType), strval($eventData), strval($incomingPeople), intval($gamets));
+        } catch (Throwable $negError) {
+            stobeLogWarn('Negotiation tick failed', ['error' => $negError->getMessage()]);
+        }
     }
 
     // Daemon-style behavior: periodic cycles run in service/manager.php.

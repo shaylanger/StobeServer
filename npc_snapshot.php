@@ -48,6 +48,13 @@ if (function_exists('stobeHandlePotentialGametsRollback')) {
 $isInventoryLiveSync = (strcasecmp($source, 'inventory_live_sync') === 0);
 
 $stored = storeNpcSnapshot($snapshot, $gamets);
+if ($stored && function_exists('stobeNegTickThrottled')) {
+    try {
+        stobeNegTickThrottled('npc_snapshot', '', '', $gamets);
+    } catch (Throwable $negError) {
+        stobeLogWarn('Negotiation tick failed', ['error' => $negError->getMessage()]);
+    }
+}
 if (!$stored) {
     stobeLogError('npc_snapshot failed to persist', [
         'name' => $name,

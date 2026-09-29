@@ -254,4 +254,9 @@ contractAssertTrue(
     'A plain-text provider fallback should remain compatible'
 );
 
+contractAssertTrue(stobeFindFastSentencePosition('Hello.') === 5, 'Completed first sentence should flush before next whitespace');
+contractAssertTrue(stobeFindFastSentencePosition('The price is 3.') === false, 'Partial decimal should stay buffered');
+$longClause = str_repeat('A natural opening phrase ', 4) . ', and the story continues without a period';
+contractAssertTrue(stobeFindFastSentencePosition($longClause) !== false, 'Long natural clause should flush early');
+
 echo "PASS: structured dialogue contract regression\n";
