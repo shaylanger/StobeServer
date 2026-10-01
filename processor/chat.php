@@ -1270,6 +1270,12 @@ if ($narratorMode) {
     $actionConfig['max_actions'] = 1;
 }
 
+$chatResponseFormat = $narratorMode
+    ? null
+    : ($negotiationActive
+        ? stobeDealResponseFormat(stobeBuildStructuredDialogueResponseFormat($targetNpc, $npcData, false, 'chat', $speaker))
+        : stobeBuildStructuredDialogueResponseFormat($targetNpc, $npcData, npcIsInPlayerFaction($npcData), 'chat', $speaker));
+
 stobeLogInfo('Latency pre-llm stage config_relationship_negotiation', [
     'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
     'duration_ms' => intval(round((microtime(true) - $stobeConfigStageStartedAt) * 1000)),
@@ -1319,6 +1325,21 @@ if ($manualActionActive && $manualActionCannotSpeak) {
         'model' => strval($llmConfig['model'] ?? ''),
     ]);
 
+    if (function_exists('stobeQueueShadowLlm')) {
+        stobeQueueShadowLlm([
+            'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+            'target_npc' => $targetNpc,
+            'speaker' => $speaker,
+            'gamets' => intval($gamets),
+            'messages' => $messages,
+            'response_format' => $chatResponseFormat,
+            'max_tokens' => intval($llmConfig['max_tokens'] ?? 750),
+            'temperature' => floatval($llmConfig['temperature'] ?? 0.8),
+            'authoritative_model' => strval($llmConfig['model'] ?? ''),
+            'queued_after_pre_llm_ms' => $stobePreLlmMs,
+        ]);
+    }
+
     $streamResult = stobeStreamDialogueViaLlm(
         $targetNpc,
         $npcData,
@@ -1334,11 +1355,7 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             'stream_gamets' => $gamets,
             'defer_structured_stream' => $negotiationDefer,
             'hold_stream_on_money' => $negotiationActive && !$negotiationDefer,
-            'response_format' => $narratorMode
-                ? null
-                : ($negotiationActive
-                    ? stobeDealResponseFormat(stobeBuildStructuredDialogueResponseFormat($targetNpc, $npcData, false, 'chat', $speaker))
-                    : stobeBuildStructuredDialogueResponseFormat($targetNpc, $npcData, npcIsInPlayerFaction($npcData), 'chat', $speaker)),
+            'response_format' => $chatResponseFormat,
         ]
     );
 
@@ -1658,5 +1675,6 @@ if (function_exists('stobeTrainingCapture')) {
         'deal_id' => isset($dealResult) && is_array($dealResult) ? strval($dealResult['id'] ?? '') : '',
         'already_streamed' => $alreadyStreamed,
         'actions_streamed_in_llm' => $actionsStreamedInLlm,
+        'shadow_enabled' => function_exists('stobeShadowEnabled') && stobeShadowEnabled(),
     ]);
 }

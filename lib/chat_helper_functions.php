@@ -13313,6 +13313,7 @@ function stobeLogOutputToPlugin(
         'utterance_id' => $utteranceId,
         'tts_hash' => $ttsHash,
         'tts_duration_ms' => $ttsDurationMs,
+        'shadow_enabled' => function_exists('stobeShadowEnabled') && stobeShadowEnabled(),
         'wire_payload' => trim($wirePayload),
     ];
     $json = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
@@ -13321,6 +13322,9 @@ function stobeLogOutputToPlugin(
     }
     $line = '[' . gmdate('Y-m-d H:i:s') . '] [INFO] output_to_plugin | ' . $json . PHP_EOL;
     @file_put_contents(stobeGetOutputToPluginLogPath(), $line, FILE_APPEND | LOCK_EX);
+    if ($ttsDurationMs > 0 && function_exists('stobeTrainingCapture')) {
+        stobeTrainingCapture('tts_output', $entry);
+    }
 }
 
 function stobeIsTtsEnabledForCurrentRequest(): bool {
