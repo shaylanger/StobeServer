@@ -313,9 +313,9 @@ function loadCoreActionRows(bool $onlyActivated = true): array {
         ['WORK_GOAL', 'WorkGoal', 'Accept a persistent finite production/resource goal. Put the desired output or resource in item, requested quantity in amount, and optional destination/base/location in target.'],
         ['TASK_GOAL', 'LootArea', 'Loot a specific item or item category from all valid nearby downed/dead targets. target can filter targets such as goats, animals, enemies, raiders, or a name. amount 0 means all matching loot.'],
         ['TASK_GOAL', 'LootStore', 'Loot matching items from valid nearby downed/dead targets, then put them into player storage. Use destination when storage is at a named known base/location.'],
-        ['TASK_GOAL', 'StoreItems', 'Put matching carried items into player storage, optionally at a named destination. amount 0 means all matching carried items.'],
-        ['TASK_GOAL', 'FetchItems', 'Fetch a finite quantity of matching items from player storage, optionally at a named destination.'],
-        ['TASK_GOAL', 'DeliverItems', 'Give a finite quantity of carried matching items to a named player-squad member.'],
+        ['TASK_GOAL', 'StoreItems', 'Put matching carried items into player storage, optionally at a named destination. amount 0 means all matching carried items. item may list several items separated by commas.'],
+        ['TASK_GOAL', 'FetchItems', 'Fetch a finite quantity of matching items from player storage, optionally at a named destination. item may list several items separated by commas (amount applies to each).'],
+        ['TASK_GOAL', 'DeliverItems', 'Give a finite quantity of carried matching items to a named player-squad member. item may list several items separated by commas.'],
         ['TASK_GOAL', 'RecoverGround', 'Recover matching dropped items from the nearby ground. amount 0 means all matching dropped items.'],
         ['TASK_GOAL', 'MedicalCleanup', 'Treat/rescue injured or downed loaded squad members until no eligible squadmate remains.'],
         ['TASK_GOAL', 'BattleCleanup', 'Perform post-battle cleanup: treat/rescue squadmates first, then loot matching items from nearby downed enemies and optionally store them.'],
@@ -14732,6 +14732,16 @@ function streamResponse(
                     $taskAmount,
                     true,0,0,false
                 );
+            } elseif (in_array($taskKind, ['FETCH','STORE','DELIVER'], true)
+                && count($taskItemList = array_values(array_filter(array_map('trim',
+                    preg_split('/\s*(?:,|&|\band\b)\s*/i', strval($taskItem)) ?: []), static fn($v) => $v !== ''))) > 1) {
+                foreach (array_slice($taskItemList, 0, 6) as $oneItem) {
+                    $taskResults[] = $queueOne(
+                        $taskKind, $oneItem, $taskTarget, $taskDestination,
+                        $taskKind === 'STORE' ? $taskAmount : max(1, $taskAmount),
+                        false, 0, $taskMaxCats, false
+                    );
+                }
             } else {
                 $taskResults[] = $queueOne(
                     $taskKind,$taskItem,$taskTarget,$taskDestination,$taskAmount,
@@ -14824,6 +14834,44 @@ function streamResponse(
             'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'DROP_WEAPON',
             'SURRENDER', 'MOVE_TO_TARGET', 'HOLD_POSITION', 'REPAIR', 'BUILD',
         ];
+        if ($bridgeCommand === 'PATROL' && function_exists('stobeTaskGoalQueue')) {
+            // Kenshi's PATROL order without waypoints wanders the region (bug 62).
+            $patrolResult = stobeTaskGoalQueue($actor, 'PATROL', '', '', '', 0, false, 0, 0, false, $effectiveDeliveryGamets);
+            if (boolval($patrolResult['ok'] ?? false)) {
+                $queuedActions++;
+            } else {
+                stobeLogWarn('Patrol goal could not be queued', ['actor' => $actor, 'error' => strval($patrolResult['error'] ?? '')]);
+                $message = trim($message . " I couldn't actually carry that action out.");
+            }
+            continue;
+        }
+        if ($bridgeCommand === 'LOOT_TARGET' && function_exists('stobeTaskGoalQueue')) {
+            $lootLine = strtolower(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''));
+            $lootCategory = '';
+            foreach ([
+                'weapons' => '/\bweapons?\b/',
+                'armour' => '/\b(armou?r|clothing|clothes|gear)\b/',
+                'food' => '/\b(food|meat|rations?)\b/',
+                'medical' => '/\b(medkits?|medical|first\s+aid|bandages?)\b/',
+                'ammo' => '/\b(ammo|ammunition|bolts)\b/',
+            ] as $lootCat => $lootRe) {
+                if (preg_match($lootRe, $lootLine) === 1) { $lootCategory = $lootCat; break; }
+            }
+            $lootTarget = trim($bridgeArgument);
+            $lootTargetLive = $lootTarget !== '' && stobeResolveLiveParticipantSerial($lootTarget) > 0;
+            if ($lootCategory !== '' || !$lootTargetLive) {
+                // Category loot, or a body outside the people list (bug 64): a LOOT_AREA goal.
+                $lootResult = stobeTaskGoalQueue($actor, 'LOOT_AREA', $lootCategory !== '' ? $lootCategory : 'all',
+                    $lootTarget, '', 0, false, 0, 0, false, $effectiveDeliveryGamets);
+                stobeLogInfo('LOOT_TARGET turned into LOOT_AREA goal', ['actor' => $actor, 'target' => $lootTarget, 'category' => $lootCategory, 'ok' => boolval($lootResult['ok'] ?? false)]);
+                if (boolval($lootResult['ok'] ?? false)) {
+                    $queuedActions++;
+                } else {
+                    $message = trim($message . " I couldn't actually carry that action out.");
+                }
+                continue;
+            }
+        }
         if (in_array($bridgeCommand, $bridgeCommands, true)) {
             $bridgeTargetCommands = [
                 'FACE_TARGET', 'FIRST_AID', 'BODYGUARD', 'RESCUE', 'PUT_IN_BED',
