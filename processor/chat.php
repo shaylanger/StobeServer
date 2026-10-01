@@ -1164,10 +1164,9 @@ foreach ($historyMessages as $historyMessage) {
 foreach ($memoryContextMessages as $memoryContextMessage) {
     $messages[] = $memoryContextMessage;
 }
-$messages[] = [
-    'role' => 'user',
-    'content' => $userContent,
-];
+
+// Cache-friendly ordering: turn/output guidance is stable across repeated turns with
+// the same NPC, so place it before the changing player message.
 $messages[] = [
     'role' => 'user',
     'content' => $narratorMode
@@ -1196,6 +1195,10 @@ $messages[] = [
             $speaker,
             $npcData
         ),
+];
+$messages[] = [
+    'role' => 'user',
+    'content' => $userContent,
 ];
 
 stobeLogInfo('Latency pre-llm stage message_assembly', [

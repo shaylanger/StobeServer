@@ -12649,6 +12649,7 @@ function buildSystemPrompt(
     $npcBountyBlock = stobeBuildNpcBountyPromptBlock($npcData);
     $npcSkills = stobeBuildNpcSkillsText($npcData);
     $npcCondition = stobeBuildNpcConditionText($npcData, $metadata);
+    $npcLatestDiary = stobeBuildLatestDiaryContextBlock($npcName, $npcData);
     $promptOverrides = stobeResolveNpcPromptOverrides($npcData, $metadata);
     $promptHeadOverride = trim(strval($promptOverrides['prompt_head'] ?? ''));
     $profilePromptOverride = trim(strval($promptOverrides['profile_prompt'] ?? ''));
@@ -12683,7 +12684,7 @@ function buildSystemPrompt(
         '#NPC_MIDDLE_TERM_MEMORY#' => stobePromptContextOptionEnabled('enabled_character_subsections', 'middle_term_memory')
             ? stobeBuildMiddleTermMemoryPromptBlock($npcData, $npcName)
             : '',
-        '#NPC_LATEST_DIARY#' => stobeBuildLatestDiaryContextBlock($npcName, $npcData),
+        '#NPC_LATEST_DIARY#' => $npcLatestDiary,
         '#PLAYER_NAME#' => stobePromptXmlEscape($playerName),
         '#PLAYER_CATS#' => stobePromptXmlEscape($playerCats),
         '#GENERAL_INSTRUCTIONS#' => stobePromptXmlEscape($generalInstructions),
@@ -12700,6 +12701,10 @@ function buildSystemPrompt(
         $prompt = str_replace('#NPC_CHARACTER_STATE#', '', $prompt);
         $prompt = str_replace($npcSkills, '', $prompt);
         $liveSkills = trim($npcSkills);
+        $liveDiary = trim($npcLatestDiary);
+        if ($liveDiary !== '') {
+            $prompt = str_replace($npcLatestDiary, '', $prompt);
+        }
         $liveRelationships = '';
         if (preg_match('/<relationships>.*?<\/relationships>/s', $prompt, $relMatch, PREG_OFFSET_CAPTURE) === 1) {
             $liveRelationships = $relMatch[0][0];
@@ -12717,6 +12722,9 @@ function buildSystemPrompt(
             if ($dynamicActionState !== '') {
                 $prompt .= "\n\n" . $dynamicActionState;
             }
+        }
+        if ($liveDiary !== '') {
+            $prompt .= "\n\n" . $liveDiary;
         }
     } elseif (strpos($prompt, '#NPC_CHARACTER_STATE#') !== false) {
         $prompt = str_replace('#NPC_CHARACTER_STATE#', $worldStateBlock, $prompt);
