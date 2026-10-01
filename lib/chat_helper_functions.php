@@ -8299,9 +8299,34 @@ function buildPlayerBaseStateBlock(array $npcData): string
     if (!$ownFresh) {
         // The DLL does not fill in per-NPC base presence; a faction member knows the
         // player's base when the player is inside it (server-side presence snapshot).
-        $row = (function_exists('stobeGetCurrentPlayerBaseState') && npcIsInPlayerFaction($npcData))
+        $inFaction = npcIsInPlayerFaction($npcData);
+        $row = ($inFaction && function_exists('stobeGetCurrentPlayerBaseState'))
             ? stobeGetCurrentPlayerBaseState(90)
             : [];
+        if ($inFaction && (!is_array($row) || trim(strval($row['base_id'] ?? '')) === '')) {
+            // Presence follows the selected character, who may be out at the base's own
+            // mine or well (outside the town radius). Use the nearest known base instead.
+            $qx = is_numeric($_GET['loc_x'] ?? null) ? floatval($_GET['loc_x']) : null;
+            $qz = is_numeric($_GET['loc_z'] ?? null) ? floatval($_GET['loc_z']) : null;
+            if ($qx !== null && $qz !== null) {
+                try {
+                    $near = $GLOBALS['db']->fetchOne(
+                        "SELECT b.* FROM player_base_locations l
+                           JOIN player_bases b ON b.base_id = l.base_id
+                          WHERE (l.x - $1) * (l.x - $1) + (l.z - $2) * (l.z - $2) <= 1500.0 * 1500.0
+                            AND b.last_seen_at >= NOW() - INTERVAL '3 hours'
+                          ORDER BY (l.x - $1) * (l.x - $1) + (l.z - $2) * (l.z - $2), b.last_seen_at DESC
+                          LIMIT 1",
+                        [$qx, $qz]
+                    );
+                    if (is_array($near)) {
+                        $row = $near;
+                    }
+                } catch (Throwable $e) {
+                    $row = [];
+                }
+            }
+        }
         if (!is_array($row) || trim(strval($row['base_id'] ?? '')) === '') {
             return '';
         }
