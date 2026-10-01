@@ -371,12 +371,35 @@ function stobeLifelikeLatestNearbyRosterNames(string $npcName): array
         }
 
         foreach (explode(',', strval($m[1] ?? '')) as $piece) {
-            $appendName($piece);
+            $appendName(stobeRosterSplitState(strval($piece))[0]);
         }
         return $names;
     } catch (Throwable $e) {
         return [];
     }
+}
+
+/**
+ * "Sorth [Dust Bandit] (dead)" -> ["Sorth [Dust Bandit]", "dead"] (bug 73).
+ * Records the state in $GLOBALS['STOBE_ROSTER_STATES'][lowercase name].
+ */
+function stobeRosterSplitState(string $raw): array
+{
+    $raw = trim($raw);
+    $state = '';
+    if (preg_match('/^(.*?)\s*\((dead|unconscious)\)\s*$/iu', $raw, $m) === 1) {
+        $raw = trim($m[1]);
+        $state = strtolower($m[2]);
+    }
+    if ($raw !== '') {
+        $GLOBALS['STOBE_ROSTER_STATES'][strtolower($raw)] = $state;
+    }
+    return [$raw, $state];
+}
+
+function stobeRosterState(string $name): string
+{
+    return strval($GLOBALS['STOBE_ROSTER_STATES'][strtolower(trim($name))] ?? '');
 }
 
 function stobeLifelikeNearbySquadLines(array $npcData, string $npcName): array
@@ -403,7 +426,15 @@ function stobeLifelikeNearbySquadLines(array $npcData, string $npcName): array
         $meta = function_exists('normalizeNpcMetadataPayload')
             ? normalizeNpcMetadataPayload($other['metadata'] ?? [])
             : stobeLifelikeDecodeAssoc($other['metadata'] ?? []);
+        $rosterState = stobeRosterState($name);
+        if ($rosterState === 'dead') {
+            $out[] = $name . ' | DEAD: a corpse, not alive; cannot hear, speak or move';
+            continue;
+        }
         $action = trim(strval($meta['current_action'] ?? ''));
+        if ($rosterState === 'unconscious') {
+            $action = 'unconscious (knocked out, cannot talk)';
+        }
         if ($action !== '' && strtolower($action) !== 'idle' && strtolower($action) !== 'none') {
             $bits[] = 'doing:' . $action;
         }

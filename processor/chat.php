@@ -430,6 +430,9 @@ if (!function_exists('stobeParseNearbyRosterNamesFromEventData')) {
         $names = [];
         $seen = [];
         foreach ($parts as $part) {
+            if (function_exists('stobeRosterSplitState')) {
+                $part = stobeRosterSplitState(strval($part))[0];
+            }
             $name = normalizeParticipantNameToken(strval($part));
             $name = trim(str_replace('...', '', $name));
             if ($name === '') {
@@ -482,7 +485,10 @@ if (!function_exists('stobeFetchNearbyActorsFromInfonpcRoster')) {
 
         $actors = [];
         foreach ($names as $name) {
-            $actors[] = ['name' => $name];
+            $rosterState = function_exists('stobeRosterState') ? stobeRosterState($name) : '';
+            $actors[] = $rosterState !== ''
+                ? ['name' => $name, 'current_action' => $rosterState, 'is_' . $rosterState => true]
+                : ['name' => $name];
         }
         return $actors;
     }
