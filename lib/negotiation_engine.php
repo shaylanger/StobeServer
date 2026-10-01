@@ -26,7 +26,7 @@ const STOBE_NEG_TRUCE_MAX_REISSUE = 2;
 const STOBE_NEG_MAX_COUNTER_ROUNDS = 6;
 const STOBE_NEG_DIRECTIVE_TTL_SECONDS = 45;
 const STOBE_NEG_INITIATIVE_GLOBAL_COOLDOWN = 120;
-const STOBE_NEG_INITIATIVE_NPC_COOLDOWN = 600;    // "once per NPC per fight"
+const STOBE_NEG_INITIATIVE_NPC_COOLDOWN = 1800;   // "once per NPC per fight" (a long fight outlasted 600 s, bug 91)
 const STOBE_NEG_BETRAYAL_MAX_CHANCE = 0.15;
 
 // ------------------------------------------------------------------ toggles
@@ -1542,11 +1542,16 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 if (stobeNegIsPlayerSide($other, $player)) $hostileToPlayer = true; else $fightingOthers = true;
             }
             $personality = strval($row['personality'] ?? '');
+            [$offerCap, $offerCarried] = function_exists('stobeNegOfferCap') ? stobeNegOfferCap($name, $data) : [0, 0];
+            $offerLine = $offerCap > 0
+                ? 'You carry about ' . $offerCarried . ' Cats; if you offer Cats, offer at most ' . $offerCap . ' (keep it modest). '
+                : 'You have next to no Cats: offer an item, information or just beg - do not offer Cats. ';
             if ($hostileToPlayer && stobeNegPhaseEnabled(4) && $ratio < stobeNegCourageThreshold($personality, 0.35)) {
                 stobeNegQueueDirective($name, 'surrender', '', [
                     'health_ratio'=>round($ratio, 2),
                     'instruction'=>'You are losing this fight against ' . $player . ' (your health is about ' . intval($ratio * 100) . '%). '
                         . 'In character, decide whether to beg for your life or offer something (Cats, items, surrender) in exchange for being spared. '
+                        . $offerLine
                         . 'If you make an offer, set deal_decision to PROPOSE and list the terms (include your own STOP_ATTACK and the player SPARE). '
                         . 'If you would rather fight to the end, just say so and use deal_decision NONE.',
                 ], true);
@@ -1558,6 +1563,7 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                     'health_ratio'=>round($ratio, 2),
                     'instruction'=>'You are losing a fight (health about ' . intval($ratio * 100) . '%) and ' . $player . ' is nearby. '
                         . 'In character, call out to ' . $player . ' for help. You may promise a reward that you can actually give. '
+                        . $offerLine
                         . 'If you offer a deal, set deal_decision to PROPOSE with terms: player PROTECT (target npc), and your reward terms with "when":"after_player".',
                 ], true);
                 return;

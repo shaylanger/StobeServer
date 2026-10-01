@@ -328,6 +328,28 @@ function stobeDealResponseFormat(array $format): array {
     return $format;
 }
 
+/**
+ * Bug 91: most Cats an NPC offers to be spared / for help. Common bandits
+ * 50-300, leaders/bosses up to ~1000, wealthy NPCs scaled to their purse;
+ * never more than 35 % of what they carry (Shay, 2026-10-01).
+ * Returns [cap, carried, tier].
+ */
+function stobeNegOfferCap(string $npc, array $npcData): array {
+    $meta = function_exists('normalizeNpcMetadataPayload')
+        ? normalizeNpcMetadataPayload($npcData['metadata'] ?? []) : (is_array($npcData['metadata'] ?? null) ? $npcData['metadata'] : []);
+    $carried = max(0, intval($meta['money'] ?? ($npcData['money'] ?? 0)));
+    $who = strtolower($npc . ' ' . strval($npcData['faction'] ?? '') . ' ' . strval($meta['faction'] ?? '') . ' ' . strval($meta['title'] ?? ''));
+    if (preg_match('/\b(traders?|merchants?|caravans?|nobles?|lords?|lady|shopkeepers?|barman|bartenders?|innkeepers?)\b/', $who)) {
+        $tier = 'wealthy'; $tierCap = PHP_INT_MAX;
+    } elseif (preg_match('/\b(leaders?|boss|king|queen|chief|captain|warlord|commander|elder)\b/', $who)) {
+        $tier = 'leader'; $tierCap = 1000;
+    } else {
+        $tier = 'common'; $tierCap = 300;
+    }
+    $cap = min($tierCap, intval(floor($carried * 0.35)));
+    return [max(0, $cap), $carried, $tier];
+}
+
 function stobeDealCaptureResponse(string $raw, string $npc, string $player, array $npcData, string $playerMessage, string $kind = 'combat', string $proposer = 'player'): array {
     $response = function_exists('stobeDecodeStructuredDialoguePayload')
         ? stobeDecodeStructuredDialoguePayload($raw) : json_decode($raw, true);
@@ -392,6 +414,21 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
         // Agreeing to terms in the middle of a fight means stopping the fight; an empty agreement stays invalid.
         if (!$ceasefire && count($terms) === 0) return ['ok'=>false,'error'=>'missing_npc_ceasefire'];
         if (!$ceasefire) $terms[] = ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player'];
+    }
+    if (in_array($kind, ['surrender','assist'], true)) {
+        [$offerCap, $offerCarried, $offerTier] = stobeNegOfferCap($npc, $npcData);
+        foreach ($terms as $ti => $term) {
+            if (($term['kind'] ?? '') !== 'GIVE_CATS' || ($term['by'] ?? '') !== 'npc') continue;
+            $amount = intval($term['amount'] ?? 0);
+            if ($amount <= $offerCap) continue;
+            stobeDealLog('info', 'NPC offer capped (bug 91)', ['npc'=>$npc, 'offered'=>$amount, 'cap'=>$offerCap, 'carried'=>$offerCarried, 'tier'=>$offerTier]);
+            if ($offerCap > 0) {
+                $terms[$ti]['amount'] = $offerCap;
+            } else {
+                unset($terms[$ti]); // broke: no Cats in the deal
+            }
+        }
+        $terms = array_values($terms);
     }
     // Bug 32: her own weapon only goes when she's surrendering or trusts the player.
     $weaponGiven = stobeDealTermsGiveUpWeapon($terms, $npcData);
