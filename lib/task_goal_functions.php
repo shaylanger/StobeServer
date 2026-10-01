@@ -289,6 +289,14 @@ function stobeGoalReportQueuePending(): int
         $p=explode("\t",trim(strval($line)));
         if(count($p)<3||trim($p[0])==='')continue;
         [$id,$actor,$type]=[trim($p[0]),normalizeParticipantNameToken(trim($p[1])),trim($p[2])];
+        if($type==='hunger'){
+            if($actor==='')continue;
+            $instruction="You're getting hungry and there's no food in your pack or in the base's storage. Tell {$player} briefly, in your own voice, that you're hungry and there's no food. You keep working for now. Don't claim you ate.";
+            stobeNegQueueDirective($actor,'goal_report',$id,['instruction'=>$instruction,'actions'=>[]],false);
+            stobeLogInfo('Hunger report queued',['actor'=>$actor,'id'=>$id]);
+            $queued++;
+            continue;
+        }
         $row=$type==='task'
             ?$GLOBALS['db']->fetchOne("SELECT kind,item_name,quantity,completed,status,reason FROM stobe_task_goal_runtime WHERE goal_id=$1",[$id])
             :$GLOBALS['db']->fetchOne("SELECT 'WORK' AS kind,item_name,quantity,completed,status,reason FROM stobe_work_goal WHERE goal_id=$1",[$id]);
