@@ -171,6 +171,35 @@ function stobeFormatCompactChatHistory(array $historyMessages, string $actorName
     return implode("\n", $lines);
 }
 
+/** "Drera [Pacifier Rowanne]" -> "drera"; used to tell who a history line involves. */
+function stobeCompactBaseName(string $name): string
+{
+    return strtolower(trim(preg_replace('/\s*\[[^\]]*\]\s*/u', ' ', $name) ?? $name));
+}
+
+/**
+ * Marks lines this NPC only overheard ("Malzin, speaking to Shay: ..." in
+ * Thaddeus's history), so the NPC does not answer as if it had been asked or
+ * take on deals and promises made between other people.
+ */
+function stobeCompactMarkOverheard(string $historyBlock, string $actorName): string
+{
+    $actor = stobeCompactBaseName($actorName);
+    if ($actor === '') {
+        return $historyBlock;
+    }
+    $out = [];
+    foreach (explode("\n", $historyBlock) as $line) {
+        if (preg_match('/^(# )(.+?), (?:speaking|talking|whispering|shouting) to (.+?): /u', $line, $m) === 1
+            && stobeCompactBaseName($m[2]) !== $actor
+            && stobeCompactBaseName($m[3]) !== $actor) {
+            $line = $m[1] . '(overheard) ' . substr($line, strlen($m[1]));
+        }
+        $out[] = $line;
+    }
+    return implode("\n", $out);
+}
+
 function stobeApplyCompactChatHistory(
     string $systemPrompt,
     array $historyMessages,
@@ -194,8 +223,14 @@ function stobeApplyCompactChatHistory(
         ];
     }
 
+    $historyBlock = stobeCompactMarkOverheard($historyBlock, $actorName);
+    $overheardNote = str_contains($historyBlock, '(overheard) ')
+        ? "Lines marked (overheard) were said between other people near you. You were not part of them: never answer as if you were the one asked, and never take on their deals, promises or refusals as your own.\n\n"
+        : '';
     if ($markdownEnabled) {
-        $historyBlock = "# Conversation History\n\n" . preg_replace('/^# /m', '- ', $historyBlock);
+        $historyBlock = "# Conversation History\n\n" . $overheardNote . preg_replace('/^# /m', '- ', $historyBlock);
+    } elseif ($overheardNote !== '') {
+        $historyBlock = '# ' . trim($overheardNote) . "\n" . $historyBlock;
     }
 
     return [

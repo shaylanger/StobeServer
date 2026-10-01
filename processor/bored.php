@@ -75,6 +75,21 @@ foreach ($candidateNames as $candidateName) {
     break;
 }
 
+// Negotiation directives (surrender offers, help requests, settlements, truce
+// re-issues, betrayal, breach reactions) take over this spontaneous turn.
+$negDirective = function_exists('stobeNegClaimDirective') ? stobeNegClaimDirective($candidateNames) : null;
+if (is_array($negDirective)) {
+    $negSpeakerData = getNpcData(strval($negDirective['npc_name']));
+    if (is_array($negSpeakerData)) {
+        $speakerNpc = strval($negDirective['npc_name']);
+        $speakerData = $negSpeakerData;
+        $forceDirectorMode = true;
+        stobeLogInfo('Bored event taken by negotiation directive', ['speaker'=>$speakerNpc, 'kind'=>$negDirective['kind']]);
+    } else {
+        $negDirective = null;
+    }
+}
+
 if ($speakerNpc === '' || !$speakerData) {
     stobeLogInfo('Bored event skipped: speaker profile unavailable', [
         'candidate_count' => count($candidateNames),
@@ -91,12 +106,29 @@ $boredChance = getNpcProfileIntegerSetting(
     0,
     100
 );
+$initiativeScore = 0;
+if (function_exists('stobeLifelikeFetchEvents') && function_exists('stobeLifelikeEventScore')) {
+    foreach (array_slice(stobeLifelikeFetchEvents($speakerNpc, 24), 0, 12) as $initiativeRow) {
+        if (!is_array($initiativeRow)) {
+            continue;
+        }
+        $initiativeScore = max($initiativeScore, stobeLifelikeEventScore($initiativeRow));
+    }
+    if ($initiativeScore >= 85) {
+        $boredChance = max($boredChance, 95);
+    } elseif ($initiativeScore >= 65) {
+        $boredChance = max($boredChance, 85);
+    } elseif ($initiativeScore >= 45) {
+        $boredChance = max($boredChance, 70);
+    }
+}
 $roll = mt_rand(0, 99);
 if (!$forceDirectorMode && $roll >= $boredChance) {
     stobeLogInfo('Bored event skipped: chance gate', [
         'speaker' => $speakerNpc,
         'roll' => $roll,
         'chance' => $boredChance,
+        'initiative_score' => $initiativeScore,
     ]);
     echo "ok";
     return;
@@ -109,6 +141,9 @@ if ($suggestedTarget !== '' &&
     strcasecmp($suggestedTarget, $speakerNpc) !== 0 &&
     ($forceDirectorMode || $playerName === '' || strcasecmp($suggestedTarget, $playerName) !== 0)) {
     $listener = $suggestedTarget;
+}
+if (is_array($negDirective) && $playerName !== '') {
+    $listener = $playerName;
 }
 if ($listener === '') {
     $listeners = [];
@@ -217,12 +252,26 @@ foreach ($historyMessages as $historyMessage) {
 foreach ($memoryContextMessages as $memoryContextMessage) {
     $messages[] = $memoryContextMessage;
 }
+$boredInstruction = function_exists('stobeBuildLifelikeBoredInstruction')
+    ? stobeBuildLifelikeBoredInstruction(
+        $speakerNpc,
+        $listener,
+        is_array($speakerData) ? $speakerData : [],
+        intval($gamets)
+    )
+    : 'Start a brief spontaneous conversation to the listener about the current situation.';
+if (is_array($negDirective)) {
+    $boredInstruction = strval($negDirective['payload']['instruction'] ?? $boredInstruction);
+    if (in_array(strval($negDirective['kind']), ['surrender','assist'], true)) {
+        $messages[0]['content'] .= "\n\n" . stobeDealPromptBlock($speakerNpc, $speakerData, '');
+    }
+}
 $messages[] = [
     'role' => 'user',
     'content' => "<bored_event_request>\n"
         . "  <speaker>" . stobePromptXmlEscape($speakerNpc) . "</speaker>\n"
         . "  <listener>" . stobePromptXmlEscape($listener) . "</listener>\n"
-        . "  <instruction>Start a brief spontaneous conversation to the listener about the current situation.</instruction>\n"
+        . "  <instruction>" . stobePromptXmlEscape($boredInstruction) . "</instruction>\n"
         . "</bored_event_request>",
 ];
 $messages[] = [
@@ -269,7 +318,10 @@ $streamResult = stobeStreamDialogueViaLlm(
         'action_config' => $actionConfig,
         'stream_event_type' => 'bored',
         'stream_gamets' => $gamets,
-        'response_format' => stobeBuildStructuredDialogueResponseFormat($speakerNpc, $speakerData, npcIsInPlayerFaction($speakerData), 'bored'),
+        'defer_structured_stream' => is_array($negDirective),
+        'response_format' => (is_array($negDirective) && in_array(strval($negDirective['kind']), ['surrender','assist'], true))
+            ? stobeDealResponseFormat(stobeBuildStructuredDialogueResponseFormat($speakerNpc, $speakerData, false, 'bored'))
+            : stobeBuildStructuredDialogueResponseFormat($speakerNpc, $speakerData, npcIsInPlayerFaction($speakerData), 'bored'),
     ]
 );
 
@@ -281,10 +333,22 @@ if (boolval($streamResult['ok'] ?? false)) {
     $actionsStreamedInLlm = boolval($streamResult['actions_streamed'] ?? false);
 } else {
     stobeLogWarn('Bored event LLM stream failed', ['speaker' => $speakerNpc]);
+    if (is_array($negDirective)) {
+        // Nothing reached the game: put the negotiation directive back so it is not lost.
+        $GLOBALS['db']->exec('UPDATE stobe_negotiation_directive SET consumed_unix=0 WHERE id=$1', [intval($negDirective['id'])]);
+    }
     echo "ok";
     return;
 }
 $responseActions = stobeDedupeActionList($responseActions, 'bored', $actionConfig);
+if (is_array($negDirective)) {
+    $negOutcome = stobeNegCompleteDirective(
+        $negDirective, strval($streamResult['raw_response'] ?? ''), $speakerNpc, $playerName,
+        $speakerData, $responseText, $responseActions
+    );
+    $responseText = strval($negOutcome['text']);
+    $responseActions = $negOutcome['actions'];
+}
 $relationshipEval = stobeEvaluateRelationshipsForTurn(
     $speakerNpc,
     $listener,

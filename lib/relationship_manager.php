@@ -247,11 +247,9 @@ class RelationshipManager {
         if (in_array($lower, ['player', 'the player', '#player_name#', 'dragonborn', 'the dragonborn'], true)) {
             return true;
         }
-        $playerName = '';
-        if (function_exists('getSetting')) {
-            $playerName = strtolower(trim(strval(getSetting('PLAYER_NAME', 'Drifter'))));
-        }
-        return ($playerName !== '' && $lower === $playerName);
+        // The configured player's real name is a legitimate relationship
+        // target. Only generic placeholder labels above are blocked.
+        return false;
     }
 
     /**

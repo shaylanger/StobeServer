@@ -9,6 +9,12 @@ function stobePlaythroughRollbackToleranceGamets(): int
     return 5;
 }
 
+/** Largest game-time step back (seconds) a delayed, non-init report may show without being treated as a reload. */
+function stobePlaythroughLateEventMaxLagGamets(): int
+{
+    return max(3600, intval(getSettingInt('PLAYTHROUGH_LATE_EVENT_MAX_LAG_GAMETS', 43200)));
+}
+
 function stobePlaythroughRollbackEventIsAuthoritative(string $eventType): bool
 {
     $event = strtolower(trim($eventType));
@@ -1651,6 +1657,26 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
             stobePlaythroughRecordLastSeenGamets($incoming);
         }
         return ['triggered' => false, 'reason' => 'forward_or_same'];
+    }
+
+    // Only a save load ("init") proves a rollback. Other reports travel through the
+    // game's serial event queue and arrive late in busy fights, carrying an older
+    // game time; treating them as a reload pruned fresh events and memories and
+    // restored stale NPC/relationship snapshots mid-conversation. A non-init event
+    // counts only when it jumps back further than lag ever could.
+    if ($event !== 'init' && strpos($event, 'test_') !== 0
+        && ($lastSeen - $incoming) < stobePlaythroughLateEventMaxLagGamets()) {
+        static $lateLogged = 0;
+        if (time() - $lateLogged >= 30) {
+            $lateLogged = time();
+            stobeLogInfo('PLAYTHROUGH: late event ignored (not a rollback)', [
+                'event_type' => $event,
+                'incoming_gamets' => $incoming,
+                'last_seen_gamets' => $lastSeen,
+                'lag_gamets' => $lastSeen - $incoming,
+            ]);
+        }
+        return ['triggered' => false, 'reason' => 'late_event_not_rollback'];
     }
 
     $lockAcquired = stobePlaythroughAcquireRollbackLock();

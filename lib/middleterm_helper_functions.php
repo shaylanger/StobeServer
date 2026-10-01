@@ -528,7 +528,10 @@ function stobeMaybeRunMiddleTermCycle(
 
             $lastGamets = stobeMiddleTermLastGametsFromExtended($npcData);
             $summaryRows = stobeMiddleTermFetchNpcSummaryChunk($npcName, $npcData, $lastGamets, $maxRows);
-            $requiredRows = $lastGamets > 0 ? 10 : 5;
+            $steadyRequiredRows = getSettingInt('MIDDLE_TERM_MIN_SUMMARY_ROWS', 20);
+            $steadyRequiredRows = max(10, min(50, $steadyRequiredRows));
+            $bootstrapRequiredRows = max(5, intval(ceil($steadyRequiredRows / 2)));
+            $requiredRows = $lastGamets > 0 ? $steadyRequiredRows : $bootstrapRequiredRows;
             if (count($summaryRows) < $requiredRows) {
                 continue;
             }

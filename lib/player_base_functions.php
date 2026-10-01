@@ -428,6 +428,23 @@ function stobeStorePlayerBaseState(array $payload): array
         throw $exception;
     }
 
+    if ($inside && function_exists('stobeWorkGoalRememberBaseLocation')) {
+        try {
+            stobeWorkGoalRememberBaseLocation(
+                strval($base['base_id'] ?? ''),
+                strval($base['name'] ?? 'Player Base'),
+                $gameTs
+            );
+        } catch (Throwable $exception) {
+            if (function_exists('stobeLogWarn')) {
+                stobeLogWarn('work-goal base location snapshot failed', [
+                    'base_id' => strval($base['base_id'] ?? ''),
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
     return [
         'inside' => $inside,
         'base_id' => $inside ? strval($base['base_id'] ?? '') : '',

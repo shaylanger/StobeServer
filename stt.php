@@ -16,6 +16,9 @@ error_reporting(E_ALL);
 
 $path = dirname(__FILE__) . DIRECTORY_SEPARATOR;
 require($path . "lib/bootstrap.php");
+if (function_exists('stobeLogRequestStart')) {
+    stobeLogRequestStart();
+}
 require_once($path . "lib/stt_transcription.php");
 
 header('Content-Type: application/json');
@@ -36,6 +39,11 @@ try {
     if ($size <= 44 || $size > 4 * 1024 * 1024 || !is_uploaded_file(strval($upload['tmp_name'] ?? ''))) {
         throw new InvalidArgumentException('Audio must be a WAV file smaller than 4 MB.');
     }
+    stobeLogInfo('Latency stage stt upload received', [
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+        'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round((microtime(true) - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
+        'audio_bytes' => $size,
+    ]);
     $result = stobeTranscribeAudio(strval($upload['tmp_name']));
     echo json_encode(['ok' => true] + $result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 } catch (InvalidArgumentException $exception) {

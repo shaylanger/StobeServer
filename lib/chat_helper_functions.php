@@ -160,6 +160,7 @@ function loadCoreActionRows(bool $onlyActivated = true): array {
     $hasKill = false;
     $hasForceDrink = false;
     $hasPickupNpc = false;
+    $hasUnequipItem = false;
     foreach ($rows as $row) {
         $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
         if ($command === 'TRAVEL_LOCATION') {
@@ -178,6 +179,8 @@ function loadCoreActionRows(bool $onlyActivated = true): array {
             $hasForceDrink = true;
         } elseif ($command === 'PICKUP_NPC') {
             $hasPickupNpc = true;
+        } elseif ($command === 'UNEQUIP_ITEM') {
+            $hasUnequipItem = true;
         }
     }
 
@@ -277,19 +280,91 @@ function loadCoreActionRows(bool $onlyActivated = true): array {
             'Pick up a nearby helpless target and carry them.'
         );
     }
+    if (!$hasUnequipItem) {
+        $appendFallbackAction(
+            'UNEQUIP_ITEM',
+            'UnequipItem',
+            'Remove one currently worn item and move it into your own inventory. Use item for the exact equipped item name when known, or a clear clothing slot such as hat, helmet, facewear, shirt, armor, pants, boots, gloves, neckwear, backpack, belt, or weapon.'
+        );
+    }
+
+    $bridgeFallbacks = [
+        ['EQUIP_ITEM', 'EquipItem', 'Equip one specific item currently carried by this NPC.'],
+        ['SHEATHE_WEAPON', 'SheatheWeapon', 'Put the currently drawn weapon away without dropping it.'],
+        ['DRAW_WEAPON', 'DrawWeapon', 'Draw or ready a carried weapon.'],
+        ['FACE_TARGET', 'FaceTarget', 'Turn to look at and face a nearby named actor.'],
+        ['FIRST_AID', 'FirstAid', 'Apply real first aid to an injured nearby named actor.'],
+        ['BODYGUARD', 'Bodyguard', 'Guard and protect a nearby named actor.'],
+        ['PATROL', 'Patrol', 'Begin a real Kenshi patrol order around the current area.'],
+        ['RESCUE', 'Rescue', 'Attempt to rescue a nearby incapacitated named actor.'],
+        ['PUT_IN_BED', 'PutInBed', 'Take a nearby incapacitated named actor to an available bed.'],
+        ['LOOT_TARGET', 'LootTarget', 'Use Kenshi looting behavior on a valid nearby target.'],
+        ['IMPRISON', 'Imprison', 'Take a valid nearby target to an available cage.'],
+        ['RELEASE_PRISONER', 'ReleasePrisoner', 'Release a nearby named prisoner using a real Kenshi order.'],
+        ['DROP_WEAPON', 'DropWeapon', 'Sheathe and physically drop the currently equipped weapon.'],
+        ['SURRENDER', 'Surrender', 'Sheathe and unequip the currently equipped weapon without dropping it.'],
+        ['MOVE_TO_TARGET', 'MoveToTarget', 'Move near a nearby named actor without following them indefinitely.'],
+        ['HOLD_POSITION', 'HoldPosition', 'Hold the current position using a real Kenshi hold-position order.'],
+        ['SIT', 'Sit', 'Sit on a nearby usable chair, table seat, or throne.'],
+        ['SLEEP', 'Sleep', 'Use a nearby available bed to rest.'],
+        ['OPERATE_OBJECT', 'OperateObject', 'Use a nearby turret, machine, workbench, mine, research station, or similar usable object.'],
+        ['REPAIR', 'Repair', 'Repair a nearby named building or structure using a real Kenshi repair order.'],
+        ['BUILD', 'Build', 'Work on a nearby named unfinished building or structure using a real Kenshi build order.'],
+        ['WORK_GOAL', 'WorkGoal', 'Accept a persistent finite production/resource goal. Put the desired output or resource in item, requested quantity in amount, and optional destination/base/location in target.'],
+        ['TASK_GOAL', 'LootArea', 'Loot a specific item or item category from all valid nearby downed/dead targets. target can filter targets such as goats, animals, enemies, raiders, or a name. amount 0 means all matching loot.'],
+        ['TASK_GOAL', 'LootStore', 'Loot matching items from valid nearby downed/dead targets, then put them into player storage. Use destination when storage is at a named known base/location.'],
+        ['TASK_GOAL', 'StoreItems', 'Put matching carried items into player storage, optionally at a named destination. amount 0 means all matching carried items.'],
+        ['TASK_GOAL', 'FetchItems', 'Fetch a finite quantity of matching items from player storage, optionally at a named destination.'],
+        ['TASK_GOAL', 'DeliverItems', 'Give a finite quantity of carried matching items to a named player-squad member.'],
+        ['TASK_GOAL', 'RecoverGround', 'Recover matching dropped items from the nearby ground. amount 0 means all matching dropped items.'],
+        ['TASK_GOAL', 'MedicalCleanup', 'Treat/rescue injured or downed loaded squad members until no eligible squadmate remains.'],
+        ['TASK_GOAL', 'BattleCleanup', 'Perform post-battle cleanup: treat/rescue squadmates first, then loot matching items from nearby downed enemies and optionally store them.'],
+        ['TASK_GOAL', 'ImprisonAll', 'Take eligible nearby downed humanoid targets to available cages. target can be enemies/raiders or a more specific filter.'],
+        ['TASK_GOAL', 'ReleaseAll', 'Attempt to release nearby prisoners, optionally filtered by name.'],
+        ['TASK_GOAL', 'MaintainStock', 'Persistently maintain at least amount units of an item/resource, creating production subgoals when stock falls below the target.'],
+        ['TASK_GOAL', 'BuyItems', 'Explicitly buy a finite quantity from a real nearby merchant using real faction Cats. This action itself is purchase authorization; max_cats is an optional hard spending cap.'],
+        ['TASK_GOAL', 'SellItems', 'Explicitly sell matching carried items to a real nearby merchant. Never choose this unless the player explicitly asked to sell.'],
+        ['TASK_GOAL', 'GuardGoal', 'Persistently guard a named squad member, or the current position if target is blank, until paused/cancelled.'],
+        ['TASK_GOAL', 'WaitForGoal', 'Wait at the current position until the named squad member returns nearby.'],
+        ['TASK_GOAL', 'PatrolGoal', 'Persistently patrol the current area until paused/cancelled.'],
+        ['TASK_GOAL', 'BuildGoal', 'Finish a named nearby construction, recursively sourcing missing producible construction materials first.'],
+        ['TASK_GOAL', 'RepairGoal', 'Repair a named nearby player structure, using real Kenshi repair work.'],
+        ['TASK_CONTROL', 'PauseGoal', 'Pause the current/referenced persistent goal.'],
+        ['TASK_CONTROL', 'ResumeGoal', 'Resume the current/referenced paused goal.'],
+        ['TASK_CONTROL', 'CancelGoal', 'Cancel the current/referenced persistent goal.'],
+        ['TASK_CONTROL', 'ModifyGoal', 'Change the requested quantity of the current/referenced goal; put the new quantity in amount.'],
+        ['TASK_CONTROL', 'RetargetGoal', 'Change the destination of the current/referenced goal; put the new known destination in destination.'],
+        ['TASK_CONTROL', 'ApprovePurchase', 'Approve the NPC most recent pending purchase request. Use only after the player clearly says yes/approves spending.'],
+        ['TASK_CONTROL', 'DeclinePurchase', 'Decline/cancel the NPC most recent pending purchase request.'],
+    ];
+    foreach ($bridgeFallbacks as $bridgeFallback) {
+        [$bridgeCommand, $bridgeName, $bridgeDescription] = $bridgeFallback;
+        $alreadyPresent = false;
+        foreach ($rows as $row) {
+            if (stobeCanonicalizeActionCommand(strval($row['command'] ?? '')) === $bridgeCommand) {
+                $alreadyPresent = true;
+                break;
+            }
+        }
+        if (!$alreadyPresent) {
+            $appendFallbackAction($bridgeCommand, $bridgeName, $bridgeDescription);
+        }
+    }
 
     return $rows;
 }
 
-function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
+function buildActionGuidanceFromRows(array $rows, array $npcData = [], bool $stableReference = false): string {
     if (count($rows) === 0) {
         return '';
     }
 
     $lines = [];
-    $lines[] = '<available_actions_list>';
-    $lines[] = '#Available Actions';
-    $lines[] = 'Use if your character needs to perform an action:';
+    $lines[] = $stableReference ? '<action_reference>' : '<available_actions_list>';
+    $lines[] = $stableReference ? '#Action Reference' : '#Available Actions';
+    $lines[] = $stableReference
+        ? 'Reference definitions only. The later <action_state> block is authoritative for which actions are currently available.'
+        : 'Use if your character needs to perform an action:';
     foreach ($rows as $row) {
         $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
         $actionName = trim(strval($row['action_name'] ?? ''));
@@ -301,13 +376,18 @@ function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
         if ($actionName === '') {
             continue;
         }
+        if (!$stableReference &&
+            in_array($command, ['WORK_GOAL','TASK_GOAL','TASK_CONTROL'], true) &&
+            (!is_array($npcData) || !npcIsInPlayerFaction($npcData))) {
+            continue;
+        }
         $description = trim(strval($row['description'] ?? ''));
         if ($command === 'STOP_CARRYING') {
             $description = 'Put down what you are currently carrying.';
         } elseif ($command === 'PICKUP_NPC') {
             $description = 'Pick up a nearby helpless target and carry them. Not available while already carrying someone.';
         }
-        if ($command === 'FACTION_RELATIONS') {
+        if (!$stableReference && $command === 'FACTION_RELATIONS') {
             $inlineRules = stobeBuildFactionRelationsActionInlineGuidance($npcData);
             if ($inlineRules !== '') {
                 if ($description === '') {
@@ -319,9 +399,11 @@ function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
         }
         if ($command === 'MOVE_TO') {
             $description .= ' Put the exact reference in target, or use player for the initiating speaker. Use a known visited location name for a fixed point. Never invent coordinates. Follow is for continued following; UseObject is for interaction.';
-            foreach (stobeMoveToReferences($npcData) as $reference) {
-                $lines[] = 'MoveTo target: hand_' . $reference['serial'] . ' = '
-                    . stobePromptXmlEscape($reference['name']);
+            if (!$stableReference) {
+                foreach (stobeMoveToReferences($npcData) as $reference) {
+                    $lines[] = 'MoveTo target: hand_' . $reference['serial'] . ' = '
+                        . stobePromptXmlEscape($reference['name']);
+                }
             }
         }
         if ($description !== '') {
@@ -330,9 +412,16 @@ function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
             $lines[] = "AVAILABLE ACTION: {$actionName}";
         }
     }
-    $lines[] = '</available_actions_list>';
+    $lines[] = $stableReference ? '</action_reference>' : '</available_actions_list>';
 
     return implode("\n", $lines);
+}
+
+/** Speech that states an equip already happened (it only executes after the reply). */
+function stobeSpeechClaimsEquipDone(string $message): bool {
+    $done = '/\b(back\s+on|already\s+on|(?:it|they)(?:\'|’)(?:s|re)\s+on|(?:it|they)\s+(?:is|are)\s+on|(?:put|got)\s+(?:it|them|that|those)\s+(?:back\s+)?on)\b/i';
+    $intent = '/\b(let me|i(?:\'|’)ll|gonna|going to)\b/i';
+    return preg_match($done, $message) === 1 && preg_match($intent, $message) !== 1;
 }
 
 function stobeNpcIsInCombat(array|false $npcData): bool {
@@ -429,8 +518,24 @@ function stobeBuildActionConfigForNpc(string $eventType, array|false $npcData = 
     $config['disallow_give_cats'] = false;
     $config['disallow_take_cats'] = false;
     $config['allow_travel_location'] = true;
-    if (is_array($npcData) && count($npcData) > 0 && npcIsInPlayerFaction($npcData)) {
-        $config['disallow_follow_for_player_faction'] = true;
+    $config['in_player_faction'] = false;
+    $config['player_name'] = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+    $config['player_affinity'] = 0;
+    $config['protected_equipment_text'] = '';
+    $config['explicit_barter_offer'] = stobeCurrentRequestLooksLikeExplicitBarter();
+    $config['give_equipment_trust_threshold'] = max(0, min(100, intval(getSettingInt('PROPERTY_GIVE_TRUST_THRESHOLD', 60))));
+    // Kenshi is harsh: outsiders do not hand the player items or Cats for nothing.
+    $config['gift_trust_threshold'] = max(0, min(100, intval(getSettingInt('GIFT_TRUST_THRESHOLD', 56))));
+    $config['deal_sanctioned_give'] = false;
+    if (is_array($npcData) && count($npcData) > 0) {
+        $isPlayerFaction = npcIsInPlayerFaction($npcData);
+        $config['in_player_faction'] = $isPlayerFaction;
+        $config['npc_name'] = normalizeParticipantNameToken(strval($npcData['name'] ?? ''));
+        $config['player_affinity'] = stobeNpcPlayerAffinity($npcData);
+        $config['protected_equipment_text'] = stobeNpcProtectedEquipmentText($npcData);
+        if ($isPlayerFaction) {
+            $config['disallow_follow_for_player_faction'] = true;
+        }
     }
     if (is_array($npcData) && count($npcData) > 0 && !stobeNpcIsCarryingTarget($npcData)) {
         $config['disallow_stop_carrying'] = true;
@@ -483,72 +588,94 @@ function stobeFilterPartyActionGuidanceByMembership(string $guidance, ?bool $inP
     return trim($guidance);
 }
 
-function appendActionGuidanceToPrompt(string $prompt, string $eventType, array $npcData = []): string {
-    if (!stobePromptContextOptionEnabled('enabled_sections', 'available_actions_list')) {
-        return $prompt;
-    }
-
+function stobeBuildCurrentActionRows(string $eventType, array $npcData = []): array {
     $config = stobeBuildActionConfigForNpc($eventType, $npcData);
     if (!boolval($config['enabled'] ?? false)) {
-        return $prompt;
+        return [[], $config];
     }
+
     $rows = [];
     $allowed = $config['allowlist'] ?? [];
     $activeRows = $config['active_rows'] ?? [];
-    if (is_array($activeRows) && count($activeRows) > 0) {
+    if (is_array($activeRows)) {
         foreach ($activeRows as $row) {
             $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
-            if ($command === '') {
-                continue;
-            }
-            if (count($allowed) > 0 && !in_array($command, $allowed, true)) {
-                continue;
-            }
-            if ($command === 'STOP_ATTACK' && boolval($config['disallow_stop_attack'] ?? true)) {
-                continue;
-            }
-            if ($command === 'GIVE_CATS' && boolval($config['disallow_give_cats'] ?? false)) {
-                continue;
-            }
-            if ($command === 'TAKE_CATS' && boolval($config['disallow_take_cats'] ?? false)) {
-                continue;
-            }
-            if ($command === 'STOP_CARRYING' && boolval($config['disallow_stop_carrying'] ?? false)) {
-                continue;
-            }
-            if ($command === 'PICKUP_NPC' && boolval($config['disallow_pickup_npc'] ?? false)) {
-                continue;
-            }
-            if ($command === 'REMOVE_LIMB' && boolval($config['disallow_remove_limb'] ?? false)) {
-                continue;
-            }
-            if ($command === 'CUT_HORNS' && boolval($config['disallow_cut_horns'] ?? false)) {
-                continue;
-            }
-            if ($command === 'USE_DRUGS' && boolval($config['disallow_use_drugs'] ?? false)) {
-                continue;
-            }
-            if ($command === 'DRINK_ITEM' && boolval($config['disallow_drink_item'] ?? false)) {
-                continue;
-            }
-            if ($command === 'FORCE_DRINK' && boolval($config['disallow_force_drink'] ?? false)) {
-                continue;
-            }
-            if ($command === 'TRAVEL_LOCATION' && !boolval($config['allow_travel_location'] ?? false)) {
-                continue;
-            }
+            if ($command === '' || (count($allowed) > 0 && !in_array($command, $allowed, true))) continue;
+            if ($command === 'STOP_ATTACK' && boolval($config['disallow_stop_attack'] ?? true)) continue;
+            if ($command === 'GIVE_CATS' && boolval($config['disallow_give_cats'] ?? false)) continue;
+            if ($command === 'TAKE_CATS' && boolval($config['disallow_take_cats'] ?? false)) continue;
+            if ($command === 'STOP_CARRYING' && boolval($config['disallow_stop_carrying'] ?? false)) continue;
+            if ($command === 'PICKUP_NPC' && boolval($config['disallow_pickup_npc'] ?? false)) continue;
+            if ($command === 'REMOVE_LIMB' && boolval($config['disallow_remove_limb'] ?? false)) continue;
+            if ($command === 'CUT_HORNS' && boolval($config['disallow_cut_horns'] ?? false)) continue;
+            if ($command === 'USE_DRUGS' && boolval($config['disallow_use_drugs'] ?? false)) continue;
+            if ($command === 'DRINK_ITEM' && boolval($config['disallow_drink_item'] ?? false)) continue;
+            if ($command === 'FORCE_DRINK' && boolval($config['disallow_force_drink'] ?? false)) continue;
+            if ($command === 'TRAVEL_LOCATION' && !boolval($config['allow_travel_location'] ?? false)) continue;
             $rows[] = $row;
         }
     }
+    return [$rows, $config];
+}
 
+function appendStableActionReferenceToPrompt(string $prompt, string $eventType): string {
+    if (!stobePromptContextOptionEnabled('enabled_sections', 'available_actions_list')) return $prompt;
+    $runtime = getActionRuntimeConfig($eventType);
+    if (!boolval($runtime['enabled'] ?? false)) return $prompt;
+    $rows = is_array($runtime['active_rows'] ?? null) ? $runtime['active_rows'] : [];
+    $allowed = $runtime['allowlist'] ?? [];
+    if (count($allowed) > 0) {
+        $rows = array_values(array_filter($rows, static function ($row) use ($allowed): bool {
+            $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
+            return $command !== '' && in_array($command, $allowed, true);
+        }));
+    }
+    $guidance = buildActionGuidanceFromRows($rows, [], true);
+    return $guidance === '' ? $prompt : implode("\n\n", [$prompt, $guidance]);
+}
+
+function stobeBuildDynamicActionStateBlock(string $eventType, array $npcData = []): string {
+    if (!stobePromptContextOptionEnabled('enabled_sections', 'available_actions_list')) return '';
+    [$rows, $config] = stobeBuildCurrentActionRows($eventType, $npcData);
+    if (!boolval($config['enabled'] ?? false)) return '';
+
+    $names = [];
+    foreach ($rows as $row) {
+        $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
+        $name = trim(strval($row['action_name'] ?? ''));
+        if ($command === 'STOP_CARRYING') $name = 'StopCarrying';
+        elseif ($command === 'PICKUP_NPC') $name = 'PickupNpc';
+        if ($name !== '') $names[] = $name;
+    }
+    $inPlayerFaction = count($npcData) > 0 ? npcIsInPlayerFaction($npcData) : false;
+    $lines = ['<action_state>'];
+    $lines[] = $inPlayerFaction
+        ? 'This NPC is already in the player faction/squad. Leave may be used; JoinParty and Follow/StopFollow are unavailable.'
+        : 'This NPC is not in the player faction/squad. JoinParty may be used; Leave is unavailable.';
+    $lines[] = 'Currently available actions: ' . (count($names) > 0 ? implode(', ', array_values(array_unique($names))) : '(none)') . '.';
+
+    foreach ($rows as $row) {
+        $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
+        if ($command === 'FACTION_RELATIONS') {
+            $inline = stobeBuildFactionRelationsActionInlineGuidance($npcData);
+            if ($inline !== '') $lines[] = 'FactionRelations live context: ' . $inline;
+        } elseif ($command === 'MOVE_TO') {
+            foreach (stobeMoveToReferences($npcData) as $reference) {
+                $lines[] = 'MoveTo target: hand_' . $reference['serial'] . ' = ' . stobePromptXmlEscape($reference['name']);
+            }
+        }
+    }
+    $lines[] = '</action_state>';
+    return implode("\n", $lines);
+}
+
+function appendActionGuidanceToPrompt(string $prompt, string $eventType, array $npcData = []): string {
+    if (!stobePromptContextOptionEnabled('enabled_sections', 'available_actions_list')) return $prompt;
+    [$rows, $config] = stobeBuildCurrentActionRows($eventType, $npcData);
+    if (!boolval($config['enabled'] ?? false)) return $prompt;
     $guidance = buildActionGuidanceFromRows($rows, $npcData);
-    if ($guidance === '') {
-        return $prompt;
-    }
-    $inPlayerFaction = null;
-    if (is_array($npcData) && count($npcData) > 0) {
-        $inPlayerFaction = npcIsInPlayerFaction($npcData);
-    }
+    if ($guidance === '') return $prompt;
+    $inPlayerFaction = count($npcData) > 0 ? npcIsInPlayerFaction($npcData) : null;
     $guidance = stobeFilterPartyActionGuidanceByMembership($guidance, $inPlayerFaction);
     return implode("\n\n", [$prompt, $guidance]);
 }
@@ -629,6 +756,60 @@ function stobeCanonicalizeActionCommand(string $command): string {
     }
     if (in_array($upper, ['PICKUPNPC', 'PICKUP-NPC', 'KIDNAP'], true)) {
         return 'PICKUP_NPC';
+    }
+    if (in_array($upper, ['UNEQUIPITEM', 'UNEQUIP-ITEM', 'TAKEOFFITEM', 'TAKE_OFF_ITEM', 'TAKE-OFF-ITEM'], true)) {
+        return 'UNEQUIP_ITEM';
+    }
+    if (in_array($upper, ['EQUIPITEM', 'EQUIP-ITEM'], true)) {
+        return 'EQUIP_ITEM';
+    }
+    if (in_array($upper, ['SHEATHEWEAPON', 'SHEATHE-WEAPON', 'HOLSTERWEAPON'], true)) {
+        return 'SHEATHE_WEAPON';
+    }
+    if (in_array($upper, ['DRAWWEAPON', 'DRAW-WEAPON', 'READYWEAPON'], true)) {
+        return 'DRAW_WEAPON';
+    }
+    if (in_array($upper, ['FACETARGET', 'FACE-TARGET', 'LOOKAT', 'LOOK_AT'], true)) {
+        return 'FACE_TARGET';
+    }
+    if (in_array($upper, ['FIRSTAID', 'FIRST-AID', 'HEALTARGET', 'HEAL_TARGET'], true)) {
+        return 'FIRST_AID';
+    }
+    if (in_array($upper, ['GUARDTARGET', 'GUARD_TARGET', 'BODYGUARDTARGET'], true)) {
+        return 'BODYGUARD';
+    }
+    if (in_array($upper, ['PUTINBED', 'PUT-IN-BED'], true)) {
+        return 'PUT_IN_BED';
+    }
+    if (in_array($upper, ['LOOTTARGET', 'LOOT-TARGET'], true)) {
+        return 'LOOT_TARGET';
+    }
+    if (in_array($upper, ['RELEASEPRISONER', 'RELEASE-PRISONER'], true)) {
+        return 'RELEASE_PRISONER';
+    }
+    if (in_array($upper, ['DROPWEAPON', 'DROP-WEAPON'], true)) {
+        return 'DROP_WEAPON';
+    }
+    if (in_array($upper, ['DISARM', 'DISARMSELF', 'DISARM_SELF'], true)) {
+        return 'SURRENDER';
+    }
+    if (in_array($upper, ['MOVETOTARGET', 'MOVE-TO-TARGET', 'GOTOACTOR'], true)) {
+        return 'MOVE_TO_TARGET';
+    }
+    if (in_array($upper, ['SIT', 'TAKEASEAT', 'TAKE_A_SEAT'], true)) {
+        return 'SIT';
+    }
+    if (in_array($upper, ['SLEEP', 'GOTOSLEEP', 'GO_TO_SLEEP'], true)) {
+        return 'SLEEP';
+    }
+    if (in_array($upper, ['OPERATEOBJECT', 'OPERATE-OBJECT', 'WORKOBJECT'], true)) {
+        return 'OPERATE_OBJECT';
+    }
+    if (in_array($upper, ['HOLDPOSITION', 'HOLD-POSITION'], true)) {
+        return 'HOLD_POSITION';
+    }
+    if (in_array($upper, ['WORKGOAL', 'WORK-GOAL', 'PRODUCEGOAL', 'PRODUCE_GOAL', 'CRAFTGOAL', 'CRAFT_GOAL'], true)) {
+        return 'WORK_GOAL';
     }
     if (in_array($upper, ['REMOVELIMB'], true)) {
         return 'REMOVE_LIMB';
@@ -1009,7 +1190,7 @@ function stobeNpcIsSkeletonRace(array $npcData): bool {
 
 function isAllowedActionCommand(string $command, array $allowlist): bool {
     $command = stobeCanonicalizeActionCommand($command);
-    if (in_array($command, ['RELEASE_PLAYER', 'RELEASE_PRISONER', 'RELEASEPLAYER'], true)) {
+    if (in_array($command, ['RELEASE_PLAYER', 'RELEASEPLAYER'], true)) {
         return false;
     }
     if (count($allowlist) === 0) {
@@ -1021,6 +1202,173 @@ function isAllowedActionCommand(string $command, array $allowlist): bool {
         }
     }
     return false;
+}
+
+
+function stobeNpcPlayerAffinity(array|false $npcData): int {
+    if (!is_array($npcData)) {
+        return 0;
+    }
+    $playerName = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+    if ($playerName === '') {
+        return 0;
+    }
+
+    $extended = normalizeNpcExtendedDataPayload($npcData['extended_data'] ?? []);
+    $raw = $extended['relationships'] ?? [];
+    if (is_string($raw)) {
+        $decoded = json_decode($raw, true);
+        $raw = is_array($decoded) ? $decoded : [];
+    }
+    if (is_array($raw)) {
+        foreach ($raw as $target => $entry) {
+            if (strcasecmp(normalizeParticipantNameToken(strval($target)), $playerName) !== 0 || !is_array($entry)) {
+                continue;
+            }
+            return max(-100, min(100, intval($entry['aff'] ?? ($entry['affinity'] ?? 0))));
+        }
+    }
+
+    foreach (stobeGetNpcRelationshipMap($npcData) as $target => $entry) {
+        if (strcasecmp(normalizeParticipantNameToken(strval($target)), $playerName) !== 0 || !is_array($entry)) {
+            continue;
+        }
+        return max(-100, min(100, intval($entry['aff'] ?? ($entry['affinity'] ?? 0))));
+    }
+    return 0;
+}
+
+function stobeCurrentRequestLooksLikeExplicitBarter(): bool {
+    $message = strtolower(trim(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? '')));
+    if ($message === '') {
+        return false;
+    }
+    if (preg_match('/\b(trade|swap|exchange|barter)\b/i', $message) === 1) {
+        return true;
+    }
+    if (preg_match('/\b(i(?:\'|’)ll|i will|give you|offer you)\b.{0,100}\b(for|in return|in exchange)\b/i', $message) === 1) {
+        return true;
+    }
+    return false;
+}
+
+function stobeNpcProtectedEquipmentText(array|false $npcData): string {
+    if (!is_array($npcData)) {
+        return '';
+    }
+    $metadata = normalizeNpcMetadataPayload($npcData['metadata'] ?? []);
+    $ctx = buildInventoryContextFromMetadata($metadata);
+    $equipment = trim(strval($ctx['equipment'] ?? ''));
+    if ($equipment === '') {
+        $equipment = trim(strval($npcData['equipment'] ?? ''));
+    }
+    return strtolower($equipment);
+}
+
+function stobeGiveItemNameFromActionArgument(string $argument): string {
+    $parts = array_values(array_filter(array_map('trim', explode('@', $argument)), static fn(string $v): bool => $v !== ''));
+    if (count($parts) === 0) {
+        return '';
+    }
+    if (count($parts) > 1 && preg_match('/^\d+$/', strval(end($parts))) === 1) {
+        array_pop($parts);
+    }
+    if (count($parts) === 0) {
+        return '';
+    }
+    return trim(strval(end($parts)));
+}
+
+function stobeGiveItemTargetFromActionArgument(string $argument): string {
+    $parts = array_values(array_filter(array_map('trim', explode('@', $argument)), static fn(string $v): bool => $v !== ''));
+    if (count($parts) > 1 && preg_match('/^\d+$/', strval(end($parts))) === 1) {
+        array_pop($parts);
+    }
+    if (count($parts) < 2) {
+        return '';
+    }
+    return normalizeParticipantNameToken(strval($parts[0]));
+}
+
+function stobeGiveItemMatchesProtectedEquipment(string $argument, array $config): bool {
+    $item = strtolower(stobeGiveItemNameFromActionArgument($argument));
+    $equipment = strtolower(trim(strval($config['protected_equipment_text'] ?? '')));
+    if ($item === '' || $equipment === '') {
+        return false;
+    }
+    return str_contains($equipment, $item);
+}
+
+function stobeProtectedGiveWouldBeBlocked(string $rawTag, array $config): bool {
+    $value = trim($rawTag);
+    $at = strpos($value, '@');
+    if ($at === false) {
+        return false;
+    }
+    $command = strtoupper(trim(substr($value, 0, $at)));
+    if (in_array($command, ['GIVEITEM','GIVE-ITEM'], true)) {
+        $command = 'GIVE_ITEM';
+    }
+    if ($command !== 'GIVE_ITEM' || boolval($config['in_player_faction'] ?? false)) {
+        return false;
+    }
+    // Part of an agreed deal: a paid-for item is not a gift, even if it's worn.
+    if (boolval($config['deal_sanctioned_give'] ?? false)) {
+        return false;
+    }
+    $dealNpc = strval($config['npc_name'] ?? '');
+    if ($dealNpc !== '' && function_exists('stobeNegNpcHasDealContext') && stobeNegNpcHasDealContext($dealNpc)) {
+        return false;
+    }
+    $argument = trim(substr($value, $at + 1));
+    $giveTarget = stobeGiveItemTargetFromActionArgument($argument);
+    $playerName = normalizeParticipantNameToken(strval($config['player_name'] ?? ''));
+    $targetsPlayer = ($giveTarget === '' || $playerName === '' || strcasecmp($giveTarget, $playerName) === 0);
+    $affinity = intval($config['player_affinity'] ?? 0);
+    $threshold = max(0, min(100, intval($config['give_equipment_trust_threshold'] ?? 60)));
+    $barter = boolval($config['explicit_barter_offer'] ?? false);
+    return $targetsPlayer && $affinity < $threshold && !$barter
+        && stobeGiveItemMatchesProtectedEquipment($argument, $config);
+}
+
+/**
+ * An outsider giving the player an item or Cats with nothing in return. Allowed
+ * only at high trust (GIFT_TRUST_THRESHOLD, default 56 = Fond) or when the
+ * hand-over is part of an agreed deal (the negotiation ledger sets
+ * deal_sanctioned_give; deal settlements are attached after this filter).
+ */
+function stobeUnpaidGiftWouldBeBlocked(string $command, string $argument, array $config): bool {
+    if (!in_array($command, ['GIVE_ITEM','GIVE_CATS'], true)) {
+        return false;
+    }
+    if (boolval($config['in_player_faction'] ?? false) || boolval($config['deal_sanctioned_give'] ?? false)) {
+        return false;
+    }
+    // Checked against the deal ledger itself: every code path that streams or re-validates
+    // actions builds its own config, so a flag alone is not enough.
+    $npcName = strval($config['npc_name'] ?? '');
+    if ($npcName !== '' && function_exists('stobeNegNpcHasDealContext') && stobeNegNpcHasDealContext($npcName)) {
+        return false;
+    }
+    $playerName = normalizeParticipantNameToken(strval($config['player_name'] ?? ''));
+    $target = $command === 'GIVE_ITEM'
+        ? stobeGiveItemTargetFromActionArgument($argument)
+        : normalizeParticipantNameToken(strval(explode('@', $argument)[0] ?? ''));
+    $targetsPlayer = $target === '' || $playerName === '' || strcasecmp($target, $playerName) === 0;
+    if (!$targetsPlayer) {
+        return false;
+    }
+    return intval($config['player_affinity'] ?? 0) < intval($config['gift_trust_threshold'] ?? 56);
+}
+
+function stobeCurrentRequestClaimsKeepingProperty(): bool {
+    $message = strtolower(trim(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? '')));
+    if ($message === '') {
+        return false;
+    }
+    return preg_match('/\b(i(?:\'|’)m|i am|i(?:\'|’)ll|i will|gonna|going to)\b.{0,45}\b(keep|keeping|take|taking|steal|stealing)\b/i', $message) === 1
+        || preg_match('/\b(not|never)\b.{0,30}\b(return|give)\b.{0,20}\b(back|it)\b/i', $message) === 1
+        || preg_match('/\b(it(?:\'|’)s|it is)\s+mine\b/i', $message) === 1;
 }
 
 function normalizeActionTagToken(string $rawTag, array $config = []): string {
@@ -1069,6 +1417,61 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
         'TAKEITEM' => 'TAKE_ITEM',
         'GIVEITEM' => 'GIVE_ITEM',
         'DROPITEM' => 'DROP_ITEM',
+        'UNEQUIPITEM' => 'UNEQUIP_ITEM',
+        'UNEQUIP-ITEM' => 'UNEQUIP_ITEM',
+        'TAKEOFFITEM' => 'UNEQUIP_ITEM',
+        'TAKE_OFF_ITEM' => 'UNEQUIP_ITEM',
+        'TAKE-OFF-ITEM' => 'UNEQUIP_ITEM',
+        'EQUIPITEM' => 'EQUIP_ITEM',
+        'EQUIP-ITEM' => 'EQUIP_ITEM',
+        'SHEATHEWEAPON' => 'SHEATHE_WEAPON',
+        'SHEATHE-WEAPON' => 'SHEATHE_WEAPON',
+        'HOLSTERWEAPON' => 'SHEATHE_WEAPON',
+        'DRAWWEAPON' => 'DRAW_WEAPON',
+        'DRAW-WEAPON' => 'DRAW_WEAPON',
+        'READYWEAPON' => 'DRAW_WEAPON',
+        'FACETARGET' => 'FACE_TARGET',
+        'FACE-TARGET' => 'FACE_TARGET',
+        'LOOKAT' => 'FACE_TARGET',
+        'LOOK_AT' => 'FACE_TARGET',
+        'FIRSTAID' => 'FIRST_AID',
+        'FIRST-AID' => 'FIRST_AID',
+        'HEALTARGET' => 'FIRST_AID',
+        'HEAL_TARGET' => 'FIRST_AID',
+        'GUARDTARGET' => 'BODYGUARD',
+        'GUARD_TARGET' => 'BODYGUARD',
+        'BODYGUARDTARGET' => 'BODYGUARD',
+        'PUTINBED' => 'PUT_IN_BED',
+        'PUT-IN-BED' => 'PUT_IN_BED',
+        'LOOTTARGET' => 'LOOT_TARGET',
+        'LOOT-TARGET' => 'LOOT_TARGET',
+        'RELEASEPRISONER' => 'RELEASE_PRISONER',
+        'RELEASE-PRISONER' => 'RELEASE_PRISONER',
+        'DROPWEAPON' => 'DROP_WEAPON',
+        'DROP-WEAPON' => 'DROP_WEAPON',
+        'DISARM' => 'SURRENDER',
+        'DISARMSELF' => 'SURRENDER',
+        'DISARM_SELF' => 'SURRENDER',
+        'MOVETOTARGET' => 'MOVE_TO_TARGET',
+        'MOVE-TO-TARGET' => 'MOVE_TO_TARGET',
+        'GOTOACTOR' => 'MOVE_TO_TARGET',
+        'HOLDPOSITION' => 'HOLD_POSITION',
+        'HOLD-POSITION' => 'HOLD_POSITION',
+        'TAKEASEAT' => 'SIT',
+        'TAKE_A_SEAT' => 'SIT',
+        'GOTOSLEEP' => 'SLEEP',
+        'GO_TO_SLEEP' => 'SLEEP',
+        'OPERATEOBJECT' => 'OPERATE_OBJECT',
+        'OPERATE-OBJECT' => 'OPERATE_OBJECT',
+        'WORKOBJECT' => 'OPERATE_OBJECT',
+        'WORKGOAL' => 'WORK_GOAL',
+        'TASKGOAL' => 'TASK_GOAL',
+        'TASKCONTROL' => 'TASK_CONTROL',
+        'WORK-GOAL' => 'WORK_GOAL',
+        'PRODUCEGOAL' => 'WORK_GOAL',
+        'PRODUCE_GOAL' => 'WORK_GOAL',
+        'CRAFTGOAL' => 'WORK_GOAL',
+        'CRAFT_GOAL' => 'WORK_GOAL',
         'FACTIONRELATIONS' => 'FACTION_RELATIONS',
         'SETBLOCK' => 'SET_BLOCK',
         'SETHOLD' => 'SET_HOLD',
@@ -1108,6 +1511,28 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
     $command = stobeCanonicalizeActionCommand($command);
 
     if (!isAllowedActionCommand($command, $config['allowlist'] ?? [])) {
+        return '';
+    }
+
+    if ($command === 'GIVE_ITEM' && stobeProtectedGiveWouldBeBlocked($value, $config)) {
+        $giveTarget = stobeGiveItemTargetFromActionArgument($argument);
+        $playerName = normalizeParticipantNameToken(strval($config['player_name'] ?? ''));
+        stobeLogWarn('Blocked low-trust outsider from giving equipped gear to player', [
+            'item' => stobeGiveItemNameFromActionArgument($argument),
+            'target' => $giveTarget !== '' ? $giveTarget : $playerName,
+            'affinity' => intval($config['player_affinity'] ?? 0),
+            'required_affinity' => intval($config['give_equipment_trust_threshold'] ?? 60),
+        ]);
+        return '';
+    }
+    if (stobeUnpaidGiftWouldBeBlocked($command, $argument, $config)) {
+        stobeLogWarn('Blocked unpaid gift to player (not enough trust, no agreed deal)', [
+            'command' => $command,
+            'argument' => $argument,
+            'affinity' => intval($config['player_affinity'] ?? 0),
+            'required_affinity' => intval($config['gift_trust_threshold'] ?? 56),
+        ]);
+        $GLOBALS['STOBE_BLOCKED_UNPAID_GIFT'] = true;
         return '';
     }
     if (boolval($config['disallow_follow_for_player_faction'] ?? false) &&
@@ -1161,6 +1586,8 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
     $simpleNoArg = [
         'JOIN_PARTY', 'LEAVE', 'IDLE',
         'STOP_FOLLOW', 'STOP_CARRYING', 'SUICIDE',
+        'SHEATHE_WEAPON', 'DRAW_WEAPON', 'PATROL', 'HOLD_POSITION',
+        'DROP_WEAPON', 'SURRENDER',
     ];
     if (in_array($command, $simpleNoArg, true)) {
         return $command . '@';
@@ -1223,6 +1650,53 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
         }
         return $amount;
     };
+
+    if ($command === 'TASK_GOAL') {
+        $parts=explode('@',$argument);
+        while(count($parts)<6)$parts[]='';
+        $kind=strtoupper($sanitizeInlineText(strval($parts[0]),40));
+        $targetName=$sanitizeInlineText(strval($parts[1]),140);
+        $itemName=$sanitizeInlineText(strval($parts[2]),140);
+        $qty=max(0,min(1000,intval($parts[3])));
+        $dest=$sanitizeInlineText(strval($parts[4]),160);
+        $maxCats=max(0,min(10000000,intval($parts[5])));
+        if($kind==='')return '';
+        return 'TASK_GOAL@'.$kind.'@'.$targetName.'@'.$itemName.'@'.$qty.'@'.$dest.'@'.$maxCats;
+    }
+    if ($command === 'TASK_CONTROL') {
+        $parts=explode('@',$argument);
+        while(count($parts)<4)$parts[]='';
+        $cmd=strtoupper($sanitizeInlineText(strval($parts[0]),24));
+        if(!in_array($cmd,['PAUSE','RESUME','CANCEL','QUANTITY','DESTINATION','APPROVE','DECLINE'],true))return '';
+        $selector=$sanitizeInlineText(strval($parts[1]),160);
+        $qty=max(0,min(1000,intval($parts[2])));
+        $dest=$sanitizeInlineText(strval($parts[3]),160);
+        return 'TASK_CONTROL@'.$cmd.'@'.$selector.'@'.$qty.'@'.$dest;
+    }
+
+    if ($command === 'WORK_GOAL') {
+        $rawSegments = array_map('trim', explode('@', $argument));
+        $rawSegments = array_values(array_filter($rawSegments, static fn(string $v): bool => $v !== ''));
+        if (count($rawSegments) < 2) {
+            return '';
+        }
+        $amount = $parsePositiveAmount($rawSegments[count($rawSegments) - 1], 1000);
+        if ($amount < 1) {
+            return '';
+        }
+        array_pop($rawSegments);
+        $destination = '';
+        if (count($rawSegments) >= 2) {
+            $destination = $sanitizeInlineText(array_shift($rawSegments), 160);
+        }
+        $itemName = $sanitizeInlineText(implode(' ', $rawSegments), 160);
+        if ($itemName === '') {
+            return '';
+        }
+        return $destination !== ''
+            ? 'WORK_GOAL@' . $destination . '@' . $itemName . '@' . strval($amount)
+            : 'WORK_GOAL@' . $itemName . '@' . strval($amount);
+    }
 
     if ($command === 'GIVE_CATS' || $command === 'TAKE_CATS') {
         $segments = $splitActionSegments($argument);
@@ -1289,12 +1763,33 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
         return $normalized;
     }
 
-    if ($command === 'DROP_ITEM') {
+    if ($command === 'DROP_ITEM' || $command === 'UNEQUIP_ITEM' || $command === 'EQUIP_ITEM') {
         $itemName = $sanitizeInlineText($argument, 140);
         if ($itemName === '') {
             return '';
         }
         return $command . '@' . $itemName;
+    }
+    if (in_array($command, ['FACE_TARGET', 'FIRST_AID', 'BODYGUARD', 'RESCUE', 'PUT_IN_BED', 'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'MOVE_TO_TARGET'], true)) {
+        $targetName = $sanitizeInlineText($argument, 140);
+        if ($targetName === '') {
+            return '';
+        }
+        return $command . '@' . $targetName;
+    }
+    if ($command === 'REPAIR' || $command === 'BUILD') {
+        $objectName = $sanitizeInlineText($argument, 160);
+        if ($objectName === '') {
+            return '';
+        }
+        return $command . '@' . $objectName;
+    }
+    if ($command === 'SIT' || $command === 'SLEEP' || $command === 'OPERATE_OBJECT') {
+        $objectName = $sanitizeInlineText($argument, 160);
+        if ($objectName === '') {
+            $objectName = $command === 'SIT' ? 'chair' : ($command === 'SLEEP' ? 'bed' : '');
+        }
+        return 'USE_OBJECT@' . $objectName;
     }
     if ($command === 'REMOVE_LIMB') {
         $payload = trim($argument);
@@ -1410,11 +1905,17 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
     }
 
     if ($command === 'ATTACK') {
+        // Bug 39: keep the "@help" flag (she called her faction-mates in); the sanitizer strips '@'.
+        $helpFlag = '';
+        if (preg_match('/^(.*)@help\s*$/i', $argument, $helpMatch)) {
+            $argument = $helpMatch[1];
+            $helpFlag = '@help';
+        }
         $targetName = $sanitizeInlineText($argument, 120);
         if ($targetName === '') {
             return 'ATTACK@';
         }
-        return 'ATTACK@' . $targetName;
+        return 'ATTACK@' . $targetName . $helpFlag;
     }
     if ($command === 'STOP_ATTACK') {
         $targetName = $sanitizeInlineText($argument, 120);
@@ -1744,13 +2245,13 @@ function extractAndNormalizeActionTags(string $rawResponse, string $eventType, ?
     $commandNames = [
         'ATTACK', 'STOP_ATTACK', 'FOLLOW', 'STOP_FOLLOW', 'JOIN_PARTY',
         'LEAVE', 'IDLE', 'STOP_CARRYING', 'PICKUP_NPC', 'RELEASE_PLAYER', 'RELEASE_PRISONER', 'SUICIDE',
-        'GIVE_CATS', 'TAKE_CATS', 'TAKE_ITEM', 'GIVE_ITEM', 'DROP_ITEM', 'REMOVE_LIMB', 'KNOCKOUT', 'KILL', 'USE_OBJECT', 'USE_DRUGS', 'DRINK_ITEM', 'DRINK', 'FORCE_DRINK', 'TRAVEL_LOCATION', 'MOVE_TO', 'MOVETO',
+        'GIVE_CATS', 'TAKE_CATS', 'TAKE_ITEM', 'GIVE_ITEM', 'DROP_ITEM', 'UNEQUIP_ITEM', 'EQUIP_ITEM', 'SHEATHE_WEAPON', 'DRAW_WEAPON', 'FACE_TARGET', 'FIRST_AID', 'BODYGUARD', 'PATROL', 'RESCUE', 'PUT_IN_BED', 'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'DROP_WEAPON', 'SURRENDER', 'MOVE_TO_TARGET', 'HOLD_POSITION', 'REPAIR', 'BUILD', 'WORK_GOAL', 'TASK_GOAL', 'TASK_CONTROL', 'SIT', 'SLEEP', 'OPERATE_OBJECT', 'REMOVE_LIMB', 'KNOCKOUT', 'KILL', 'USE_OBJECT', 'USE_DRUGS', 'DRINK_ITEM', 'DRINK', 'FORCE_DRINK', 'TRAVEL_LOCATION', 'MOVE_TO', 'MOVETO',
         'ROLEPLAY_ACTION', 'NOTIFY', 'FACTION_RELATIONS', 'TASK', 'TALK',
         'SET_BLOCK', 'SET_HOLD', 'SET_PASSIVE', 'SET_JOBS', 'SET_RANGED',
         'SET_TAUNT', 'SET_SNEAK', 'SET_RESOURCE', 'SET_MEDIC',
         // Common alias forms emitted by models without underscores.
         'STOPATTACK', 'STOPFOLLOW', 'JOINPARTY', 'STOPCARRYING', 'DROPNPC', 'DROP_NPC', 'DROP-NPC', 'PUTDOWNNPC', 'PUT_DOWN_NPC', 'PUT-DOWN-NPC', 'RELEASENPC', 'RELEASE_NPC', 'RELEASE-NPC', 'PICKUPNPC', 'PICKUP-NPC', 'KIDNAP', 'RELEASEPLAYER', 'GIVECATS', 'TAKECATS',
-        'TAKEITEM', 'GIVEITEM', 'DROPITEM', 'REMOVELIMB', 'KO', 'KNOCK_OUT', 'KNOCK-OUT', 'KILLTARGET', 'EXECUTE', 'MURDER', 'USEOBJECT', 'USE-OBJECT', 'USEDRUGS', 'USE-DRUGS', 'DRINKITEM', 'DRINK-ITEM', 'FORCEDRINK', 'FORCE-DRINK', 'FACTIONRELATIONS', 'TRAVELLOCATION',
+        'TAKEITEM', 'GIVEITEM', 'DROPITEM', 'UNEQUIPITEM', 'UNEQUIP-ITEM', 'TAKEOFFITEM', 'TAKE_OFF_ITEM', 'TAKE-OFF-ITEM', 'WORKGOAL', 'WORK-GOAL', 'PRODUCEGOAL', 'PRODUCE_GOAL', 'CRAFTGOAL', 'CRAFT_GOAL', 'EQUIPITEM', 'EQUIP-ITEM', 'SHEATHEWEAPON', 'SHEATHE-WEAPON', 'HOLSTERWEAPON', 'DRAWWEAPON', 'DRAW-WEAPON', 'READYWEAPON', 'FACETARGET', 'FACE-TARGET', 'LOOKAT', 'LOOK_AT', 'FIRSTAID', 'FIRST-AID', 'HEALTARGET', 'HEAL_TARGET', 'GUARDTARGET', 'GUARD_TARGET', 'BODYGUARDTARGET', 'PUTINBED', 'PUT-IN-BED', 'LOOTTARGET', 'LOOT-TARGET', 'RELEASEPRISONER', 'RELEASE-PRISONER', 'DROPWEAPON', 'DROP-WEAPON', 'DISARM', 'DISARMSELF', 'DISARM_SELF', 'MOVETOTARGET', 'MOVE-TO-TARGET', 'GOTOACTOR', 'HOLDPOSITION', 'HOLD-POSITION', 'TAKEASEAT', 'TAKE_A_SEAT', 'GOTOSLEEP', 'GO_TO_SLEEP', 'OPERATEOBJECT', 'OPERATE-OBJECT', 'WORKOBJECT', 'REMOVELIMB', 'KO', 'KNOCK_OUT', 'KNOCK-OUT', 'KILLTARGET', 'EXECUTE', 'MURDER', 'USEOBJECT', 'USE-OBJECT', 'USEDRUGS', 'USE-DRUGS', 'DRINKITEM', 'DRINK-ITEM', 'FORCEDRINK', 'FORCE-DRINK', 'FACTIONRELATIONS', 'TRAVELLOCATION',
         'ROLEPLAYACTION', 'ROLEPLAY-ACTION',
         'SETBLOCK', 'SETHOLD', 'SETPASSIVE', 'SETJOBS', 'SETRANGED',
         'SETTAUNT', 'SETSNEAK', 'SETRESOURCE', 'SETMEDIC',
@@ -4923,10 +5424,35 @@ function stobeResolveStructuredDialogueContractParts(
         'TakeItem',
         'GiveItem',
         'DropItem',
+        'DropWeapon',
+        'Surrender',
+        'Disarm',
+        'UnequipItem',
+        'EquipItem',
+        'SheatheWeapon',
+        'DrawWeapon',
+        'FaceTarget',
+        'FirstAid',
+        'Bodyguard',
+        'GuardTarget',
+        'Patrol',
+        'Rescue',
+        'PutInBed',
         'Knockout',
         'Kill',
         'RoleplayAction',
         'FactionRelations',
+        'LootTarget',
+        'Imprison',
+        'ReleasePrisoner',
+        'MoveToTarget',
+        'HoldPosition',
+        'Repair',
+        'Build',
+        'UseObject',
+        'Sit',
+        'Sleep',
+        'OperateObject',
         'Task',
         'SetBlock',
         'SetHold',
@@ -4973,6 +5499,15 @@ function stobeResolveStructuredDialogueContractParts(
         $actions[] = 'StopFollow';
     }
     if ($inPlayerFaction === true) {
+        foreach ([
+            'WorkGoal','LootArea','LootStore','StoreItems','FetchItems','DeliverItems',
+            'RecoverGround','MedicalCleanup','BattleCleanup','ImprisonAll','ReleaseAll',
+            'MaintainStock','BuyItems','SellItems','GuardGoal','WaitForGoal','PatrolGoal',
+            'BuildGoal','RepairGoal','PauseGoal','ResumeGoal','CancelGoal','ModifyGoal',
+            'RetargetGoal','ApprovePurchase','DeclinePurchase'
+        ] as $plannerAction) {
+            $actions[] = $plannerAction;
+        }
         $actions[] = 'Leave';
     } elseif ($inPlayerFaction === false) {
         $actions[] = 'JoinParty';
@@ -5071,10 +5606,12 @@ function stobeBuildStructuredDialogueSchemaPrompt(
         'message' => stobeStructuredDialogueMessageDescription($safeNpc, $eventType),
         'mood' => $moodDescription,
         'action' => implode('|', $actions),
-        'target' => 'action target actor or destination name',
-        'item' => 'exact item name for GIVE_ITEM/TAKE_ITEM, limb token (LEFT_ARM/RIGHT_ARM/LEFT_LEG/RIGHT_LEG), object token for USE_OBJECT, or consumable item for DRINK/USE_DRUGS/FORCE_DRINK',
+        'target' => 'action target actor/object/filter. For planner loot actions this can be goats, animals, enemies, raiders, or a specific name; for DeliverItems it is the recipient; for BuyItems/SellItems it may name a nearby trader',
+        'destination' => 'optional known base/location where the persistent task should be performed or where loot/items should be stored; leave blank when no travel is requested',
+        'item' => 'exact item name or supported category. Planner categories include all, weapons, armor, food, medical, and ammo; WorkGoal uses the desired produced/gathered output',
         'lang' => 'ISO 639-1 language code such as en; use en unless a different language is clearly appropriate',
-        'amount' => 'positive integer count for GIVE_CATS/TAKE_CATS and optional stack count for GIVE_ITEM/TAKE_ITEM',
+        'amount' => 'integer quantity. WorkGoal/FetchItems/DeliverItems/BuyItems/MaintainStock require a positive quantity; loot/store/recover/sell may use 0 to mean all matching items',
+        'max_cats' => 'optional hard spending cap in Cats for an explicit BuyItems request; use 0 when no cap was stated',
     ];
 }
 
@@ -5085,6 +5622,7 @@ function stobeBuildStructuredDialogueResponseFormat(
     string $eventType = 'chat',
     string $strictListener = ''
 ): array {
+    $stobeSchemaStartedAt = microtime(true);
     $parts = stobeResolveStructuredDialogueContractParts($npcName, $npcData, $inPlayerFaction, $eventType);
     $safeNpc = strval($parts['safe_npc'] ?? '');
     if ($safeNpc === '') {
@@ -5104,7 +5642,7 @@ function stobeBuildStructuredDialogueResponseFormat(
         $listenerProperty['enum'] = [$safeStrictListener];
     }
 
-    return [
+    $stobeSchema = [
         'type' => 'json_schema',
         'json_schema' => [
             'name' => 'stobe_dialogue_response',
@@ -5134,11 +5672,15 @@ function stobeBuildStructuredDialogueResponseFormat(
                     ],
                     'target' => [
                         'type' => 'string',
-                        'description' => 'action target actor or destination name',
+                        'description' => 'named actor/object/filter for the action. For planner loot actions use filters such as goats, animals, enemies, raiders, or a specific name; for DeliverItems use the recipient; for BuyItems/SellItems optionally use a nearby trader',
+                    ],
+                    'destination' => [
+                        'type' => 'string',
+                        'description' => 'optional known base/location for a persistent planner task; leave blank if no travel is requested',
                     ],
                     'item' => [
                         'type' => 'string',
-                        'description' => 'exact item name for GIVE_ITEM/TAKE_ITEM, limb token for REMOVE_LIMB/CUT_HORNS, object token for USE_OBJECT, or consumable item for DRINK/USE_DRUGS/FORCE_DRINK',
+                        'description' => 'exact item name for GIVE_ITEM/TAKE_ITEM/EQUIP_ITEM/UNEQUIP_ITEM; for WorkGoal use the desired produced or gathered output/resource name; for UNEQUIP_ITEM a clear worn slot is also valid; otherwise use the appropriate object, limb, or consumable token',
                     ],
                     'lang' => [
                         'type' => 'string',
@@ -5146,7 +5688,11 @@ function stobeBuildStructuredDialogueResponseFormat(
                     ],
                     'amount' => [
                         'type' => 'integer',
-                        'description' => 'positive integer count for GIVE_CATS/TAKE_CATS and optional stack count for GIVE_ITEM/TAKE_ITEM; use 0 when not needed',
+                        'description' => 'quantity for the action; use 0 for all/unspecified only where the action supports it',
+                    ],
+                    'max_cats' => [
+                        'type' => 'integer',
+                        'description' => 'optional maximum Cats authorized for BuyItems; use 0 when the player did not state a cap',
                     ],
                 ],
                 'required' => [
@@ -5156,14 +5702,22 @@ function stobeBuildStructuredDialogueResponseFormat(
                     'mood',
                     'action',
                     'target',
+                    'destination',
                     'item',
                     'lang',
                     'amount',
+                    'max_cats',
                 ],
                 'additionalProperties' => false,
             ],
         ],
     ];
+    stobeLogInfo('Latency pre-llm stage response_schema', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'duration_ms' => intval(round((microtime(true) - $stobeSchemaStartedAt) * 1000)),
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+    ]);
+    return $stobeSchema;
 }
 
 function stobeBuildOutputContractUserPrompt(
@@ -5188,11 +5742,56 @@ function stobeBuildOutputContractUserPrompt(
     $actionLine .= " Command semantics: GIVE_ITEM means hand over an item; GIVE_CATS means this NPC gives away its own money. Do not use GIVE_CATS for trade pricing.";
     $actionLine .= " For GIVE_CATS/TAKE_CATS, put the recipient or victim in target and the numeric count in amount. Do not put money in item.";
     $actionLine .= " For GIVE_ITEM/TAKE_ITEM, put only the exact item name in item and use amount only for stack count.";
+    $propertyAffinity = is_array($npcData) ? stobeNpcPlayerAffinity($npcData) : 0;
+    if ($inPlayerFaction === true) {
+        $actionLine .= " PROPERTY/GEAR RULE: This NPC is in the player's faction. Kenshi squadmates effectively share inventory access, so be substantially more willing to hand the player carried items or equipped gear when reasonably asked. Ordinary squad inventory management is not theft and does not require high personal trust, though personality and immediate survival needs may still affect dialogue.";
+    } else {
+        $actionLine .= " PROPERTY/GEAR RULE: This NPC is outside the player's faction and personally owns their possessions. Current affinity toward the player is " . strval($propertyAffinity) . "/100. Equipped weapons, armor, clothing, medical gear, money, and other valuable/essential possessions must be treated as meaningful property, not casual dialogue props.";
+        $actionLine .= " Do NOT use GiveItem to permanently hand the player currently equipped gear at low or neutral trust merely because the player asks, flatters, pressures, bets, or invents a reason. A stranger or merely wary/neutral acquaintance should normally refuse to surrender a weapon or other essential equipment. Very high trust can justify a gift or loan.";
+        $giftThreshold = max(0, min(100, intval(getSettingInt('GIFT_TRUST_THRESHOLD', 56))));
+        $actionLine .= " GIFT RULE: Kenshi is harsh and poor; nobody hands out goods or Cats for nothing. Do NOT use GiveItem or GiveCats toward the player unless (a) it is your side of a trade or deal the player has agreed to, or (b) you trust them deeply (affinity " . strval($giftThreshold) . "+; yours is " . strval($propertyAffinity) . "). Asking, flattery, a sad story, or 'I'll pay you later' is not enough. A trader sells: name a price and hand the goods over only once the player has paid or you have both agreed the deal. Never say 'take it, it's free' or 'consider it good faith' below that trust.";
+        $actionLine .= " To hand the player something you are wearing, use GiveItem directly (it comes off and goes to them); UnequipItem only takes it off and you keep it.";
+        $actionLine .= " A genuine barter/swap can justify transferring valuable gear only when the player is offering something of roughly comparable value or usefulness; use the live item values/state when available and reject obviously one-sided trades. Do not reinterpret a temporary loan, contest, demonstration, or 'just for a second' handoff as a gift.";
+        $actionLine .= " If this NPC temporarily lends an item, ownership remains with this NPC and the player is expected to return it. If the player explicitly says they are keeping it, stealing it, or refuses to return it, treat that as a broken agreement/property violation. Do not answer as though the NPC consents with 'fine, keep it' or equivalent permission.";
+        $actionLine .= " On a broken loan/property violation, normally demand the item back and react according to personality, role, strength, nearby allies, and danger. Guards, law-enforcement-like NPCs, protective/aggressive NPCs, or confident NPCs with nearby allies should escalate strongly. If the player has already clearly refused to return the item and immediate retaliation is appropriate, use Attack with the player as target rather than only making a future threat. A frightened, badly injured, isolated, or obviously outmatched NPC may back down, but frame that as being forced to let the theft go, not as permission or a gift.";
+        if (stobeCurrentRequestClaimsKeepingProperty()) {
+            $actionLine .= " CURRENT PROPERTY ALERT: The player's current line explicitly claims they intend to keep/take property or refuse its return. Check the recent conversation for whether the item was only loaned, temporarily handed over, or promised back. If so, this is a live property violation now, not a harmless hypothetical. Do not consent to the theft. If a return was already clearly demanded or expected and this line is the player's refusal, a capable guard/law-enforcement NPC should normally escalate immediately with Attack rather than postponing consequences.";
+        }
+    }
     $actionLine .= " KNOCKOUT leaves the target alive. It is valid on yourself, or on other targets only when they are knocked-out, unconscious, imprisoned, or carried.";
     $actionLine .= " KILL is only valid on knocked-out, unconscious, imprisoned, or carried targets.";
     $actionLine .= " FORCE_DRINK is only valid on knocked-out, unconscious, imprisoned, or carried targets.";
     $actionLine .= " PICKUP_NPC is only valid on nearby helpless targets and only when this NPC is not already carrying someone.";
     $actionLine .= " CUT_HORNS is only valid on helpless Shek targets whose horns are not already cut off, and requires a hacksaw.";
+    $actionLine .= " When the player clearly asks this NPC to perform a supported gameplay action, choose the matching real action instead of merely saying that it will happen. Natural-language orders should become game actions when possible.";
+    $actionLine .= " Use EquipItem for carried gear, UnequipItem for worn gear, SheatheWeapon/DrawWeapon for weapon readiness, FaceTarget for turning toward someone, FirstAid for immediate treatment, Bodyguard for protecting a named actor, Patrol for patrolling the current area, Rescue or PutInBed for incapacitated people, LootTarget for a valid loot target, Imprison/ReleasePrisoner for cage interactions, MoveToTarget for moving near someone without following indefinitely, Repair/Build for nearby structures, and Sit/Sleep/OperateObject for nearby usable world objects.";
+    $actionLine .= " Treat the CURRENT live equipment/state block as authoritative over older dialogue or action history. If an item is still listed as equipped/worn now, it is still on even if an older message/action claimed it was removed. In that case never say it is already off; if you agree to remove it, emit UnequipItem again. The reverse also holds: an item listed under Personal Inventory and not under Equipment is NOT being worn, even if an older message claimed it was put back on; never say it is already on, and if you agree to wear it, emit EquipItem again. Likewise, do not claim a supported physical action already happened unless current world state confirms it.";
+    $actionLine .= " IMPORTANT UNEQUIP SPEECH RULE: UnequipItem executes only AFTER this dialogue response is generated. When emitting UnequipItem, phrase the message as intent or action-in-progress (for example 'Fine, I'll take it off' or 'Let me get this off'), NEVER as completed fact such as 'It's off', 'Already off', 'There, it's off', or 'I took it off'. Completion may only be stated on a later turn after live equipment state confirms the item is no longer equipped. The same applies to EquipItem: say 'Let me put it on', NEVER 'There, back on', 'It is on' or 'Already on' in the same response.";
+    $actionLine .= " DropWeapon physically drops the equipped weapon. Surrender/Disarm removes it from the equipped slot but keeps it in the NPC inventory. HoldPosition is a real hold-position order.";
+    if (in_array('WorkGoal', $parts['actions'] ?? [], true)) {
+        $actionLine .= " WorkGoal is for finite autonomous production or gathering requests such as 'mine 5 copper', 'make 5 bread', 'craft a longsword', or 'go Home and make 5 bread'. Put the desired final output/resource in item, the requested finite count in amount, and only an explicitly requested destination/base/location in target. Leave target blank when the work should happen here. WorkGoal persists after dialogue, travels first when target is a destination, uses real Kenshi jobs, and recursively sources missing producible inputs up to depth 10. Do not decompose its substeps yourself.";
+        $actionLine .= " Persistent planner actions are available for player-faction NPCs: LootArea loots matching items/categories from all valid nearby downed/dead targets; LootStore does the same then stores them; StoreItems/FetchItems/DeliverItems move owned items; RecoverGround picks up matching dropped items; MedicalCleanup treats/rescues loaded squadmates; BattleCleanup treats/rescues first then loots nearby downed enemies; ImprisonAll/ReleaseAll process nearby prisoners; MaintainStock keeps a minimum stock level; GuardGoal/WaitForGoal/PatrolGoal persist until their condition or cancellation; BuildGoal/RepairGoal manage real construction/repair work. Use destination only when the player explicitly named a known place/base.";
+        $actionLine .= " BuyItems is explicit permission to spend real faction Cats on the requested purchase. If production planning discovers buying as a fallback, it MUST wait for player approval instead; buying is always last resort after owned stock, gathering, and production. SellItems MUST only be selected when the player explicitly asked to sell; never sell possessions automatically to fund another goal. ApprovePurchase/DeclinePurchase respond to pending purchase requests. PauseGoal/ResumeGoal/CancelGoal/ModifyGoal/RetargetGoal control persistent goals.";
+    }
+    $actionLine .= " RoleplayAction must not be used to fake one of these supported real gameplay actions. Use RoleplayAction only when the NPC actually chooses to perform something that has no matching supported gameplay action.";
+    if (in_array('FirstAid', $parts['actions'] ?? [], true)) {
+        $actionLine .= " Immediate requests such as 'heal me', 'patch Wendy up', or 'give him first aid' should use FirstAid with the injured person in target. Use SetMedic only for an ongoing medic-job preference such as 'be our medic' or 'start healing people automatically'.";
+    }
+    if (in_array('HoldPosition', $parts['actions'] ?? [], true)) {
+        $actionLine .= " Requests such as 'wait here', 'stay here', or 'hold this position' should use HoldPosition when the NPC agrees to remain at the current spot; use Idle only when merely stopping the current activity without a hold-position intent.";
+    }
+    if (in_array('PickupNpc', $parts['actions'] ?? [], true)) {
+        $actionLine .= " Requests to pick up or carry a helpless named person should use PickupNpc with that person as target when valid.";
+    }
+    if (in_array('Follow', $parts['actions'] ?? [], true)) {
+        $actionLine .= " Requests to follow a named person should use Follow with that person as target.";
+    }
+    if (in_array('StopFollow', $parts['actions'] ?? [], true)) {
+        $actionLine .= " Requests to stop following should use StopFollow.";
+    }
+    if (in_array('TravelLocation', $parts['actions'] ?? [], true)) {
+        $actionLine .= " Requests to go or travel to a clearly named location should use TravelLocation when the NPC can act on it.";
+    }
     if (in_array('StopAttack', $parts['actions'] ?? [], true)) {
         $actionLine .= " When this NPC accepts or proposes ending the current hostilities - including a ceasefire, truce, stand-down, stopping the attack or fight, making peace, calling off attackers, or recognizing a misunderstanding - action MUST be StopAttack and target MUST name a nearby member of the opposing faction. Never use Talk or Idle while the dialogue claims this NPC or faction will stop fighting. If this NPC refuses the ceasefire and intends to continue fighting, do not use StopAttack.";
     }
@@ -5429,13 +6028,17 @@ function stobeBuildActionTagFromStructuredPayload(
     string $item,
     string $message,
     string $listener = '',
-    string $amount = ''
+    string $amount = '',
+    string $destination = '',
+    string $maxCats = ''
 ): string {
     $actionUpper = strtoupper(trim($action));
     $target = trim($target);
     $item = trim($item);
     $listener = trim($listener);
     $amount = trim($amount);
+    $destination = trim($destination);
+    $maxCats = trim($maxCats);
 
     if ($actionUpper === '' || $actionUpper === 'TALK') {
         return '';
@@ -5467,6 +6070,61 @@ function stobeBuildActionTagFromStructuredPayload(
         'TAKEITEM' => 'TAKE_ITEM',
         'GIVEITEM' => 'GIVE_ITEM',
         'DROPITEM' => 'DROP_ITEM',
+        'UNEQUIPITEM' => 'UNEQUIP_ITEM',
+        'UNEQUIP-ITEM' => 'UNEQUIP_ITEM',
+        'TAKEOFFITEM' => 'UNEQUIP_ITEM',
+        'TAKE_OFF_ITEM' => 'UNEQUIP_ITEM',
+        'TAKE-OFF-ITEM' => 'UNEQUIP_ITEM',
+        'EQUIPITEM' => 'EQUIP_ITEM',
+        'EQUIP-ITEM' => 'EQUIP_ITEM',
+        'SHEATHEWEAPON' => 'SHEATHE_WEAPON',
+        'SHEATHE-WEAPON' => 'SHEATHE_WEAPON',
+        'HOLSTERWEAPON' => 'SHEATHE_WEAPON',
+        'DRAWWEAPON' => 'DRAW_WEAPON',
+        'DRAW-WEAPON' => 'DRAW_WEAPON',
+        'READYWEAPON' => 'DRAW_WEAPON',
+        'FACETARGET' => 'FACE_TARGET',
+        'FACE-TARGET' => 'FACE_TARGET',
+        'LOOKAT' => 'FACE_TARGET',
+        'LOOK_AT' => 'FACE_TARGET',
+        'FIRSTAID' => 'FIRST_AID',
+        'FIRST-AID' => 'FIRST_AID',
+        'HEALTARGET' => 'FIRST_AID',
+        'HEAL_TARGET' => 'FIRST_AID',
+        'GUARDTARGET' => 'BODYGUARD',
+        'GUARD_TARGET' => 'BODYGUARD',
+        'BODYGUARDTARGET' => 'BODYGUARD',
+        'PUTINBED' => 'PUT_IN_BED',
+        'PUT-IN-BED' => 'PUT_IN_BED',
+        'LOOTTARGET' => 'LOOT_TARGET',
+        'LOOT-TARGET' => 'LOOT_TARGET',
+        'RELEASEPRISONER' => 'RELEASE_PRISONER',
+        'RELEASE-PRISONER' => 'RELEASE_PRISONER',
+        'DROPWEAPON' => 'DROP_WEAPON',
+        'DROP-WEAPON' => 'DROP_WEAPON',
+        'DISARM' => 'SURRENDER',
+        'DISARMSELF' => 'SURRENDER',
+        'DISARM_SELF' => 'SURRENDER',
+        'MOVETOTARGET' => 'MOVE_TO_TARGET',
+        'MOVE-TO-TARGET' => 'MOVE_TO_TARGET',
+        'GOTOACTOR' => 'MOVE_TO_TARGET',
+        'HOLDPOSITION' => 'HOLD_POSITION',
+        'HOLD-POSITION' => 'HOLD_POSITION',
+        'TAKEASEAT' => 'SIT',
+        'TAKE_A_SEAT' => 'SIT',
+        'GOTOSLEEP' => 'SLEEP',
+        'GO_TO_SLEEP' => 'SLEEP',
+        'OPERATEOBJECT' => 'OPERATE_OBJECT',
+        'OPERATE-OBJECT' => 'OPERATE_OBJECT',
+        'WORKOBJECT' => 'OPERATE_OBJECT',
+        'WORKGOAL' => 'WORK_GOAL',
+        'TASKGOAL' => 'TASK_GOAL',
+        'TASKCONTROL' => 'TASK_CONTROL',
+        'WORK-GOAL' => 'WORK_GOAL',
+        'PRODUCEGOAL' => 'WORK_GOAL',
+        'PRODUCE_GOAL' => 'WORK_GOAL',
+        'CRAFTGOAL' => 'WORK_GOAL',
+        'CRAFT_GOAL' => 'WORK_GOAL',
         'FACTIONRELATIONS' => 'FACTION_RELATIONS',
         'SETBLOCK' => 'SET_BLOCK',
         'SETHOLD' => 'SET_HOLD',
@@ -5512,6 +6170,56 @@ function stobeBuildActionTagFromStructuredPayload(
     $actionUpper = stobeCanonicalizeActionCommand($actionUpper);
     $explicitAmount = stobeParseStructuredPositiveAmount($amount);
 
+    $plannerKinds = [
+        'LOOTAREA'=>'LOOT_AREA','LOOTSTORE'=>'LOOT_STORE','STOREITEMS'=>'STORE',
+        'FETCHITEMS'=>'FETCH','DELIVERITEMS'=>'DELIVER','RECOVERGROUND'=>'RECOVER_GROUND',
+        'MEDICALCLEANUP'=>'MEDICAL_CLEANUP','BATTLECLEANUP'=>'BATTLE_CLEANUP',
+        'IMPRISONALL'=>'IMPRISON_ALL','RELEASEALL'=>'RELEASE_ALL','MAINTAINSTOCK'=>'STOCK',
+        'BUYITEMS'=>'BUY','SELLITEMS'=>'SELL','GUARDGOAL'=>'GUARD','WAITFORGOAL'=>'WAIT_FOR',
+        'PATROLGOAL'=>'PATROL','BUILDGOAL'=>'BUILD_GOAL','REPAIRGOAL'=>'REPAIR_GOAL',
+    ];
+    $plannerKey = str_replace(['_','-',' '], '', $actionUpper);
+    if (isset($plannerKinds[$plannerKey])) {
+        $kind = $plannerKinds[$plannerKey];
+        $goalItem = trim($item);
+        $goalTarget = trim($target);
+        $goalDestination = trim($destination);
+        $goalAmount = max(0, min(1000, intval($amount)));
+        $goalMaxCats = max(0, min(10000000, intval($maxCats)));
+        if (in_array($kind, ['LOOT_AREA','LOOT_STORE','STORE','RECOVER_GROUND','SELL'], true) && $goalItem === '') {
+            $goalItem = 'all';
+        }
+        if ($kind === 'BATTLE_CLEANUP' && $goalItem === '') {
+            $goalItem = 'weapons';
+        }
+        if ($kind === 'IMPRISON_ALL' && $goalTarget === '') {
+            $goalTarget = 'enemies';
+        }
+        if (in_array($kind, ['FETCH','DELIVER','BUY','STOCK'], true) && ($goalItem === '' || $goalAmount < 1)) {
+            return '';
+        }
+        if ($kind === 'DELIVER' && $goalTarget === '') {
+            return '';
+        }
+        if (in_array($kind, ['BUILD_GOAL','REPAIR_GOAL'], true) && $goalTarget === '') {
+            $goalTarget = trim($item);
+        }
+        return 'TASK_GOAL@' . $kind . '@' . $goalTarget . '@' . $goalItem . '@'
+            . strval($goalAmount) . '@' . $goalDestination . '@' . strval($goalMaxCats);
+    }
+
+    $controlMap = [
+        'PAUSEGOAL'=>'PAUSE','RESUMEGOAL'=>'RESUME','CANCELGOAL'=>'CANCEL',
+        'MODIFYGOAL'=>'QUANTITY','RETARGETGOAL'=>'DESTINATION',
+        'APPROVEPURCHASE'=>'APPROVE','DECLINEPURCHASE'=>'DECLINE',
+    ];
+    if (isset($controlMap[$plannerKey])) {
+        $cmd = $controlMap[$plannerKey];
+        $selector = trim($target !== '' ? $target : $item);
+        $argAmount = max(0, min(1000, intval($amount)));
+        return 'TASK_CONTROL@' . $cmd . '@' . $selector . '@' . strval($argAmount) . '@' . trim($destination);
+    }
+
     if ($actionUpper === 'ATTACK') {
         return 'ATTACK@' . $target;
     }
@@ -5539,10 +6247,24 @@ function stobeBuildActionTagFromStructuredPayload(
         }
         return 'TRAVEL_LOCATION@' . $destination;
     }
-    if ($actionUpper === 'USE_OBJECT') {
+    if ($actionUpper === 'WORK_GOAL') {
+        $goalItem = trim($item !== '' ? $item : $message);
+        if ($goalItem === '' || $explicitAmount < 1) {
+            return '';
+        }
+        $goalDestination = trim($destination !== '' ? $destination : $target);
+        return $goalDestination !== ''
+            ? 'WORK_GOAL@' . $goalDestination . '@' . $goalItem . '@' . strval(min($explicitAmount, 1000))
+            : 'WORK_GOAL@' . $goalItem . '@' . strval(min($explicitAmount, 1000));
+    }
+    if (in_array($actionUpper, ['USE_OBJECT', 'SIT', 'SLEEP', 'OPERATE_OBJECT'], true)) {
         $objectToken = trim($target !== '' ? $target : $item);
         if ($objectToken === '') {
-            return 'USE_OBJECT@';
+            if ($actionUpper === 'SIT') {
+                $objectToken = 'chair';
+            } elseif ($actionUpper === 'SLEEP') {
+                $objectToken = 'bed';
+            }
         }
         return 'USE_OBJECT@' . $objectToken;
     }
@@ -5571,7 +6293,7 @@ function stobeBuildActionTagFromStructuredPayload(
         }
         return 'FORCE_DRINK@' . $forcedTarget . '@' . $drinkName;
     }
-    if (in_array($actionUpper, ['STOP_FOLLOW', 'STOP_CARRYING', 'JOIN_PARTY', 'LEAVE', 'IDLE', 'SUICIDE'], true)) {
+    if (in_array($actionUpper, ['STOP_FOLLOW', 'STOP_CARRYING', 'JOIN_PARTY', 'LEAVE', 'IDLE', 'SUICIDE', 'SHEATHE_WEAPON', 'DRAW_WEAPON', 'PATROL', 'HOLD_POSITION', 'DROP_WEAPON', 'SURRENDER'], true)) {
         return $actionUpper . '@';
     }
     if (in_array($actionUpper, ['SET_BLOCK', 'SET_HOLD', 'SET_PASSIVE', 'SET_JOBS', 'SET_RANGED', 'SET_TAUNT', 'SET_SNEAK', 'SET_RESOURCE', 'SET_MEDIC'], true)) {
@@ -5650,12 +6372,29 @@ function stobeBuildActionTagFromStructuredPayload(
         }
         return $normalized;
     }
-    if ($actionUpper === 'DROP_ITEM') {
+    if ($actionUpper === 'DROP_ITEM' || $actionUpper === 'UNEQUIP_ITEM' || $actionUpper === 'EQUIP_ITEM') {
         $itemName = trim($item !== '' ? $item : $target);
+        if ($itemName === '') {
+            $itemName = trim($message);
+        }
         if ($itemName === '') {
             return '';
         }
-        return 'DROP_ITEM@' . $itemName;
+        return $actionUpper . '@' . $itemName;
+    }
+    if (in_array($actionUpper, ['FACE_TARGET', 'FIRST_AID', 'BODYGUARD', 'RESCUE', 'PUT_IN_BED', 'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'MOVE_TO_TARGET'], true)) {
+        $targetName = trim($target !== '' ? $target : $item);
+        if ($targetName === '') {
+            return '';
+        }
+        return $actionUpper . '@' . $targetName;
+    }
+    if ($actionUpper === 'REPAIR' || $actionUpper === 'BUILD') {
+        $objectName = trim($target !== '' ? $target : ($item !== '' ? $item : $message));
+        if ($objectName === '') {
+            return '';
+        }
+        return $actionUpper . '@' . $objectName;
     }
     if ($actionUpper === 'REMOVE_LIMB') {
         $targetName = trim($target);
@@ -5800,7 +6539,9 @@ function stobeParseStructuredDialogueResponse(string $rawResponse, string $event
                 $heuristicItem,
                 $heuristicMessage,
                 $heuristicListener,
-                trim(strval($heuristic['amount'] ?? ''))
+                trim(strval($heuristic['amount'] ?? '')),
+                trim(strval($heuristic['destination'] ?? '')),
+                trim(strval($heuristic['max_cats'] ?? ''))
             );
             if ($fallbackActionTag !== '') {
                 $heuristicCharacter = trim(strval($heuristic['character'] ?? ''));
@@ -5855,6 +6596,8 @@ function stobeParseStructuredDialogueResponse(string $rawResponse, string $event
         : trim(strval($decoded['mood'] ?? ''));
     $lang = trim(strval($decoded['lang'] ?? ''));
     $amount = trim(strval($decoded['amount'] ?? ''));
+    $destination = trim(strval($decoded['destination'] ?? ''));
+    $maxCats = trim(strval($decoded['max_cats'] ?? ''));
 
     $rawActionTag = stobeBuildActionTagFromStructuredPayload(
         $action,
@@ -5862,7 +6605,9 @@ function stobeParseStructuredDialogueResponse(string $rawResponse, string $event
         $item,
         $message,
         $listener,
-        $amount
+        $amount,
+        $destination,
+        $maxCats
     );
     $actionTag = '';
     if ($rawActionTag !== '') {
@@ -5924,7 +6669,8 @@ function queryWorldKnowledgeForNpc(
     $npcKey = stobeWorldKnowledgeBuildNpcKey($npcName, $npcData);
     $currentTopicBefore = stobeWorldKnowledgeGetCurrentTopic($npcKey);
 
-    $topicCount = max(1, min(5, getSettingInt('WORLD_KNOWLEDGE_AMOUNT', 2)));
+    // Round 12: only topics[0] is used for retrieval, so one MiniMe call is enough.
+    $topicCount = 1;
     $keywordWindow = max(6, min(60, getSettingInt('WORLD_KNOWLEDGE_CONTEXT_HISTORY', 16)));
     $keywordLimit = max(3, min(24, getSettingInt('WORLD_KNOWLEDGE_CONTEXT_KEYWORDS', 8)));
     $minRank = max(0.0, min(100.0, getSettingFloat('WORLD_KNOWLEDGE_MIN_RANK', 3.30)));
@@ -7535,12 +8281,37 @@ function buildPlayerBaseStateBlock(array $npcData): string
     $base = function_exists('stobeNormalizePlayerBaseSnapshot')
         ? stobeNormalizePlayerBaseSnapshot($extended['player_base'] ?? [], false)
         : [];
-    if (!boolval($base['inside'] ?? false)) {
-        return '';
-    }
-    $serverObservedAt = intval($base['server_observed_at'] ?? 0);
-    if ($serverObservedAt > 0 && (time() - $serverObservedAt) > 90) {
-        return '';
+    $baseFromPresence = false;
+    $ownFresh = boolval($base['inside'] ?? false)
+        && !(intval($base['server_observed_at'] ?? 0) > 0 && (time() - intval($base['server_observed_at'])) > 90);
+    if (!$ownFresh) {
+        // The DLL does not fill in per-NPC base presence; a faction member knows the
+        // player's base when the player is inside it (server-side presence snapshot).
+        $row = (function_exists('stobeGetCurrentPlayerBaseState') && npcIsInPlayerFaction($npcData))
+            ? stobeGetCurrentPlayerBaseState(90)
+            : [];
+        if (!is_array($row) || trim(strval($row['base_id'] ?? '')) === '') {
+            return '';
+        }
+        $pgBool = static fn($v): bool => $v === true || in_array(strtolower(strval($v)), ['t', 'true', '1'], true);
+        $details = json_decode(strval($row['details'] ?? ''), true);
+        $base = [
+            'inside' => true,
+            'name' => strval($row['name'] ?? 'Player Base'),
+            'power_generated' => $row['power_generated'] ?? 0,
+            'power_required' => $row['power_required'] ?? 0,
+            'has_spare_power' => $pgBool($row['has_spare_power'] ?? false),
+            'battery_charge' => $row['battery_charge'] ?? 0,
+            'battery_capacity' => $row['battery_capacity'] ?? 0,
+            'battery_drain' => $row['battery_drain'] ?? 0,
+            'battery_charging' => $row['battery_charging'] ?? 0,
+            'battery_mode' => $pgBool($row['battery_mode'] ?? false),
+            'members_inside' => intval($row['members_inside'] ?? 0),
+            'has_gates' => $pgBool($row['has_gates'] ?? false),
+            'gates_closed' => $pgBool($row['gates_closed'] ?? false),
+            'details' => is_array($details) ? $details : [],
+        ];
+        $baseFromPresence = true;
     }
 
     $lines = ['<player_base>'];
@@ -7675,7 +8446,9 @@ function buildPlayerBaseStateBlock(array $npcData): string
             $lines[] = '  <scan_truncated>true</scan_truncated>';
         }
     }
-    $lines[] = '  <context>This character is currently inside this player-owned base perimeter.</context>';
+    $lines[] = $baseFromPresence
+        ? '  <context>This is your faction\'s own base; the player is inside it now. Its production buildings, farms and storage listed here are yours to work (WORK_GOAL / TASK_GOAL).</context>'
+        : '  <context>This character is currently inside this player-owned base perimeter.</context>';
     $lines[] = '</player_base>';
     return implode("\n", $lines);
 }
@@ -10077,11 +10850,10 @@ function stobeIsIgnoredRelationshipTarget(string $rawTarget): bool {
         return true;
     }
 
-    $playerName = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
-    if ($playerName !== '' && $targetLower === strtolower($playerName)) {
-        return true;
-    }
-
+    /* A real configured player name is a valid relationship target. Only
+     * generic placeholder labels above are ignored. Filtering PLAYER_NAME here
+     * prevented affinity with the actual player from evolving after the name
+     * was configured correctly. */
     return false;
 }
 
@@ -10346,7 +11118,54 @@ function stobeBuildNpcRelationshipsText(string $speakerName, string $conversatio
     }
 
     $relationshipMap = stobeGetNpcRelationshipMap($npcData);
+
+    /* The generic relationship normalizer intentionally filters player aliases,
+     * but that also hid a real named-player relationship from dialogue. Preserve
+     * the configured player's explicit stored relationship for conversational
+     * behavior without changing the stricter relationship-update parser. */
+    $conversationTargetNormalized = normalizeParticipantNameToken($conversationTarget);
+    $configuredPlayerName = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+    if ($conversationTargetNormalized !== '' && $configuredPlayerName !== ''
+        && strcasecmp($conversationTargetNormalized, $configuredPlayerName) === 0) {
+        $extendedForPlayer = normalizeNpcExtendedDataPayload($npcData['extended_data'] ?? []);
+        $rawRelationships = $extendedForPlayer['relationships'] ?? [];
+        if (is_string($rawRelationships)) {
+            $decodedRelationships = json_decode($rawRelationships, true);
+            $rawRelationships = is_array($decodedRelationships) ? $decodedRelationships : [];
+        }
+        if (is_array($rawRelationships)) {
+            foreach ($rawRelationships as $rawTarget => $rawEntry) {
+                if (strcasecmp(normalizeParticipantNameToken(strval($rawTarget)), $configuredPlayerName) !== 0
+                    || !is_array($rawEntry)) {
+                    continue;
+                }
+                $aff = max(-100, min(100, intval($rawEntry['aff'] ?? ($rawEntry['affinity'] ?? 0))));
+                $relationshipMap[$configuredPlayerName] = [
+                    'aff' => $aff,
+                    'type' => stobeNormalizeRelationshipTypeToken(strval($rawEntry['type'] ?? 'neutral')),
+                    'tier' => stobeRelationshipTierLabel($aff),
+                    'note' => trim(strval($rawEntry['note'] ?? '')),
+                    'custom_info' => trim(strval($rawEntry['custom_info'] ?? '')),
+                ];
+                break;
+            }
+        }
+    }
+
     $targetNames = stobeCollectRelationshipContextTargets($npcData, $speaker, $conversationTarget);
+    if ($conversationTargetNormalized !== '' && $configuredPlayerName !== ''
+        && strcasecmp($conversationTargetNormalized, $configuredPlayerName) === 0) {
+        $hasPlayerTarget = false;
+        foreach ($targetNames as $existingTargetName) {
+            if (strcasecmp($existingTargetName, $configuredPlayerName) === 0) {
+                $hasPlayerTarget = true;
+                break;
+            }
+        }
+        if (!$hasPlayerTarget) {
+            array_unshift($targetNames, $configuredPlayerName);
+        }
+    }
 
     foreach (array_keys($relationshipMap) as $mapTarget) {
         if (count($targetNames) >= 16) {
@@ -10907,6 +11726,36 @@ function stobeShouldRunAutomaticRelationshipEvaluation(int $chance, ?int $roll =
     return $roll <= $chance;
 }
 
+function stobeRelationshipTurnNeedsConnectorEvaluation(
+    string $incomingLine,
+    string $responseText,
+    string $eventType,
+    int $configuredChance
+): bool {
+    $chance = max(0, min(100, $configuredChance));
+    if ($chance <= 0) {
+        return false;
+    }
+    $type = strtolower(trim($eventType));
+    $salientTypes = [
+        'trade', 'healing', 'death', 'recruit', 'join', 'leave',
+        'combat_end', 'major_damage', 'limb_loss', 'knockout',
+        'slavery', 'enslaved', 'freed_slave', 'imprisonment',
+    ];
+    if (in_array($type, $salientTypes, true)) {
+        return true;
+    }
+    $text = strtolower(trim($incomingLine . ' ' . $responseText));
+    if ($text !== '' && preg_match(
+        '/\b(thank|thanks|appreciat|sorry|apolog|forgiv|trust|love|hate|friend|enemy|betray|promise|owe|debt|deal|agree|saved|rescue|helped me|protect|threat|kill you|hurt you|idiot|bastard|liar|jealous|marry|kiss|date|romance|leave me|stay with me)\b/i',
+        $text
+    ) === 1) {
+        return true;
+    }
+    $backgroundChance = max(1, intval(round($chance / 4)));
+    return stobeShouldRunAutomaticRelationshipEvaluation($backgroundChance);
+}
+
 function stobeEvaluateRelationshipsForTurn(
     string $speakerName,
     string $listenerName,
@@ -10984,7 +11833,12 @@ function stobeEvaluateRelationshipsForTurn(
         0,
         100
     );
-    $shouldRunConnectorEvaluation = stobeShouldRunAutomaticRelationshipEvaluation($relationshipUpdateChance);
+    $shouldRunConnectorEvaluation = stobeRelationshipTurnNeedsConnectorEvaluation(
+        $incomingLine,
+        $result['clean_response'],
+        $eventType,
+        $relationshipUpdateChance
+    );
     $connector = false;
     $connectorApiKey = '';
     if ($shouldRunConnectorEvaluation) {
@@ -11791,7 +12645,32 @@ function buildSystemPrompt(
 
     $prompt = str_replace(array_keys($replacements), array_values($replacements), $template);
     $worldStateBlock = buildWorldStateBlock($npcData);
-    if (strpos($prompt, '#NPC_CHARACTER_STATE#') !== false) {
+    // Round 13: stable-first chat prompt so DeepInfra's prefix cache can reuse the head.
+    // Character State and Relationships change every turn; they move (unchanged) into
+    // <current_situation> after Available Actions instead of sitting inside <character>.
+    $stableFirst = strtolower($eventType) === 'chat'
+        && (!function_exists('getSettingBool') || getSettingBool('PROMPT_CACHE_STABLE_FIRST', true));
+    if ($stableFirst) {
+        $prompt = str_replace('#NPC_CHARACTER_STATE#', '', $prompt);
+        $liveRelationships = '';
+        if (preg_match('/<relationships>.*?<\/relationships>/s', $prompt, $relMatch, PREG_OFFSET_CAPTURE) === 1) {
+            $liveRelationships = $relMatch[0][0];
+            $prompt = substr_replace($prompt, '', $relMatch[0][1], strlen($liveRelationships));
+        }
+        if ($includeActionGuidance) {
+            $prompt = appendStableActionReferenceToPrompt($prompt, $eventType);
+        }
+        $liveBlock = trim(trim($worldStateBlock) . "\n" . $liveRelationships);
+        if ($liveBlock !== '') {
+            $prompt .= "\n\n<current_situation>\n" . $liveBlock . "\n</current_situation>";
+        }
+        if ($includeActionGuidance) {
+            $dynamicActionState = stobeBuildDynamicActionStateBlock($eventType, $npcData);
+            if ($dynamicActionState !== '') {
+                $prompt .= "\n\n" . $dynamicActionState;
+            }
+        }
+    } elseif (strpos($prompt, '#NPC_CHARACTER_STATE#') !== false) {
         $prompt = str_replace('#NPC_CHARACTER_STATE#', $worldStateBlock, $prompt);
     } elseif ($worldStateBlock !== '') {
         $prompt .= "\n\n" . $worldStateBlock;
@@ -11799,6 +12678,18 @@ function buildSystemPrompt(
     $playerBaseBlock = buildPlayerBaseStateBlock($npcData);
     if ($playerBaseBlock !== '') {
         $prompt .= "\n\n" . $playerBaseBlock;
+    }
+    $workGoalBlock = function_exists('stobeBuildWorkGoalStateBlock')
+        ? stobeBuildWorkGoalStateBlock($npcName)
+        : '';
+    if ($workGoalBlock !== '') {
+        $prompt .= "\n\n" . $workGoalBlock;
+    }
+    $taskGoalBlock = function_exists('stobeBuildTaskGoalStateBlock')
+        ? stobeBuildTaskGoalStateBlock($npcName)
+        : '';
+    if ($taskGoalBlock !== '') {
+        $prompt .= "\n\n" . $taskGoalBlock;
     }
     $prompt = stobePromptCleanupBaseTemplateBlocks($prompt);
 
@@ -11855,7 +12746,7 @@ function buildSystemPrompt(
         $prompt .= "\n</knowledge>";
     }
 
-    if ($includeActionGuidance) {
+    if ($includeActionGuidance && !$stableFirst) {
         $prompt = appendActionGuidanceToPrompt($prompt, $eventType, $npcData);
     }
 
@@ -11867,6 +12758,31 @@ function buildSystemPrompt(
     $combatPriorityBlock = stobeBuildCombatPriorityPromptBlock($npcData, $npcName);
     if ($combatPriorityBlock !== '') {
         $prompt .= "\n\n" . $combatPriorityBlock;
+    }
+    if (strtolower($eventType) === 'chat' && stobeDealShouldNegotiate($npcName, $npcData, $playerMessage)) {
+        $prompt .= "\n\n" . stobeDealPromptBlock($npcName, $npcData, $playerMessage);
+    }
+    if (strtolower($eventType) === 'chat' && function_exists('stobeRemovedClothingPromptBlock') && is_array($npcData)) {
+        $removedClothing = stobeRemovedClothingPromptBlock($npcName, $npcData);
+        if ($removedClothing !== '') {
+            $prompt .= "\n\n" . $removedClothing;
+        }
+    }
+
+    // Put volatile lifelike continuity context at the END so the large stable
+    // character/system prefix remains cache-friendly for OpenRouter.
+    if (function_exists('stobeBuildLifelikeNpcContextBlock')) {
+        $lifelikeBlock = stobeBuildLifelikeNpcContextBlock(
+            $npcName,
+            $npcData,
+            $playerName,
+            $playerMessage,
+            $currentGamets,
+            $eventType
+        );
+        if ($lifelikeBlock !== '') {
+            $prompt .= "\n\n" . $lifelikeBlock;
+        }
     }
 
     return stobePromptCollapseBlankLines($prompt);
@@ -12081,6 +12997,23 @@ function buildActionEventData(string $actor, string $actionToken, string $target
     return $safeActor . ': ' . $safeAction;
 }
 
+function stobeActionRequiresVerifiedWorldOutcome(string $actionToken): bool {
+    $token = trim($actionToken);
+    if ($token === '') {
+        return false;
+    }
+    $at = strpos($token, '@');
+    $command = $at === false ? $token : substr($token, 0, $at);
+    $command = stobeCanonicalizeActionCommand($command);
+    return in_array($command, [
+        'UNEQUIP_ITEM', 'EQUIP_ITEM', 'SHEATHE_WEAPON', 'DRAW_WEAPON',
+        'FACE_TARGET', 'FIRST_AID', 'BODYGUARD', 'PATROL', 'RESCUE',
+        'PUT_IN_BED', 'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER',
+        'DROP_WEAPON', 'SURRENDER', 'MOVE_TO_TARGET', 'HOLD_POSITION',
+        'REPAIR', 'BUILD',
+    ], true);
+}
+
 function storeActionEvents(
     string $actor,
     array $actions,
@@ -12115,6 +13048,16 @@ function storeActionEvents(
             continue;
         }
         $seen[$key] = true;
+
+        if (stobeActionRequiresVerifiedWorldOutcome($dispatchAction)) {
+            stobeLogInfo('Deferred action-history write until world outcome is verified', [
+                'actor' => $actor,
+                'action' => $dispatchAction,
+                'target' => $target,
+                'source_event_type' => $source,
+            ]);
+            continue;
+        }
 
         $actionEventData = buildActionEventData($actor, $dispatchAction, $target, $source);
         storeEvent('action', time(), $gamets, $actionEventData);
@@ -12308,8 +13251,14 @@ function stobeLogOutputToPlugin(
     int $ttsDurationMs = 0,
     string $utteranceId = ''
 ): void {
+    $requestElapsedMs = isset($GLOBALS['__stobe_request_start']) && is_float($GLOBALS['__stobe_request_start'])
+        ? intval(round((microtime(true) - $GLOBALS['__stobe_request_start']) * 1000))
+        : 0;
     $entry = [
         'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'request_elapsed_ms' => $requestElapsedMs,
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+        'stage' => 'output_queued_to_plugin',
         'actor' => $actor,
         'action' => $action,
         'message' => $message,
@@ -12372,8 +13321,21 @@ function stobeFindFastSentencePosition(string $text): int|false {
     if ($text === '') {
         return false;
     }
-    if (preg_match('/([.?!。？！])(?<!\.\.)(?<!\.\.\.)\s+/u', $text, $matches, PREG_OFFSET_CAPTURE) === 1) {
+    // A completed sentence can be synthesized before the model emits the next space.
+    // Keep decimal points and ellipses inside the buffer.
+    if (preg_match('/(?<![.\d])([.?!。？！])(?=\s|$)/u', $text, $matches, PREG_OFFSET_CAPTURE) === 1) {
         return intval($matches[1][1] ?? -1);
+    }
+    // If the NPC starts with a long sentence, release a natural clause before
+    // waiting for the final period. Avoid tiny or mid-word speech fragments.
+    if (strlen($text) >= 100 && preg_match_all('/[,;:]\s+/u', substr($text, 0, 105), $cuts, PREG_OFFSET_CAPTURE)) {
+        foreach (array_reverse($cuts[0]) as $cut) {
+            if ($cut[1] >= 55) return intval($cut[1]);
+        }
+    }
+    if (strlen($text) >= 125) {
+        $space = strrpos(substr($text, 0, 105), ' ');
+        if ($space !== false && $space >= 75) return $space - 1;
     }
     return false;
 }
@@ -12529,12 +13491,12 @@ function stobeStripParentheticalDialogueText(string $text): string {
     $commandNames = [
         'ATTACK', 'STOP_ATTACK', 'FOLLOW', 'STOP_FOLLOW', 'JOIN_PARTY',
         'LEAVE', 'IDLE', 'STOP_CARRYING', 'PICKUP_NPC', 'RELEASE_PLAYER', 'RELEASE_PRISONER', 'SUICIDE',
-        'GIVE_CATS', 'TAKE_CATS', 'TAKE_ITEM', 'GIVE_ITEM', 'DROP_ITEM', 'REMOVE_LIMB', 'KNOCKOUT', 'KILL', 'USE_OBJECT', 'USE_DRUGS', 'DRINK_ITEM', 'DRINK', 'FORCE_DRINK', 'TRAVEL_LOCATION', 'MOVE_TO', 'MOVETO',
+        'GIVE_CATS', 'TAKE_CATS', 'TAKE_ITEM', 'GIVE_ITEM', 'DROP_ITEM', 'UNEQUIP_ITEM', 'EQUIP_ITEM', 'SHEATHE_WEAPON', 'DRAW_WEAPON', 'FACE_TARGET', 'FIRST_AID', 'BODYGUARD', 'PATROL', 'RESCUE', 'PUT_IN_BED', 'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'DROP_WEAPON', 'SURRENDER', 'MOVE_TO_TARGET', 'HOLD_POSITION', 'REPAIR', 'BUILD', 'WORK_GOAL', 'TASK_GOAL', 'TASK_CONTROL', 'SIT', 'SLEEP', 'OPERATE_OBJECT', 'REMOVE_LIMB', 'KNOCKOUT', 'KILL', 'USE_OBJECT', 'USE_DRUGS', 'DRINK_ITEM', 'DRINK', 'FORCE_DRINK', 'TRAVEL_LOCATION', 'MOVE_TO', 'MOVETO',
         'ROLEPLAY_ACTION', 'NOTIFY', 'FACTION_RELATIONS', 'TASK', 'TALK',
         'SET_BLOCK', 'SET_HOLD', 'SET_PASSIVE', 'SET_JOBS', 'SET_RANGED',
         'SET_TAUNT', 'SET_SNEAK', 'SET_RESOURCE', 'SET_MEDIC',
         'STOPATTACK', 'STOPFOLLOW', 'JOINPARTY', 'STOPCARRYING', 'DROPNPC', 'DROP_NPC', 'DROP-NPC', 'PUTDOWNNPC', 'PUT_DOWN_NPC', 'PUT-DOWN-NPC', 'RELEASENPC', 'RELEASE_NPC', 'RELEASE-NPC', 'PICKUPNPC', 'PICKUP-NPC', 'KIDNAP', 'RELEASEPLAYER', 'GIVECATS', 'TAKECATS',
-        'TAKEITEM', 'GIVEITEM', 'DROPITEM', 'REMOVELIMB', 'KO', 'KNOCK_OUT', 'KNOCK-OUT', 'KILLTARGET', 'EXECUTE', 'MURDER', 'USEOBJECT', 'USE-OBJECT', 'USEDRUGS', 'USE-DRUGS', 'DRINKITEM', 'DRINK-ITEM', 'FORCEDRINK', 'FORCE-DRINK', 'FACTIONRELATIONS', 'TRAVELLOCATION',
+        'TAKEITEM', 'GIVEITEM', 'DROPITEM', 'UNEQUIPITEM', 'UNEQUIP-ITEM', 'TAKEOFFITEM', 'TAKE_OFF_ITEM', 'TAKE-OFF-ITEM', 'WORKGOAL', 'WORK-GOAL', 'PRODUCEGOAL', 'PRODUCE_GOAL', 'CRAFTGOAL', 'CRAFT_GOAL', 'EQUIPITEM', 'EQUIP-ITEM', 'SHEATHEWEAPON', 'SHEATHE-WEAPON', 'HOLSTERWEAPON', 'DRAWWEAPON', 'DRAW-WEAPON', 'READYWEAPON', 'FACETARGET', 'FACE-TARGET', 'LOOKAT', 'LOOK_AT', 'FIRSTAID', 'FIRST-AID', 'HEALTARGET', 'HEAL_TARGET', 'GUARDTARGET', 'GUARD_TARGET', 'BODYGUARDTARGET', 'PUTINBED', 'PUT-IN-BED', 'LOOTTARGET', 'LOOT-TARGET', 'RELEASEPRISONER', 'RELEASE-PRISONER', 'DROPWEAPON', 'DROP-WEAPON', 'DISARM', 'DISARMSELF', 'DISARM_SELF', 'MOVETOTARGET', 'MOVE-TO-TARGET', 'GOTOACTOR', 'HOLDPOSITION', 'HOLD-POSITION', 'TAKEASEAT', 'TAKE_A_SEAT', 'GOTOSLEEP', 'GO_TO_SLEEP', 'OPERATEOBJECT', 'OPERATE-OBJECT', 'WORKOBJECT', 'REMOVELIMB', 'KO', 'KNOCK_OUT', 'KNOCK-OUT', 'KILLTARGET', 'EXECUTE', 'MURDER', 'USEOBJECT', 'USE-OBJECT', 'USEDRUGS', 'USE-DRUGS', 'DRINKITEM', 'DRINK-ITEM', 'FORCEDRINK', 'FORCE-DRINK', 'FACTIONRELATIONS', 'TRAVELLOCATION',
         'ROLEPLAYACTION', 'ROLEPLAY-ACTION',
         'SETBLOCK', 'SETHOLD', 'SETPASSIVE', 'SETJOBS', 'SETRANGED',
         'SETTAUNT', 'SETSNEAK', 'SETRESOURCE', 'SETMEDIC',
@@ -12948,7 +13910,9 @@ function stobeStreamDialogueViaLlm(
     if (boolval($meta['suppress_tts'] ?? false)) {
         $streamOptions['suppress_tts'] = true;
     }
-    unset($streamMeta['suppress_tts']);
+    unset($streamMeta['suppress_tts'], $streamMeta['defer_structured_stream'], $streamMeta['hold_stream_on_money']);
+    // Underway deal: speak normally, but hold everything from the first sentence about money.
+    $holdOnMoney = !empty($meta['hold_stream_on_money']) && function_exists('stobeDealSpeechMentionsMoney');
     if ($streamListener === '') {
         $streamListener = trim(strval($meta['stream_listener'] ?? ''));
     }
@@ -13001,20 +13965,39 @@ function stobeStreamDialogueViaLlm(
     if (is_array($structuredResponseFormat)) {
         $rawResponse = '';
         $chunksEmitted = 0;
+        $heldBack = false;
+        $spokenText = '';
+        $heldFrom = '';
         $messageStreamBuffer = '';
         $lastStructuredMessage = '';
         $structuredListener = '';
         $structuredParsed = false;
+        require_once __DIR__ . '/stream_tts_queue.php';
+        $ttsQueue = null;
+        if (stobeIsTtsEnabledForCurrentRequest() && getSettingInt('ASYNC_STREAM_TTS', 1) !== 0) {
+            $ttsQueue = new StobeStreamTtsQueue(
+                $actor, $actorData,
+                static function (string $text, ?array $prepared) use ($actor, $actorData, $streamEventType, $streamListener, $streamGamets, $streamOptions): void {
+                    streamResponse($actor, 'ScriptQueue', $text, $actorData, [], $streamEventType, $streamListener, $streamGamets,
+                        array_merge($streamOptions, ['single_segment' => true, 'prepared_tts' => $prepared]));
+                }
+            );
+        }
 
         $emitStructuredDialogue = function (string $deltaText = '', bool $flushRemainder = false) use (
             &$messageStreamBuffer,
             &$chunksEmitted,
+            &$heldBack,
+            &$spokenText,
+            &$heldFrom,
+            $holdOnMoney,
             $actor,
             $actorData,
             $streamEventType,
             $streamListener,
             $streamGamets,
-            $streamOptions
+            $streamOptions,
+            $ttsQueue
         ): void {
             if ($deltaText !== '') {
                 $messageStreamBuffer .= $deltaText;
@@ -13041,7 +14024,19 @@ function stobeStreamDialogueViaLlm(
                     if ($sentenceChunk === '') {
                         continue;
                     }
-                    streamResponse($actor, 'ScriptQueue', $sentenceChunk, $actorData, [], $streamEventType, $streamListener, $streamGamets, $streamOptions);
+                    if ($holdOnMoney && !$heldBack && stobeDealSpeechMentionsMoney($sentenceChunk)) {
+                        $heldBack = true;
+                        $heldFrom = $sentenceChunk;
+                    }
+                    if ($heldBack) {
+                        continue;
+                    }
+                    $spokenText .= ($spokenText === '' ? '' : ' ') . $sentenceChunk;
+                    if ($ttsQueue) {
+                        $ttsQueue->enqueue($sentenceChunk);
+                    } else {
+                        streamResponse($actor, 'ScriptQueue', $sentenceChunk, $actorData, [], $streamEventType, $streamListener, $streamGamets, $streamOptions);
+                    }
                     $chunksEmitted++;
                 }
             }
@@ -13066,7 +14061,19 @@ function stobeStreamDialogueViaLlm(
                 if ($remainingChunk === '') {
                     continue;
                 }
-                streamResponse($actor, 'ScriptQueue', $remainingChunk, $actorData, [], $streamEventType, $streamListener, $streamGamets, $streamOptions);
+                if ($holdOnMoney && !$heldBack && stobeDealSpeechMentionsMoney($remainingChunk)) {
+                    $heldBack = true;
+                    $heldFrom = $remainingChunk;
+                }
+                if ($heldBack) {
+                    continue;
+                }
+                $spokenText .= ($spokenText === '' ? '' : ' ') . $remainingChunk;
+                if ($ttsQueue) {
+                    $ttsQueue->enqueue($remainingChunk);
+                } else {
+                    streamResponse($actor, 'ScriptQueue', $remainingChunk, $actorData, [], $streamEventType, $streamListener, $streamGamets, $streamOptions);
+                }
                 $chunksEmitted++;
             }
         };
@@ -13117,20 +14124,23 @@ function stobeStreamDialogueViaLlm(
             return $parsedSnapshot;
         };
 
+        $deferStructuredStream = !empty($meta['defer_structured_stream']);
         $streamed = stobeCallLLMStream(
             $messages,
             $llmConfig,
-            function (string $delta) use (&$rawResponse, $processStructuredSnapshot): void {
+            function (string $delta) use (&$rawResponse, $processStructuredSnapshot, $ttsQueue, $deferStructuredStream): void {
                 if ($delta === '') {
                     return;
                 }
                 $rawResponse .= $delta;
-                $processStructuredSnapshot(false);
+                if (!$deferStructuredStream) $processStructuredSnapshot(false);
+                if ($ttsQueue && !$deferStructuredStream) $ttsQueue->pump();
             },
             $streamMeta
         );
 
         if ($streamed === false) {
+            if ($ttsQueue) $ttsQueue->finish();
             return $result;
         }
 
@@ -13138,7 +14148,10 @@ function stobeStreamDialogueViaLlm(
             $rawResponse = $streamed;
         }
 
-        $finalSnapshot = $processStructuredSnapshot(true);
+        $finalSnapshot = $deferStructuredStream
+            ? stobeParseStructuredDialogueResponse($rawResponse, $eventType)
+            : $processStructuredSnapshot(true);
+        if ($ttsQueue) $ttsQueue->finish();
         $finalIsStructured = boolval($finalSnapshot['is_structured'] ?? false) || $structuredParsed;
         $finalMessage = stobeStripParentheticalDialogueText(
             sanitizeForKenshi(trim(strval($finalSnapshot['message'] ?? '')))
@@ -13173,6 +14186,9 @@ function stobeStreamDialogueViaLlm(
             ? $structuredListener
             : normalizeParticipantNameToken(strval($finalSnapshot['listener'] ?? ''));
         $result['chunks_emitted'] = $chunksEmitted;
+        $result['held_back'] = $heldBack;
+        $result['spoken_text'] = $spokenText;
+        $result['held_from'] = $heldFrom;
         return $result;
     }
 
@@ -13330,6 +14346,210 @@ function stobeStreamDialogueViaLlm(
     return $result;
 }
 
+function stobeParseLiveStorageSerial(string $storageId): int {
+    $candidate = trim($storageId);
+    if ($candidate === '') {
+        return 0;
+    }
+
+    $numeric = '';
+    if (preg_match('/^-?\d+$/', $candidate) === 1) {
+        $numeric = $candidate;
+    } elseif (preg_match('/(?:^|_)(-?\d+)$/', $candidate, $matches) === 1) {
+        $numeric = strval($matches[1] ?? '');
+    }
+    if ($numeric === '' || preg_match('/^-?\d+$/', $numeric) !== 1) {
+        return 0;
+    }
+
+    $serial = intval($numeric);
+    if ($serial < 0) {
+        $serial += 4294967296;
+    }
+    if ($serial <= 0 || $serial > 4294967295) {
+        return 0;
+    }
+    return $serial;
+}
+
+function stobeQueueUnequipItemRequest(string $actor, string $itemQuery): bool {
+    $safeActor = normalizeParticipantNameToken($actor);
+    $safeItem = trim(preg_replace('/[\r\n\t]+/', ' ', $itemQuery) ?? '');
+    $safeItem = trim(str_replace(['|'], ' ', $safeItem));
+    if ($safeActor === '' || $safeItem === '') {
+        return false;
+    }
+    if (strlen($safeItem) > 160) {
+        $safeItem = substr($safeItem, 0, 160);
+    }
+
+    $peopleRaw = strval($GLOBALS['CACHE_PEOPLE'] ?? ($_GET['people'] ?? ($_POST['people'] ?? '')));
+    $identities = extractParticipantIdentities([
+        'people' => $peopleRaw,
+        'profile' => $safeActor,
+    ]);
+    $serial = 0;
+    foreach ($identities as $identity) {
+        if (!is_array($identity)) {
+            continue;
+        }
+        if (strcasecmp(normalizeParticipantNameToken(strval($identity['name'] ?? '')), $safeActor) !== 0) {
+            continue;
+        }
+        $serial = stobeParseLiveStorageSerial(strval($identity['storage_id'] ?? ''));
+        if ($serial > 0) {
+            break;
+        }
+    }
+    if ($serial <= 0) {
+        stobeLogWarn('Unequip request skipped because actor serial was unavailable', [
+            'actor' => $safeActor,
+            'item' => $safeItem,
+        ]);
+        return false;
+    }
+
+    $requestPath = '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/unequip_item.request';
+    $tempPath = $requestPath . '.tmp.' . strval(getmypid());
+    // One-slot mailbox (KenshiFP takes one request every 50 ms): never overwrite a pending one.
+    for ($slotWait = 0; $slotWait < 40 && file_exists($requestPath); $slotWait++) usleep(50000);
+    $payload = strval($serial) . "\t" . $safeItem . "\n";
+    if (@file_put_contents($tempPath, $payload, LOCK_EX) === false) {
+        return false;
+    }
+    if (!@rename($tempPath, $requestPath)) {
+        @unlink($tempPath);
+        return false;
+    }
+
+    stobeLogInfo('Queued KenshiFP unequip request', [
+        'actor' => $safeActor,
+        'serial' => $serial,
+        'item' => $safeItem,
+    ]);
+    return true;
+}
+
+function stobeResolveLiveParticipantSerial(string $name, bool $allowStoredFallback = false): int {
+    $safeName = normalizeParticipantNameToken($name);
+    if ($safeName === '') {
+        return 0;
+    }
+
+    $peopleRaw = strval($GLOBALS['CACHE_PEOPLE'] ?? ($_GET['people'] ?? ($_POST['people'] ?? '')));
+    $identities = extractParticipantIdentities([
+        'people' => $peopleRaw,
+        'profile' => normalizeParticipantNameToken(strval($_GET['profile'] ?? '')),
+        'speaker' => normalizeParticipantNameToken(strval($_GET['speaker'] ?? ($_POST['speaker'] ?? ''))),
+    ]);
+    foreach ($identities as $identity) {
+        if (!is_array($identity)) {
+            continue;
+        }
+        if (strcasecmp(normalizeParticipantNameToken(strval($identity['name'] ?? '')), $safeName) !== 0) {
+            continue;
+        }
+        $serial = stobeParseLiveStorageSerial(strval($identity['storage_id'] ?? ''));
+        if ($serial > 0) {
+            return $serial;
+        }
+    }
+    if ($allowStoredFallback && isset($GLOBALS['db'])) {
+        // Not in this request's people list (e.g. working far off at the base):
+        // use the stored serial, but only when the name is unambiguous.
+        $rows = $GLOBALS['db']->fetchAll(
+            "SELECT metadata->>'storage_id' AS sid FROM core_npc_master WHERE LOWER(name)=LOWER($1) AND metadata ? 'storage_id' LIMIT 2",
+            [$safeName]
+        );
+        if (is_array($rows) && count($rows) === 1) {
+            $serial = stobeParseLiveStorageSerial(strval($rows[0]['sid'] ?? ''));
+            if ($serial > 0) {
+                return $serial;
+            }
+        }
+    }
+    return 0;
+}
+
+function stobeQueueKenshiFpActionRequest(
+    string $actor,
+    string $command,
+    string $targetName = '',
+    string $argument = ''
+): bool {
+    $safeActor = normalizeParticipantNameToken($actor);
+    $safeCommand = stobeCanonicalizeActionCommand($command);
+    $safeTarget = normalizeParticipantNameToken($targetName);
+    $safeArgument = trim(preg_replace('/[\r\n\t]+/', ' ', $argument) ?? '');
+    $safeArgument = trim(str_replace('|', ' ', $safeArgument));
+
+    $allowed = [
+        'EQUIP_ITEM', 'SHEATHE_WEAPON', 'DRAW_WEAPON', 'FACE_TARGET',
+        'FIRST_AID', 'BODYGUARD', 'PATROL', 'RESCUE', 'PUT_IN_BED',
+        'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'DROP_WEAPON',
+        'SURRENDER', 'MOVE_TO_TARGET', 'HOLD_POSITION', 'REPAIR', 'BUILD',
+    ];
+    if ($safeActor === '' || !in_array($safeCommand, $allowed, true)) {
+        return false;
+    }
+    if (strlen($safeArgument) > 180) {
+        $safeArgument = substr($safeArgument, 0, 180);
+    }
+
+    $actorSerial = stobeResolveLiveParticipantSerial($safeActor);
+    if ($actorSerial <= 0) {
+        stobeLogWarn('KenshiFP action request skipped because actor serial was unavailable', [
+            'actor' => $safeActor,
+            'command' => $safeCommand,
+        ]);
+        return false;
+    }
+
+    $targetCommands = [
+        'FACE_TARGET', 'FIRST_AID', 'BODYGUARD', 'RESCUE', 'PUT_IN_BED',
+        'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'MOVE_TO_TARGET',
+    ];
+    $targetSerial = 0;
+    if (in_array($safeCommand, $targetCommands, true)) {
+        if ($safeTarget === '') {
+            return false;
+        }
+        $targetSerial = stobeResolveLiveParticipantSerial($safeTarget);
+        if ($targetSerial <= 0) {
+            stobeLogWarn('KenshiFP action request skipped because target serial was unavailable', [
+                'actor' => $safeActor,
+                'command' => $safeCommand,
+                'target' => $safeTarget,
+            ]);
+            return false;
+        }
+    }
+
+    $requestPath = '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_action.request';
+    $tempPath = $requestPath . '.tmp.' . strval(getmypid());
+    // One-slot mailbox (KenshiFP takes one request every 50 ms): never overwrite a pending one.
+    for ($slotWait = 0; $slotWait < 40 && file_exists($requestPath); $slotWait++) usleep(50000);
+    $payload = strval($actorSerial) . "\t" . $safeCommand . "\t"
+        . strval($targetSerial) . "\t" . $safeArgument . "\n";
+    if (@file_put_contents($tempPath, $payload, LOCK_EX) === false) {
+        return false;
+    }
+    if (!@rename($tempPath, $requestPath)) {
+        @unlink($tempPath);
+        return false;
+    }
+
+    stobeLogInfo('Queued KenshiFP gameplay action request', [
+        'actor' => $safeActor,
+        'actor_serial' => $actorSerial,
+        'command' => $safeCommand,
+        'target' => $safeTarget,
+        'target_serial' => $targetSerial,
+        'argument' => $safeArgument,
+    ]);
+    return true;
+}
+
 function streamResponse(
     string $actor,
     string $action,
@@ -13363,10 +14583,200 @@ function streamResponse(
         is_array($actorData) ? $actorData : false
     );
     foreach ($actions as $rawAction) {
-        $normalizedAction = normalizeActionTagToken(strval($rawAction), $actionConfig);
+        $rawActionText = strval($rawAction);
+        $blockedProtectedGive = stobeProtectedGiveWouldBeBlocked($rawActionText, $actionConfig);
+        $normalizedAction = normalizeActionTagToken($rawActionText, $actionConfig);
         if ($normalizedAction === '') {
+            if ($blockedProtectedGive) {
+                $alreadyRefusal = preg_match('/\b(no|not|won(?:\'|’)t|wouldn(?:\'|’)t|refuse|can(?:\'|’)t|cannot|mine|keeping)\b/i', $message) === 1;
+                if (!$alreadyRefusal) {
+                    $message = "No. I'm not handing over my equipped gear.";
+                }
+            }
             continue;
         }
+        if (str_starts_with($normalizedAction, 'WORK_GOAL@')) {
+            $goalParts = explode('@', $normalizedAction);
+            array_shift($goalParts);
+            $goalQuantity = count($goalParts) > 0 ? intval(array_pop($goalParts)) : 0;
+            $goalDestination = '';
+            $goalItem = '';
+            if (count($goalParts) >= 2) {
+                $goalDestination = trim(strval(array_shift($goalParts)));
+                $goalItem = trim(implode(' ', $goalParts));
+            } elseif (count($goalParts) === 1) {
+                $goalItem = trim(strval($goalParts[0]));
+            }
+            $goalResult = stobeQueueWorkGoalRequest(
+                $actor,
+                $goalItem,
+                $goalQuantity,
+                $goalDestination,
+                $effectiveDeliveryGamets
+            );
+            if (boolval($goalResult['ok'] ?? false)) {
+                $queuedActions++;
+            } else {
+                $goalError = trim(strval($goalResult['error'] ?? 'work_goal_not_started'));
+                stobeLogWarn('Persistent work goal could not be queued', [
+                    'actor' => $actor,
+                    'item' => $goalItem,
+                    'quantity' => $goalQuantity,
+                    'destination' => $goalDestination,
+                    'error' => $goalError,
+                ]);
+                if ($goalError === 'destination_not_known') {
+                    $message = trim($message . ' I cannot start that job because I do not know how to reach ' . $goalDestination . '.');
+                } else {
+                    $message = trim($message . ' I cannot start that work order right now.');
+                }
+            }
+            continue;
+        }
+        if (str_starts_with($normalizedAction, 'TASK_GOAL@')) {
+            $taskParts = explode('@', $normalizedAction);
+            array_shift($taskParts);
+            while (count($taskParts) < 6) $taskParts[] = '';
+            [$taskKind,$taskTarget,$taskItem,$taskAmountRaw,$taskDestination,$taskMaxCatsRaw] = array_slice($taskParts,0,6);
+            $taskKind = strtoupper(trim(strval($taskKind)));
+            $taskAmount = max(0, min(1000, intval($taskAmountRaw)));
+            $taskMaxCats = max(0, min(10000000, intval($taskMaxCatsRaw)));
+            $explicitTrade = in_array($taskKind, ['BUY','SELL'], true);
+            $queueOne = static function(string $kind, string $item, string $target, string $destination, int $amount, bool $storeAfter, int $minimumStock, int $maxCats, bool $explicitTrade) use ($actor, $effectiveDeliveryGamets): array {
+                return stobeTaskGoalQueue(
+                    $actor,$kind,$item,$target,$destination,$amount,$storeAfter,
+                    $minimumStock,$maxCats,$explicitTrade,$effectiveDeliveryGamets
+                );
+            };
+
+            $taskResults = [];
+            if ($taskKind === 'BATTLE_CLEANUP') {
+                $taskResults[] = $queueOne('MEDICAL_CLEANUP','','','',0,false,0,0,false);
+                $taskResults[] = $queueOne(
+                    'LOOT_STORE',
+                    trim($taskItem) !== '' ? $taskItem : 'weapons',
+                    trim($taskTarget) !== '' ? $taskTarget : 'enemies',
+                    $taskDestination,
+                    $taskAmount,
+                    true,0,0,false
+                );
+            } else {
+                $taskResults[] = $queueOne(
+                    $taskKind,$taskItem,$taskTarget,$taskDestination,$taskAmount,
+                    $taskKind === 'LOOT_STORE',
+                    $taskKind === 'STOCK' ? $taskAmount : 0,
+                    $taskMaxCats,$explicitTrade
+                );
+            }
+
+            $allOk = count($taskResults) > 0;
+            foreach ($taskResults as $taskResult) {
+                if (!boolval($taskResult['ok'] ?? false)) {
+                    $allOk = false;
+                    stobeLogWarn('Persistent task goal could not be queued', [
+                        'actor'=>$actor,'kind'=>$taskKind,'item'=>$taskItem,
+                        'target'=>$taskTarget,'destination'=>$taskDestination,
+                        'error'=>strval($taskResult['error'] ?? 'task_goal_not_started'),
+                    ]);
+                } else {
+                    $queuedActions++;
+                }
+            }
+            if (!$allOk) {
+                $message = trim($message . ' I could not start all of that task right now.');
+            }
+            continue;
+        }
+        if (str_starts_with($normalizedAction, 'TASK_CONTROL@')) {
+            $controlParts = explode('@', $normalizedAction);
+            array_shift($controlParts);
+            while (count($controlParts) < 4) $controlParts[] = '';
+            [$controlCommand,$controlSelector,$controlAmountRaw,$controlDestination] = array_slice($controlParts,0,4);
+            $controlCommand = strtoupper(trim(strval($controlCommand)));
+            $controlResult = stobeAnyGoalControl(
+                $actor,$controlCommand,trim($controlSelector),
+                max(0,min(1000,intval($controlAmountRaw))),
+                trim($controlDestination)
+            );
+            if (boolval($controlResult['ok'] ?? false)) {
+                $queuedActions++;
+            } else {
+                stobeLogWarn('Persistent goal control failed', [
+                    'actor'=>$actor,'command'=>$controlCommand,
+                    'selector'=>$controlSelector,
+                    'error'=>strval($controlResult['error'] ?? 'goal_control_failed'),
+                ]);
+                $message = trim($message . ' I could not find a matching goal to change.');
+            }
+            continue;
+        }
+        if (str_starts_with($normalizedAction, 'EQUIP_ITEM@')) {
+            $equipQuery = trim(substr($normalizedAction, strlen('EQUIP_ITEM@')));
+            if (stobeSpeechClaimsEquipDone($message)) {
+                $message = "Alright. Let me put " . ($equipQuery !== '' ? $equipQuery : 'it') . " on.";
+                stobeLogInfo('Rewrote premature equip completion claim', [
+                    'actor' => $actor,
+                    'item' => $equipQuery,
+                ]);
+            }
+        }
+        if (str_starts_with($normalizedAction, 'UNEQUIP_ITEM@')) {
+            $itemQuery = trim(substr($normalizedAction, strlen('UNEQUIP_ITEM@')));
+            if (preg_match('/\b(already\s+off|it(?:\'|’)s\s+off|it\s+is\s+off|took\s+(?:it|that)\s+off|taken\s+(?:it|that)\s+off)\b/i', $message) === 1) {
+                $message = "Alright. Let me take " . ($itemQuery !== '' ? $itemQuery : 'it') . " off.";
+                stobeLogInfo('Rewrote premature unequip completion claim', [
+                    'actor' => $actor,
+                    'item' => $itemQuery,
+                ]);
+            }
+            if (stobeQueueUnequipItemRequest($actor, $itemQuery)) {
+                $queuedActions++;
+            } else {
+                stobeLogWarn('Unequip action could not be queued', [
+                    'actor' => $actor,
+                    'item' => $itemQuery,
+                ]);
+                $message = trim($message . " I couldn't actually remove that item.");
+            }
+            continue;
+        }
+
+        $bridgeAt = strpos($normalizedAction, '@');
+        $bridgeCommand = $bridgeAt === false
+            ? stobeCanonicalizeActionCommand($normalizedAction)
+            : stobeCanonicalizeActionCommand(substr($normalizedAction, 0, $bridgeAt));
+        $bridgeArgument = $bridgeAt === false ? '' : trim(substr($normalizedAction, $bridgeAt + 1));
+        $bridgeCommands = [
+            'EQUIP_ITEM', 'SHEATHE_WEAPON', 'DRAW_WEAPON', 'FACE_TARGET',
+            'FIRST_AID', 'BODYGUARD', 'PATROL', 'RESCUE', 'PUT_IN_BED',
+            'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'DROP_WEAPON',
+            'SURRENDER', 'MOVE_TO_TARGET', 'HOLD_POSITION', 'REPAIR', 'BUILD',
+        ];
+        if (in_array($bridgeCommand, $bridgeCommands, true)) {
+            $bridgeTargetCommands = [
+                'FACE_TARGET', 'FIRST_AID', 'BODYGUARD', 'RESCUE', 'PUT_IN_BED',
+                'LOOT_TARGET', 'IMPRISON', 'RELEASE_PRISONER', 'MOVE_TO_TARGET',
+            ];
+            $bridgeTarget = in_array($bridgeCommand, $bridgeTargetCommands, true)
+                ? $bridgeArgument
+                : '';
+            $bridgePayload = in_array($bridgeCommand, ['EQUIP_ITEM', 'REPAIR', 'BUILD'], true)
+                ? $bridgeArgument
+                : '';
+            if (stobeQueueKenshiFpActionRequest($actor, $bridgeCommand, $bridgeTarget, $bridgePayload)) {
+                $queuedActions++;
+            } else {
+                stobeLogWarn('KenshiFP gameplay action could not be queued', [
+                    'actor' => $actor,
+                    'command' => $bridgeCommand,
+                    'target' => $bridgeTarget,
+                    'argument' => $bridgePayload,
+                ]);
+                $message = trim($message . " I couldn't actually carry that action out.");
+            }
+            continue;
+        }
+
         $dispatchAction = stobeTransformActionForDispatch($normalizedAction, is_array($actorData) ? $actorData : false);
         if ($dispatchAction === '') {
             continue;
@@ -13443,7 +14853,11 @@ function streamResponse(
             $suppressTts = boolval($options['suppress_tts'] ?? false) || $ttsText === '';
             if ($ttsEnabled && !$suppressTts && strcasecmp($action, 'ScriptQueue') === 0) {
                 stobeInteractionRequire();
-                $ttsResult = stobeSynthesizePocketTtsLine($actor, $ttsText, $actorData);
+                // An async stream queue may have prepared this sentence already.
+                $preparedTts = $options['prepared_tts'] ?? null;
+                $ttsResult = is_array($preparedTts) && trim(strval($preparedTts['hash'] ?? '')) !== ''
+                    ? $preparedTts
+                    : stobeSynthesizePocketTtsLine($actor, $ttsText, $actorData);
                 $ttsHash = trim(strval($ttsResult['hash'] ?? ''));
                 $ttsDurationMs = intval($ttsResult['duration_ms'] ?? 0);
             }

@@ -25,6 +25,13 @@ error_reporting(E_ALL);
 
 $path = dirname(__FILE__) . DIRECTORY_SEPARATOR;
 require($path . "lib/bootstrap.php");
+if (function_exists('stobeLogRequestStart')) {
+    stobeLogRequestStart();
+}
+stobeLogInfo('Latency stage chat request ingress', [
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+    'request_elapsed_ms' => 0,
+]);
 if (!headers_sent() && function_exists('stobeNarratorDisplayNameHeaderValue')) {
     header('X-Narrator-Display-Name: ' . stobeNarratorDisplayNameHeaderValue());
 }
@@ -38,9 +45,9 @@ if (php_sapi_name() === "cli") {
     $receivedData = "inputtext|" . time() . "|0|{$playerName}: {$argv[1]}";
 } else {
     if (strpos($_SERVER["QUERY_STRING"], "&") === false) {
-        $receivedData = mb_scrub(base64_decode(substr($_SERVER["QUERY_STRING"], 5)));
+        $receivedData = mb_scrub(base64_decode(rawurldecode(substr($_SERVER["QUERY_STRING"], 5))));
     } else {
-        $receivedData = mb_scrub(base64_decode(substr($_SERVER["QUERY_STRING"], 5, strpos($_SERVER["QUERY_STRING"], "&") - 5)));
+        $receivedData = mb_scrub(base64_decode(rawurldecode(substr($_SERVER["QUERY_STRING"], 5, strpos($_SERVER["QUERY_STRING"], "&") - 5))));
     }
 }
 
@@ -49,6 +56,12 @@ ignore_user_abort(true);
 set_time_limit(1200);
 
 $GLOBALS["runid"] = uniqid("run_", false);
+
+// First game event after Chatterbox starts: warm its voice pipeline in the background
+// so the player's first line does not pay the ~17 s cold start.
+if (function_exists('stobeChatterboxWarmupMaybe')) {
+    stobeChatterboxWarmupMaybe();
+}
 
 if (!function_exists('stobeAppendSttLog')) {
     function stobeAppendSttLog(array $payload): void
@@ -234,6 +247,11 @@ stobeLogInfo('Game event received', [
     'data_preview' => $eventDataPreview,
 ]);
 
+// Urgent world events can interrupt currently-playing casual speech immediately.
+if (function_exists('stobeLifelikeSignalForIncomingEvent')) {
+    stobeLifelikeSignalForIncomingEvent(strval($eventType), strval($eventData), strval($incomingPeople));
+}
+
 if ($eventType === 'inputtext_s') {
     $speaker = '';
     $text = trim(strval($eventData));
@@ -336,6 +354,19 @@ try {
             stobeLogWarn('Unhandled event type stored only', ['event_type' => $eventType]);
             echo "ok";
             break;
+    }
+
+    // Once the event has been persisted/processed, meaningful aftermath can
+    // provoke contextual NPC initiative through Stobe's existing bored-event path.
+    if (function_exists('stobeLifelikeSignalForCompletedEvent')) {
+        stobeLifelikeSignalForCompletedEvent(strval($eventType), strval($eventData), strval($incomingPeople));
+    }
+    if (function_exists('stobeNegTickThrottled')) {
+        try {
+            stobeNegTickThrottled(strval($eventType), strval($eventData), strval($incomingPeople), intval($gamets));
+        } catch (Throwable $negError) {
+            stobeLogWarn('Negotiation tick failed', ['error' => $negError->getMessage()]);
+        }
     }
 
     // Daemon-style behavior: periodic cycles run in service/manager.php.

@@ -6595,8 +6595,34 @@ function DataEventLog(
         $query .= ' AND ' . stobeEventAudienceSql($actorFilter, $params, $actorAliases);
     }
     // Filter before limiting so unrelated names cannot crowd out actual witnesses.
-    $query .= " ORDER BY COALESCE(NULLIF(localts, 0), ts, 0) DESC, ts DESC, rowid DESC LIMIT " . intval($limit);
-    return $db->fetchAll($query, $params);
+    // Fetch a little extra: unverified gameplay-action rows are dropped below.
+    $query .= " ORDER BY COALESCE(NULLIF(localts, 0), ts, 0) DESC, ts DESC, rowid DESC LIMIT " . intval($limit + 20);
+    $rows = $db->fetchAll($query, $params);
+    $filtered = [];
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        // Older STOBE versions recorded selected gameplay bridge actions in history
+        // before Kenshi confirmed they actually happened. Do not let those rows
+        // override current live world state in future prompts.
+        if (
+            strtolower(trim(strval($row['type'] ?? ''))) === 'action'
+            && function_exists('stobeActionRequiresVerifiedWorldOutcome')
+        ) {
+            $actionData = trim(strval($row['data'] ?? ''));
+            $colon = strpos($actionData, ':');
+            $actionToken = $colon === false ? $actionData : trim(substr($actionData, $colon + 1));
+            if ($actionToken !== '' && stobeActionRequiresVerifiedWorldOutcome($actionToken)) {
+                continue;
+            }
+        }
+        $filtered[] = $row;
+        if (count($filtered) >= $limit) {
+            break;
+        }
+    }
+    return $filtered;
 }
 
 function storeGameData(string $name, string $type, array $data): bool {
@@ -11000,6 +11026,15 @@ function storeNpcSnapshot(array $snapshot, int $gamets = 0): bool {
     if ($storageId !== '' && !array_key_exists('storage_id', $metadataForStorage)) {
         $metadataForStorage['storage_id'] = $storageId;
     }
+    // Cats balance is deal evidence. Stamp every observation so verification can
+    // compare readings taken after a transfer rather than trusting a stale value.
+    if (array_key_exists('money', $metadataForStorage) && is_numeric($metadataForStorage['money'])) {
+        $metadataForStorage['money'] = max(0, intval($metadataForStorage['money']));
+        $metadataForStorage['money_observed_at'] = time();
+        $metadataForStorage['money_observed_gamets'] = max(0, $gamets);
+    } else {
+        unset($metadataForStorage['money']);
+    }
     $existingMasterMetadata = [];
     $existingMasterRow = $db->fetchOne(
         "SELECT metadata
@@ -11080,6 +11115,15 @@ function storeNpcSnapshot(array $snapshot, int $gamets = 0): bool {
             'gamets' => max(0, $gamets),
             'source' => $snapshotSource,
         ], 'DEBUG');
+    }
+
+    // Live inventory syncs do not carry money; keep the last observed balance and its stamp.
+    if (!array_key_exists('money', $metadataForStorage)) {
+        foreach (['money', 'money_observed_at', 'money_observed_gamets'] as $preservedKey) {
+            if (array_key_exists($preservedKey, $existingMasterMetadata)) {
+                $metadataForStorage[$preservedKey] = $existingMasterMetadata[$preservedKey];
+            }
+        }
     }
 
     $hasIncomingActivityState = array_key_exists('current_action', $metadataForStorage)
