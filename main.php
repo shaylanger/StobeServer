@@ -25,6 +25,13 @@ error_reporting(E_ALL);
 
 $path = dirname(__FILE__) . DIRECTORY_SEPARATOR;
 require($path . "lib/bootstrap.php");
+if (function_exists('stobeLogRequestStart')) {
+    stobeLogRequestStart();
+}
+stobeLogInfo('Latency stage chat request ingress', [
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+    'request_elapsed_ms' => 0,
+]);
 if (!headers_sent() && function_exists('stobeNarratorDisplayNameHeaderValue')) {
     header('X-Narrator-Display-Name: ' . stobeNarratorDisplayNameHeaderValue());
 }
@@ -38,9 +45,9 @@ if (php_sapi_name() === "cli") {
     $receivedData = "inputtext|" . time() . "|0|{$playerName}: {$argv[1]}";
 } else {
     if (strpos($_SERVER["QUERY_STRING"], "&") === false) {
-        $receivedData = mb_scrub(base64_decode(substr($_SERVER["QUERY_STRING"], 5)));
+        $receivedData = mb_scrub(base64_decode(rawurldecode(substr($_SERVER["QUERY_STRING"], 5))));
     } else {
-        $receivedData = mb_scrub(base64_decode(substr($_SERVER["QUERY_STRING"], 5, strpos($_SERVER["QUERY_STRING"], "&") - 5)));
+        $receivedData = mb_scrub(base64_decode(rawurldecode(substr($_SERVER["QUERY_STRING"], 5, strpos($_SERVER["QUERY_STRING"], "&") - 5))));
     }
 }
 

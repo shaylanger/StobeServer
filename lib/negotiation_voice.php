@@ -117,7 +117,7 @@ function stobeNegParseHandover(string $message, string $npc, string $player): ar
     if ($trimmed === '') return $none;
     // Judge each sentence on its own: a hand-over is a short, present-tense sentence.
     // "I offered to pay you 200 ... there's no way I'm paying for that" must never pay.
-    $cuePattern = "/\b(here'?s|here is|here are|here you go|here,|take (it|this|these|them|that|the)|there you go|as promised|as agreed|i'?m (giving|paying|handing) you|i am (giving|paying|handing) you|i give you|i pay you|handing (you|it) over|have (it|these|this)|keep the change)\b/";
+    $cuePattern = "/\b(here'?s|here is|here are|here you go|here,|(?<!you )take (it|this|these|them|that|the)|there you go|as promised|as agreed|i'?m (giving|paying|handing) you|i am (giving|paying|handing) you|i give you|i pay you|handing (you|it) over|have (it|these|this)|keep the change)\b/";
     $text = '';
     $fallback = '';
     $reason = 'no_handover';
@@ -137,6 +137,11 @@ function stobeNegParseHandover(string $message, string $npc, string $player): ar
     // A message that is only an amount ("Two hundred cats.") is judged by the debt rule below.
     if ($text === '' && $fallback !== '' && preg_match('/^\s*(ok(ay)?[, ]+|alright[, ]+|fine[, ]+)?\d+\s*(cats?|c)?\s*[.!]*\s*$/', $trimmed)) $text = $fallback;
     if ($text === '') return ['reason'=>$reason] + $none;
+    // "..., I pay you 300. Deal?" asks for agreement: an offer, unless it's an explicit "here's".
+    if (preg_match("/\b(deal|agreed|okay|ok|alright|sound good|fair|you in|yes|right)\s*\?\s*$/", $trimmed)
+        && !preg_match("/\b(here'?s|here is|here are|here you go|there you go|as promised|as agreed)\b/", $text)) {
+        return ['reason'=>'offer_or_future'] + $none;
+    }
     $cue = preg_match($cuePattern, $text) === 1;
 
     $cats = 0;
@@ -164,6 +169,21 @@ function stobeNegParseHandover(string $message, string $npc, string $player): ar
             if (preg_match('/\b(\d{1,3})\s+' . preg_quote($name, '/') . '/', $text, $q)) $qty = max(1, intval($q[1]));
             $items[] = ['name'=>$name, 'qty'=>min($qty, $have)];
         }
+        // 1b. A distinctive word of the name ("this bread" -> Poppyseed Bread), if exactly one fits.
+        if (count($items) === 0) {
+            $generic = ['basic','standard','high','quality','specialist','masterwork','shoddy','small','large','dried','brown','veggie','regulars','with','your','this','that','some'];
+            $fits = [];
+            foreach ($inventory as $name => $have) {
+                foreach (preg_split('/[^a-z]+/', $name) ?: [] as $word) {
+                    if (strlen($word) < 4 || in_array($word, $generic, true)) continue;
+                    if (preg_match('/\b' . preg_quote($word, '/') . 's?\b/', $text)) { $fits[$name] = $have; break; }
+                }
+            }
+            if (count($fits) === 1) {
+                $name = array_key_first($fits);
+                $items[] = ['name'=>$name, 'qty'=>1];
+            }
+        }
         // 2. "Here's your drink" / "what I owe you": the item(s) this deal says you owe.
         if (count($items) === 0 && preg_match("/\\b(your (drink|food|meal|item|payment|share|cut)|a drink|the drink|the food|some food|what i owe|as promised|as agreed|your (booze|round|grub)|here'?s your)\\b/", $text)) {
             foreach (stobeNegPlayerOwedItems($npc) as $owed) {
@@ -172,7 +192,8 @@ function stobeNegParseHandover(string $message, string $npc, string $player): ar
             }
         }
         // 3. No deal but generic ("here, have a drink" / "here's some food"): hand over one you carry.
-        if (count($items) === 0) {
+        // Not when a deal names what's owed: "here's your food" must not swap in some other food.
+        if (count($items) === 0 && count(stobeNegPlayerOwedItems($npc)) === 0) {
             $generic = preg_match('/\b(a drink|this drink|your drink|some booze|a round)\b/', $text) ? 'drink'
                 : (preg_match('/\b(some food|this food|your food|the food|a meal|something to eat|some grub)\b/', $text) ? 'food' : '');
             $pick = $generic !== '' ? stobeNegPickInventoryItem($inventory, $generic) : '';
@@ -190,7 +211,7 @@ function stobeNegParseHandover(string $message, string $npc, string $player): ar
 
     $note = '';
     if ($cats > 0) {
-        $money = stobeNegMoney(stobeNegNpcRow($player));
+        $money = stobeNegMoney(stobeNegNpcRow($player), true);
         if ($money['known'] && $money['value'] < $cats) {
             return ['cats'=>0, 'items'=>$items, 'reason'=>'insufficient_cats',
                 'note'=>$player . ' reaches for ' . $cats . ' Cats but only has ' . $money['value'] . '. No money changed hands.'];
@@ -231,6 +252,7 @@ function stobeNegVoiceHandover(string $npc, array|false $npcData, string $player
         if (ob_get_length()) @ob_flush();
         @flush();
         stobeLogInfo('Voice hand-over dispatched', ['player'=>$player, 'npc'=>$npc, 'actions'=>$actions, 'message'=>$message]);
+        $GLOBALS['STOBE_VOICE_HANDOVER_NPC'] = $npc; // bug 34: settle her side before this request ends
         $parts = [];
         if ($parsed['cats'] > 0) $parts[] = intval($parsed['cats']) . ' Cats';
         foreach ($parsed['items'] as $item) $parts[] = intval($item['qty']) . ' x ' . $item['name'];

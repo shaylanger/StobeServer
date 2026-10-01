@@ -85,7 +85,7 @@ function stobeTaskGoalQueue(
         return ['ok'=>false,'error'=>'quantity_required'];
     }
 
-    $serial = function_exists('stobeResolveLiveParticipantSerial') ? stobeResolveLiveParticipantSerial($actor) : 0;
+    $serial = function_exists('stobeResolveLiveParticipantSerial') ? stobeResolveLiveParticipantSerial($actor, true) : 0;
     if ($serial <= 0) return ['ok'=>false,'error'=>'actor_serial_unavailable'];
 
     $resolved = ['name'=>'','x'=>null,'y'=>null,'z'=>null];
@@ -292,7 +292,7 @@ function stobeAnyGoalControl(string $actor,string $command,string $selector='',i
         "SELECT * FROM stobe_work_goal
          WHERE LOWER(actor_name)=LOWER($1) AND status = ANY($2::text[])
          ORDER BY updated_at DESC,created_at DESC LIMIT 20",
-        [$actor, match($command){'PAUSE'=>'{ACTIVE}','RESUME'=>'{PAUSED}',default=>'{ACTIVE,PAUSED}'}]
+        [$actor, match($command){'PAUSE'=>'{ACTIVE}','RESUME'=>'{PAUSED,BLOCKED}',default=>'{ACTIVE,PAUSED}'}]
     );
     $work=false;
     foreach(($rows?:[]) as $r){

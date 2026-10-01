@@ -354,15 +354,17 @@ function loadCoreActionRows(bool $onlyActivated = true): array {
     return $rows;
 }
 
-function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
+function buildActionGuidanceFromRows(array $rows, array $npcData = [], bool $stableReference = false): string {
     if (count($rows) === 0) {
         return '';
     }
 
     $lines = [];
-    $lines[] = '<available_actions_list>';
-    $lines[] = '#Available Actions';
-    $lines[] = 'Use if your character needs to perform an action:';
+    $lines[] = $stableReference ? '<action_reference>' : '<available_actions_list>';
+    $lines[] = $stableReference ? '#Action Reference' : '#Available Actions';
+    $lines[] = $stableReference
+        ? 'Reference definitions only. The later <action_state> block is authoritative for which actions are currently available.'
+        : 'Use if your character needs to perform an action:';
     foreach ($rows as $row) {
         $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
         $actionName = trim(strval($row['action_name'] ?? ''));
@@ -374,7 +376,8 @@ function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
         if ($actionName === '') {
             continue;
         }
-        if (in_array($command, ['WORK_GOAL','TASK_GOAL','TASK_CONTROL'], true) &&
+        if (!$stableReference &&
+            in_array($command, ['WORK_GOAL','TASK_GOAL','TASK_CONTROL'], true) &&
             (!is_array($npcData) || !npcIsInPlayerFaction($npcData))) {
             continue;
         }
@@ -384,7 +387,7 @@ function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
         } elseif ($command === 'PICKUP_NPC') {
             $description = 'Pick up a nearby helpless target and carry them. Not available while already carrying someone.';
         }
-        if ($command === 'FACTION_RELATIONS') {
+        if (!$stableReference && $command === 'FACTION_RELATIONS') {
             $inlineRules = stobeBuildFactionRelationsActionInlineGuidance($npcData);
             if ($inlineRules !== '') {
                 if ($description === '') {
@@ -396,9 +399,11 @@ function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
         }
         if ($command === 'MOVE_TO') {
             $description .= ' Put the exact reference in target, or use player for the initiating speaker. Use a known visited location name for a fixed point. Never invent coordinates. Follow is for continued following; UseObject is for interaction.';
-            foreach (stobeMoveToReferences($npcData) as $reference) {
-                $lines[] = 'MoveTo target: hand_' . $reference['serial'] . ' = '
-                    . stobePromptXmlEscape($reference['name']);
+            if (!$stableReference) {
+                foreach (stobeMoveToReferences($npcData) as $reference) {
+                    $lines[] = 'MoveTo target: hand_' . $reference['serial'] . ' = '
+                        . stobePromptXmlEscape($reference['name']);
+                }
             }
         }
         if ($description !== '') {
@@ -407,7 +412,7 @@ function buildActionGuidanceFromRows(array $rows, array $npcData = []): string {
             $lines[] = "AVAILABLE ACTION: {$actionName}";
         }
     }
-    $lines[] = '</available_actions_list>';
+    $lines[] = $stableReference ? '</action_reference>' : '</available_actions_list>';
 
     return implode("\n", $lines);
 }
@@ -583,72 +588,94 @@ function stobeFilterPartyActionGuidanceByMembership(string $guidance, ?bool $inP
     return trim($guidance);
 }
 
-function appendActionGuidanceToPrompt(string $prompt, string $eventType, array $npcData = []): string {
-    if (!stobePromptContextOptionEnabled('enabled_sections', 'available_actions_list')) {
-        return $prompt;
-    }
-
+function stobeBuildCurrentActionRows(string $eventType, array $npcData = []): array {
     $config = stobeBuildActionConfigForNpc($eventType, $npcData);
     if (!boolval($config['enabled'] ?? false)) {
-        return $prompt;
+        return [[], $config];
     }
+
     $rows = [];
     $allowed = $config['allowlist'] ?? [];
     $activeRows = $config['active_rows'] ?? [];
-    if (is_array($activeRows) && count($activeRows) > 0) {
+    if (is_array($activeRows)) {
         foreach ($activeRows as $row) {
             $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
-            if ($command === '') {
-                continue;
-            }
-            if (count($allowed) > 0 && !in_array($command, $allowed, true)) {
-                continue;
-            }
-            if ($command === 'STOP_ATTACK' && boolval($config['disallow_stop_attack'] ?? true)) {
-                continue;
-            }
-            if ($command === 'GIVE_CATS' && boolval($config['disallow_give_cats'] ?? false)) {
-                continue;
-            }
-            if ($command === 'TAKE_CATS' && boolval($config['disallow_take_cats'] ?? false)) {
-                continue;
-            }
-            if ($command === 'STOP_CARRYING' && boolval($config['disallow_stop_carrying'] ?? false)) {
-                continue;
-            }
-            if ($command === 'PICKUP_NPC' && boolval($config['disallow_pickup_npc'] ?? false)) {
-                continue;
-            }
-            if ($command === 'REMOVE_LIMB' && boolval($config['disallow_remove_limb'] ?? false)) {
-                continue;
-            }
-            if ($command === 'CUT_HORNS' && boolval($config['disallow_cut_horns'] ?? false)) {
-                continue;
-            }
-            if ($command === 'USE_DRUGS' && boolval($config['disallow_use_drugs'] ?? false)) {
-                continue;
-            }
-            if ($command === 'DRINK_ITEM' && boolval($config['disallow_drink_item'] ?? false)) {
-                continue;
-            }
-            if ($command === 'FORCE_DRINK' && boolval($config['disallow_force_drink'] ?? false)) {
-                continue;
-            }
-            if ($command === 'TRAVEL_LOCATION' && !boolval($config['allow_travel_location'] ?? false)) {
-                continue;
-            }
+            if ($command === '' || (count($allowed) > 0 && !in_array($command, $allowed, true))) continue;
+            if ($command === 'STOP_ATTACK' && boolval($config['disallow_stop_attack'] ?? true)) continue;
+            if ($command === 'GIVE_CATS' && boolval($config['disallow_give_cats'] ?? false)) continue;
+            if ($command === 'TAKE_CATS' && boolval($config['disallow_take_cats'] ?? false)) continue;
+            if ($command === 'STOP_CARRYING' && boolval($config['disallow_stop_carrying'] ?? false)) continue;
+            if ($command === 'PICKUP_NPC' && boolval($config['disallow_pickup_npc'] ?? false)) continue;
+            if ($command === 'REMOVE_LIMB' && boolval($config['disallow_remove_limb'] ?? false)) continue;
+            if ($command === 'CUT_HORNS' && boolval($config['disallow_cut_horns'] ?? false)) continue;
+            if ($command === 'USE_DRUGS' && boolval($config['disallow_use_drugs'] ?? false)) continue;
+            if ($command === 'DRINK_ITEM' && boolval($config['disallow_drink_item'] ?? false)) continue;
+            if ($command === 'FORCE_DRINK' && boolval($config['disallow_force_drink'] ?? false)) continue;
+            if ($command === 'TRAVEL_LOCATION' && !boolval($config['allow_travel_location'] ?? false)) continue;
             $rows[] = $row;
         }
     }
+    return [$rows, $config];
+}
 
+function appendStableActionReferenceToPrompt(string $prompt, string $eventType): string {
+    if (!stobePromptContextOptionEnabled('enabled_sections', 'available_actions_list')) return $prompt;
+    $runtime = getActionRuntimeConfig($eventType);
+    if (!boolval($runtime['enabled'] ?? false)) return $prompt;
+    $rows = is_array($runtime['active_rows'] ?? null) ? $runtime['active_rows'] : [];
+    $allowed = $runtime['allowlist'] ?? [];
+    if (count($allowed) > 0) {
+        $rows = array_values(array_filter($rows, static function ($row) use ($allowed): bool {
+            $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
+            return $command !== '' && in_array($command, $allowed, true);
+        }));
+    }
+    $guidance = buildActionGuidanceFromRows($rows, [], true);
+    return $guidance === '' ? $prompt : implode("\n\n", [$prompt, $guidance]);
+}
+
+function stobeBuildDynamicActionStateBlock(string $eventType, array $npcData = []): string {
+    if (!stobePromptContextOptionEnabled('enabled_sections', 'available_actions_list')) return '';
+    [$rows, $config] = stobeBuildCurrentActionRows($eventType, $npcData);
+    if (!boolval($config['enabled'] ?? false)) return '';
+
+    $names = [];
+    foreach ($rows as $row) {
+        $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
+        $name = trim(strval($row['action_name'] ?? ''));
+        if ($command === 'STOP_CARRYING') $name = 'StopCarrying';
+        elseif ($command === 'PICKUP_NPC') $name = 'PickupNpc';
+        if ($name !== '') $names[] = $name;
+    }
+    $inPlayerFaction = count($npcData) > 0 ? npcIsInPlayerFaction($npcData) : false;
+    $lines = ['<action_state>'];
+    $lines[] = $inPlayerFaction
+        ? 'This NPC is already in the player faction/squad. Leave may be used; JoinParty and Follow/StopFollow are unavailable.'
+        : 'This NPC is not in the player faction/squad. JoinParty may be used; Leave is unavailable.';
+    $lines[] = 'Currently available actions: ' . (count($names) > 0 ? implode(', ', array_values(array_unique($names))) : '(none)') . '.';
+
+    foreach ($rows as $row) {
+        $command = stobeCanonicalizeActionCommand(strval($row['command'] ?? ''));
+        if ($command === 'FACTION_RELATIONS') {
+            $inline = stobeBuildFactionRelationsActionInlineGuidance($npcData);
+            if ($inline !== '') $lines[] = 'FactionRelations live context: ' . $inline;
+        } elseif ($command === 'MOVE_TO') {
+            foreach (stobeMoveToReferences($npcData) as $reference) {
+                $lines[] = 'MoveTo target: hand_' . $reference['serial'] . ' = ' . stobePromptXmlEscape($reference['name']);
+            }
+        }
+    }
+    $lines[] = '</action_state>';
+    return implode("\n", $lines);
+}
+
+function appendActionGuidanceToPrompt(string $prompt, string $eventType, array $npcData = []): string {
+    if (!stobePromptContextOptionEnabled('enabled_sections', 'available_actions_list')) return $prompt;
+    [$rows, $config] = stobeBuildCurrentActionRows($eventType, $npcData);
+    if (!boolval($config['enabled'] ?? false)) return $prompt;
     $guidance = buildActionGuidanceFromRows($rows, $npcData);
-    if ($guidance === '') {
-        return $prompt;
-    }
-    $inPlayerFaction = null;
-    if (is_array($npcData) && count($npcData) > 0) {
-        $inPlayerFaction = npcIsInPlayerFaction($npcData);
-    }
+    if ($guidance === '') return $prompt;
+    $inPlayerFaction = count($npcData) > 0 ? npcIsInPlayerFaction($npcData) : null;
     $guidance = stobeFilterPartyActionGuidanceByMembership($guidance, $inPlayerFaction);
     return implode("\n\n", [$prompt, $guidance]);
 }
@@ -1285,6 +1312,14 @@ function stobeProtectedGiveWouldBeBlocked(string $rawTag, array $config): bool {
     if ($command !== 'GIVE_ITEM' || boolval($config['in_player_faction'] ?? false)) {
         return false;
     }
+    // Part of an agreed deal: a paid-for item is not a gift, even if it's worn.
+    if (boolval($config['deal_sanctioned_give'] ?? false)) {
+        return false;
+    }
+    $dealNpc = strval($config['npc_name'] ?? '');
+    if ($dealNpc !== '' && function_exists('stobeNegNpcHasDealContext') && stobeNegNpcHasDealContext($dealNpc)) {
+        return false;
+    }
     $argument = trim(substr($value, $at + 1));
     $giveTarget = stobeGiveItemTargetFromActionArgument($argument);
     $playerName = normalizeParticipantNameToken(strval($config['player_name'] ?? ''));
@@ -1870,11 +1905,17 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
     }
 
     if ($command === 'ATTACK') {
+        // Bug 39: keep the "@help" flag (she called her faction-mates in); the sanitizer strips '@'.
+        $helpFlag = '';
+        if (preg_match('/^(.*)@help\s*$/i', $argument, $helpMatch)) {
+            $argument = $helpMatch[1];
+            $helpFlag = '@help';
+        }
         $targetName = $sanitizeInlineText($argument, 120);
         if ($targetName === '') {
             return 'ATTACK@';
         }
-        return 'ATTACK@' . $targetName;
+        return 'ATTACK@' . $targetName . $helpFlag;
     }
     if ($command === 'STOP_ATTACK') {
         $targetName = $sanitizeInlineText($argument, 120);
@@ -5581,6 +5622,7 @@ function stobeBuildStructuredDialogueResponseFormat(
     string $eventType = 'chat',
     string $strictListener = ''
 ): array {
+    $stobeSchemaStartedAt = microtime(true);
     $parts = stobeResolveStructuredDialogueContractParts($npcName, $npcData, $inPlayerFaction, $eventType);
     $safeNpc = strval($parts['safe_npc'] ?? '');
     if ($safeNpc === '') {
@@ -5600,7 +5642,7 @@ function stobeBuildStructuredDialogueResponseFormat(
         $listenerProperty['enum'] = [$safeStrictListener];
     }
 
-    return [
+    $stobeSchema = [
         'type' => 'json_schema',
         'json_schema' => [
             'name' => 'stobe_dialogue_response',
@@ -5670,6 +5712,12 @@ function stobeBuildStructuredDialogueResponseFormat(
             ],
         ],
     ];
+    stobeLogInfo('Latency pre-llm stage response_schema', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'duration_ms' => intval(round((microtime(true) - $stobeSchemaStartedAt) * 1000)),
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+    ]);
+    return $stobeSchema;
 }
 
 function stobeBuildOutputContractUserPrompt(
@@ -6621,7 +6669,8 @@ function queryWorldKnowledgeForNpc(
     $npcKey = stobeWorldKnowledgeBuildNpcKey($npcName, $npcData);
     $currentTopicBefore = stobeWorldKnowledgeGetCurrentTopic($npcKey);
 
-    $topicCount = max(1, min(5, getSettingInt('WORLD_KNOWLEDGE_AMOUNT', 2)));
+    // Round 12: only topics[0] is used for retrieval, so one MiniMe call is enough.
+    $topicCount = 1;
     $keywordWindow = max(6, min(60, getSettingInt('WORLD_KNOWLEDGE_CONTEXT_HISTORY', 16)));
     $keywordLimit = max(3, min(24, getSettingInt('WORLD_KNOWLEDGE_CONTEXT_KEYWORDS', 8)));
     $minRank = max(0.0, min(100.0, getSettingFloat('WORLD_KNOWLEDGE_MIN_RANK', 3.30)));
@@ -8232,12 +8281,37 @@ function buildPlayerBaseStateBlock(array $npcData): string
     $base = function_exists('stobeNormalizePlayerBaseSnapshot')
         ? stobeNormalizePlayerBaseSnapshot($extended['player_base'] ?? [], false)
         : [];
-    if (!boolval($base['inside'] ?? false)) {
-        return '';
-    }
-    $serverObservedAt = intval($base['server_observed_at'] ?? 0);
-    if ($serverObservedAt > 0 && (time() - $serverObservedAt) > 90) {
-        return '';
+    $baseFromPresence = false;
+    $ownFresh = boolval($base['inside'] ?? false)
+        && !(intval($base['server_observed_at'] ?? 0) > 0 && (time() - intval($base['server_observed_at'])) > 90);
+    if (!$ownFresh) {
+        // The DLL does not fill in per-NPC base presence; a faction member knows the
+        // player's base when the player is inside it (server-side presence snapshot).
+        $row = (function_exists('stobeGetCurrentPlayerBaseState') && npcIsInPlayerFaction($npcData))
+            ? stobeGetCurrentPlayerBaseState(90)
+            : [];
+        if (!is_array($row) || trim(strval($row['base_id'] ?? '')) === '') {
+            return '';
+        }
+        $pgBool = static fn($v): bool => $v === true || in_array(strtolower(strval($v)), ['t', 'true', '1'], true);
+        $details = json_decode(strval($row['details'] ?? ''), true);
+        $base = [
+            'inside' => true,
+            'name' => strval($row['name'] ?? 'Player Base'),
+            'power_generated' => $row['power_generated'] ?? 0,
+            'power_required' => $row['power_required'] ?? 0,
+            'has_spare_power' => $pgBool($row['has_spare_power'] ?? false),
+            'battery_charge' => $row['battery_charge'] ?? 0,
+            'battery_capacity' => $row['battery_capacity'] ?? 0,
+            'battery_drain' => $row['battery_drain'] ?? 0,
+            'battery_charging' => $row['battery_charging'] ?? 0,
+            'battery_mode' => $pgBool($row['battery_mode'] ?? false),
+            'members_inside' => intval($row['members_inside'] ?? 0),
+            'has_gates' => $pgBool($row['has_gates'] ?? false),
+            'gates_closed' => $pgBool($row['gates_closed'] ?? false),
+            'details' => is_array($details) ? $details : [],
+        ];
+        $baseFromPresence = true;
     }
 
     $lines = ['<player_base>'];
@@ -8372,7 +8446,9 @@ function buildPlayerBaseStateBlock(array $npcData): string
             $lines[] = '  <scan_truncated>true</scan_truncated>';
         }
     }
-    $lines[] = '  <context>This character is currently inside this player-owned base perimeter.</context>';
+    $lines[] = $baseFromPresence
+        ? '  <context>This is your faction\'s own base; the player is inside it now. Its production buildings, farms and storage listed here are yours to work (WORK_GOAL / TASK_GOAL).</context>'
+        : '  <context>This character is currently inside this player-owned base perimeter.</context>';
     $lines[] = '</player_base>';
     return implode("\n", $lines);
 }
@@ -12569,7 +12645,32 @@ function buildSystemPrompt(
 
     $prompt = str_replace(array_keys($replacements), array_values($replacements), $template);
     $worldStateBlock = buildWorldStateBlock($npcData);
-    if (strpos($prompt, '#NPC_CHARACTER_STATE#') !== false) {
+    // Round 13: stable-first chat prompt so DeepInfra's prefix cache can reuse the head.
+    // Character State and Relationships change every turn; they move (unchanged) into
+    // <current_situation> after Available Actions instead of sitting inside <character>.
+    $stableFirst = strtolower($eventType) === 'chat'
+        && (!function_exists('getSettingBool') || getSettingBool('PROMPT_CACHE_STABLE_FIRST', true));
+    if ($stableFirst) {
+        $prompt = str_replace('#NPC_CHARACTER_STATE#', '', $prompt);
+        $liveRelationships = '';
+        if (preg_match('/<relationships>.*?<\/relationships>/s', $prompt, $relMatch, PREG_OFFSET_CAPTURE) === 1) {
+            $liveRelationships = $relMatch[0][0];
+            $prompt = substr_replace($prompt, '', $relMatch[0][1], strlen($liveRelationships));
+        }
+        if ($includeActionGuidance) {
+            $prompt = appendStableActionReferenceToPrompt($prompt, $eventType);
+        }
+        $liveBlock = trim(trim($worldStateBlock) . "\n" . $liveRelationships);
+        if ($liveBlock !== '') {
+            $prompt .= "\n\n<current_situation>\n" . $liveBlock . "\n</current_situation>";
+        }
+        if ($includeActionGuidance) {
+            $dynamicActionState = stobeBuildDynamicActionStateBlock($eventType, $npcData);
+            if ($dynamicActionState !== '') {
+                $prompt .= "\n\n" . $dynamicActionState;
+            }
+        }
+    } elseif (strpos($prompt, '#NPC_CHARACTER_STATE#') !== false) {
         $prompt = str_replace('#NPC_CHARACTER_STATE#', $worldStateBlock, $prompt);
     } elseif ($worldStateBlock !== '') {
         $prompt .= "\n\n" . $worldStateBlock;
@@ -12645,7 +12746,7 @@ function buildSystemPrompt(
         $prompt .= "\n</knowledge>";
     }
 
-    if ($includeActionGuidance) {
+    if ($includeActionGuidance && !$stableFirst) {
         $prompt = appendActionGuidanceToPrompt($prompt, $eventType, $npcData);
     }
 
@@ -13150,8 +13251,14 @@ function stobeLogOutputToPlugin(
     int $ttsDurationMs = 0,
     string $utteranceId = ''
 ): void {
+    $requestElapsedMs = isset($GLOBALS['__stobe_request_start']) && is_float($GLOBALS['__stobe_request_start'])
+        ? intval(round((microtime(true) - $GLOBALS['__stobe_request_start']) * 1000))
+        : 0;
     $entry = [
         'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'request_elapsed_ms' => $requestElapsedMs,
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+        'stage' => 'output_queued_to_plugin',
         'actor' => $actor,
         'action' => $action,
         'message' => $message,
@@ -13803,7 +13910,9 @@ function stobeStreamDialogueViaLlm(
     if (boolval($meta['suppress_tts'] ?? false)) {
         $streamOptions['suppress_tts'] = true;
     }
-    unset($streamMeta['suppress_tts'], $streamMeta['defer_structured_stream']);
+    unset($streamMeta['suppress_tts'], $streamMeta['defer_structured_stream'], $streamMeta['hold_stream_on_money']);
+    // Underway deal: speak normally, but hold everything from the first sentence about money.
+    $holdOnMoney = !empty($meta['hold_stream_on_money']) && function_exists('stobeDealSpeechMentionsMoney');
     if ($streamListener === '') {
         $streamListener = trim(strval($meta['stream_listener'] ?? ''));
     }
@@ -13856,6 +13965,9 @@ function stobeStreamDialogueViaLlm(
     if (is_array($structuredResponseFormat)) {
         $rawResponse = '';
         $chunksEmitted = 0;
+        $heldBack = false;
+        $spokenText = '';
+        $heldFrom = '';
         $messageStreamBuffer = '';
         $lastStructuredMessage = '';
         $structuredListener = '';
@@ -13875,6 +13987,10 @@ function stobeStreamDialogueViaLlm(
         $emitStructuredDialogue = function (string $deltaText = '', bool $flushRemainder = false) use (
             &$messageStreamBuffer,
             &$chunksEmitted,
+            &$heldBack,
+            &$spokenText,
+            &$heldFrom,
+            $holdOnMoney,
             $actor,
             $actorData,
             $streamEventType,
@@ -13908,6 +14024,14 @@ function stobeStreamDialogueViaLlm(
                     if ($sentenceChunk === '') {
                         continue;
                     }
+                    if ($holdOnMoney && !$heldBack && stobeDealSpeechMentionsMoney($sentenceChunk)) {
+                        $heldBack = true;
+                        $heldFrom = $sentenceChunk;
+                    }
+                    if ($heldBack) {
+                        continue;
+                    }
+                    $spokenText .= ($spokenText === '' ? '' : ' ') . $sentenceChunk;
                     if ($ttsQueue) {
                         $ttsQueue->enqueue($sentenceChunk);
                     } else {
@@ -13937,6 +14061,14 @@ function stobeStreamDialogueViaLlm(
                 if ($remainingChunk === '') {
                     continue;
                 }
+                if ($holdOnMoney && !$heldBack && stobeDealSpeechMentionsMoney($remainingChunk)) {
+                    $heldBack = true;
+                    $heldFrom = $remainingChunk;
+                }
+                if ($heldBack) {
+                    continue;
+                }
+                $spokenText .= ($spokenText === '' ? '' : ' ') . $remainingChunk;
                 if ($ttsQueue) {
                     $ttsQueue->enqueue($remainingChunk);
                 } else {
@@ -14054,6 +14186,9 @@ function stobeStreamDialogueViaLlm(
             ? $structuredListener
             : normalizeParticipantNameToken(strval($finalSnapshot['listener'] ?? ''));
         $result['chunks_emitted'] = $chunksEmitted;
+        $result['held_back'] = $heldBack;
+        $result['spoken_text'] = $spokenText;
+        $result['held_from'] = $heldFrom;
         return $result;
     }
 
@@ -14276,6 +14411,8 @@ function stobeQueueUnequipItemRequest(string $actor, string $itemQuery): bool {
 
     $requestPath = '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/unequip_item.request';
     $tempPath = $requestPath . '.tmp.' . strval(getmypid());
+    // One-slot mailbox (KenshiFP takes one request every 50 ms): never overwrite a pending one.
+    for ($slotWait = 0; $slotWait < 40 && file_exists($requestPath); $slotWait++) usleep(50000);
     $payload = strval($serial) . "\t" . $safeItem . "\n";
     if (@file_put_contents($tempPath, $payload, LOCK_EX) === false) {
         return false;
@@ -14293,7 +14430,7 @@ function stobeQueueUnequipItemRequest(string $actor, string $itemQuery): bool {
     return true;
 }
 
-function stobeResolveLiveParticipantSerial(string $name): int {
+function stobeResolveLiveParticipantSerial(string $name, bool $allowStoredFallback = false): int {
     $safeName = normalizeParticipantNameToken($name);
     if ($safeName === '') {
         return 0;
@@ -14315,6 +14452,20 @@ function stobeResolveLiveParticipantSerial(string $name): int {
         $serial = stobeParseLiveStorageSerial(strval($identity['storage_id'] ?? ''));
         if ($serial > 0) {
             return $serial;
+        }
+    }
+    if ($allowStoredFallback && isset($GLOBALS['db'])) {
+        // Not in this request's people list (e.g. working far off at the base):
+        // use the stored serial, but only when the name is unambiguous.
+        $rows = $GLOBALS['db']->fetchAll(
+            "SELECT metadata->>'storage_id' AS sid FROM core_npc_master WHERE LOWER(name)=LOWER($1) AND metadata ? 'storage_id' LIMIT 2",
+            [$safeName]
+        );
+        if (is_array($rows) && count($rows) === 1) {
+            $serial = stobeParseLiveStorageSerial(strval($rows[0]['sid'] ?? ''));
+            if ($serial > 0) {
+                return $serial;
+            }
         }
     }
     return 0;
@@ -14376,6 +14527,8 @@ function stobeQueueKenshiFpActionRequest(
 
     $requestPath = '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_action.request';
     $tempPath = $requestPath . '.tmp.' . strval(getmypid());
+    // One-slot mailbox (KenshiFP takes one request every 50 ms): never overwrite a pending one.
+    for ($slotWait = 0; $slotWait < 40 && file_exists($requestPath); $slotWait++) usleep(50000);
     $payload = strval($actorSerial) . "\t" . $safeCommand . "\t"
         . strval($targetSerial) . "\t" . $safeArgument . "\n";
     if (@file_put_contents($tempPath, $payload, LOCK_EX) === false) {

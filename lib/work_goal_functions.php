@@ -200,7 +200,7 @@ function stobeQueueWorkGoalRequest(
     }
 
     $serial = function_exists('stobeResolveLiveParticipantSerial')
-        ? stobeResolveLiveParticipantSerial($safeActor)
+        ? stobeResolveLiveParticipantSerial($safeActor, true)
         : 0;
     if ($serial <= 0) {
         return ['ok' => false, 'error' => 'actor_serial_unavailable'];

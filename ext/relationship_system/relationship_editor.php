@@ -58,20 +58,11 @@ if ((!is_array($jsonbRelationships) || count($jsonbRelationships) === 0) && !emp
 if (!is_array($jsonbRelationships)) {
     $jsonbRelationships = [];
 }
-$playerNameToken = '';
-if (function_exists('getSetting')) {
-    $playerNameToken = strtolower(trim(strval(getSetting('PLAYER_NAME', 'Drifter'))));
-}
+// Round 13: the player's row is shown and editable (the UI save replaces the
+// whole map, so hiding it here also deleted it on save).
 $filteredRelationships = [];
 foreach ($jsonbRelationships as $target => $payload) {
-    $targetToken = strtolower(trim(strval($target)));
-    if ($targetToken === '') {
-        continue;
-    }
-    if (in_array($targetToken, ['player', 'the player', '#player_name#', 'dragonborn', 'the dragonborn'], true)) {
-        continue;
-    }
-    if ($playerNameToken !== '' && $targetToken === $playerNameToken) {
+    if (trim(strval($target)) === '') {
         continue;
     }
     $filteredRelationships[$target] = $payload;
@@ -141,8 +132,8 @@ $defaultTypes = [
 
 // Collect any custom types from existing relationships
 $customTypes = [];
-foreach ($jsonbRelationships as $target => $data) {
-    $type = $data['type'] ?? 'neutral';
+foreach ($jsonbRelationships as $target => $relPayload) {
+    $type = $relPayload['type'] ?? 'neutral';
     if (!isset($defaultTypes[$type])) {
         $customTypes[$type] = '&#x1F3F7;&#xFE0F;'; // Default icon for custom types
     }
@@ -179,17 +170,17 @@ $typeIcons = array_merge($defaultTypes, $customTypes);
                         </tr>
                     </thead>
                     <tbody id="rel-tbody">
-                        <?php foreach ($jsonbRelationships as $target => $data):
-                            $aff = $data['aff'] ?? 0;
-                            $type = $data['type'] ?? 'neutral';
-                            $relation = $data['relation'] ?? '';
-                            $note = $data['note'] ?? '';
-                            $best = $data['best'] ?? '';
-                            $worst = $data['worst'] ?? '';
-                            $bestDelta = $data['best_delta'] ?? 0;
-                            $worstDelta = $data['worst_delta'] ?? 0;
-                            $customInfo = isset($data['custom_info']) && is_scalar($data['custom_info'])
-                                ? strval($data['custom_info'])
+                        <?php foreach ($jsonbRelationships as $target => $relPayload):
+                            $aff = $relPayload['aff'] ?? 0;
+                            $type = $relPayload['type'] ?? 'neutral';
+                            $relation = $relPayload['relation'] ?? '';
+                            $note = $relPayload['note'] ?? '';
+                            $best = $relPayload['best'] ?? '';
+                            $worst = $relPayload['worst'] ?? '';
+                            $bestDelta = $relPayload['best_delta'] ?? 0;
+                            $worstDelta = $relPayload['worst_delta'] ?? 0;
+                            $customInfo = isset($relPayload['custom_info']) && is_scalar($relPayload['custom_info'])
+                                ? strval($relPayload['custom_info'])
                                 : '';
                             $tier = RelationshipManager::getTierLabel($aff);
                             $tierColor = $tierColors[$tier] ?? '#e5e7eb';

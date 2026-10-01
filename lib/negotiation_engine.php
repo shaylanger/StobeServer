@@ -13,6 +13,8 @@
  * general_settings toggle NEGOTIATION_PHASE_<n> (default true).
  */
 
+const STOBE_NEG_PAY_WINDOW_GAMETS = 1950;        // bug 41: ~60 s of game time at 1x (about 32.5 gamets/s)
+const STOBE_NEG_PAY_WINDOW_REAL_CAP = 1800;      // bug 41: no game time seen at all (paused/closed): give up after 30 min
 const STOBE_NEG_PAY_WINDOW_SECONDS = 60;          // combat: player pays within 1 minute
 const STOBE_NEG_SOCIAL_DEADLINE_GAMETS = 86400;   // social: 1 in-game day
 const STOBE_NEG_TRUCE_OBSERVE_SECONDS = 30;
@@ -116,6 +118,8 @@ function stobeNegSaveDeal(string $id, string $expectedStatus, array $fields): bo
     $params = [$id, $expectedStatus];
     foreach ($fields as $column => $value) {
         if (!preg_match('/^[a-z_]+$/', $column)) continue;
+        // Timestamps compared against NOW() must come from NOW(): the DB clock is not UTC.
+        if ($column === 'resolved_at' && $value === true) { $sets[] = 'resolved_at=NOW()'; continue; }
         $params[] = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : $value;
         $placeholder = '$' . count($params);
         $cast = in_array($column, ['term_state','baseline','betrayal','evidence','terms','conflict_context'], true) ? '::jsonb' : '';
@@ -172,9 +176,17 @@ function stobeNegDealSerial(array &$deal): int {
     return $serial;
 }
 
-function stobeNegMoney(array $row): array {
+function stobeNegMoney(array $row, bool $isPlayer = false): array {
     $meta = stobeNegDecode($row['metadata'] ?? []);
-    if (!array_key_exists('money', $meta)) return ['known'=>false, 'value'=>0, 'observed_at'=>0];
+    if (!array_key_exists('money', $meta)) {
+        // The DLL syncs the player's balance into conf_opts PLAYER_CATS, not onto the character row.
+        $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+        if ($isPlayer || ($player !== '' && strcasecmp(normalizeParticipantNameToken(strval($row['name'] ?? '')), $player) === 0)) {
+            $cats = trim(strval(function_exists('getConfOpt') ? getConfOpt('PLAYER_CATS', '') : ''));
+            if ($cats !== '' && is_numeric($cats)) return ['known'=>true, 'value'=>max(0, intval($cats)), 'observed_at'=>time()];
+        }
+        return ['known'=>false, 'value'=>0, 'observed_at'=>0];
+    }
     return ['known'=>true, 'value'=>intval($meta['money']), 'observed_at'=>intval($meta['money_observed_at'] ?? 0)];
 }
 
@@ -449,12 +461,23 @@ function stobeNegStopAttackRecord(string $npc, int $sinceUnix): ?array {
 }
 
 /** KenshiFP bridge result for a command performed by the NPC's serial. */
-function stobeNegBridgeResult(string $command, int $serial, int $sinceUnix): string {
+function stobeNegBridgeResult(string $command, int $serial, int $sinceUnix, string $item = ''): string {
     $result = '';
+    $base = static fn(string $n): string => strtolower(trim(preg_replace('/\s*\[[^\]]*\]|\s+(shoddy|standard|high quality|specialist|masterwork|mk ?[ivx]+)$/i', '', $n) ?? $n));
+    $wanted = $base($item);
     foreach (stobeNegBridgeRecords($sinceUnix) as $r) {
         $body = $r['body'];
         if ($command === 'UNEQUIP_ITEM') {
-            if (preg_match('/^UNEQUIP_ITEM serial=(\d+) .*result=(\w+)/', $body, $m) && intval($m[1]) === $serial) $result = $m[2];
+            if (preg_match('/^UNEQUIP_ITEM serial=(\d+) query=(.*?) matched=(.*?) result=(\w+)/', $body, $m) && intval($m[1]) === $serial) {
+                // Each term is verified by its own item's result, not by any unequip.
+                if ($wanted !== '') {
+                    $got = $base($m[3]) !== '' ? $base($m[3]) : $base($m[2]);
+                    if ($got === '' || (!str_contains($wanted, $got) && !str_contains($got, $wanted))) continue;
+                }
+                $result = $m[4];
+            } elseif ($wanted === '' && preg_match('/^UNEQUIP_ITEM serial=(\d+) .*result=(\w+)/', $body, $m) && intval($m[1]) === $serial) {
+                $result = $m[2];
+            }
             continue;
         }
         if (preg_match('/^ACTION_BRIDGE command=' . preg_quote($command, '/') . ' actor=(\d+) .*result=(\w+)/', $body, $m) && intval($m[1]) === $serial) {
@@ -611,14 +634,16 @@ function stobeNegBeginPerformance(string $id, array $finalActions, string $playe
         $deadlineUnix = in_array($kind, ['social'], true)
             ? $now + 86400 * 7 // real-time safety cap; the game-day deadline below is authoritative
             : $now + STOBE_NEG_PAY_WINDOW_SECONDS;
-        $deadlineGamets = $kind === 'social' ? max(0, $gamets) + STOBE_NEG_SOCIAL_DEADLINE_GAMETS : 0;
+        // Bug 41: combat windows also run on game time, so a pause doesn't count against the player.
+        $deadlineGamets = $kind === 'social' ? max(0, $gamets) + STOBE_NEG_SOCIAL_DEADLINE_GAMETS
+            : ($gamets > 0 ? $gamets + STOBE_NEG_PAY_WINDOW_GAMETS : 0);
         $npcRow = stobeNegNpcRow(strval($deal['npc_name']), intval($deal['npc_serial'] ?? 0));
         $playerRow = stobeNegNpcRow($player);
         $baseline = [
             'at'=>$now,
             'gamets'=>$gamets,
             'npc_money'=>stobeNegMoney($npcRow),
-            'player_money'=>stobeNegMoney($playerRow),
+            'player_money'=>stobeNegMoney($playerRow, true),
             'npc_inventory'=>stobeNegInventoryCounts(strval($npcRow['inventory'] ?? '') . ', ' . strval($npcRow['equipment'] ?? '')),
             'player_inventory'=>stobeNegInventoryCounts(strval($playerRow['inventory'] ?? '') . ', ' . strval($playerRow['equipment'] ?? '')),
             'witnesses_people'=>$peopleRaw,
@@ -631,7 +656,8 @@ function stobeNegBeginPerformance(string $id, array $finalActions, string $playe
               WHERE LOWER(npc_name)=LOWER($1) AND contract_id<>$2 AND status NOT IN ('PROPOSED','COUNTERED','ACCEPTED')",
             [strval($deal['npc_name']), $id]
         );
-        $lookback = min(120, max(0, intval($prev['age'] ?? 120) - 2));
+        // Payment searches start 3 s before dispatch_unix; keep clear of the previous deal's payment.
+        $lookback = min(120, max(0, intval($prev['age'] ?? 120) - 6));
         foreach ($state as $idx => $t) {
             if (($t['by'] ?? '') === 'player' && in_array($t['kind'] ?? '', ['GIVE_CATS','GIVE_ITEM','RETURN_ITEM'], true)) {
                 $state[$idx]['dispatched_unix'] = $now - $lookback;
@@ -687,6 +713,19 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
 
     if ($by === 'npc') {
         if ($status !== 'DISPATCHED') return $term;
+        if ($kind === 'UNEQUIP_ITEM') {
+            // Handing the item over takes it off: a verified GIVE_ITEM of the same item covers this.
+            $itemBase = static fn($s): string => strtolower(trim(preg_replace('/\s*\[[^\]]*\]/', '', strval($s)) ?? ''));
+            foreach (stobeNegDecode($deal['term_state'] ?? []) as $other) {
+                if (is_array($other) && ($other['kind'] ?? '') === 'GIVE_ITEM' && ($other['by'] ?? '') === 'npc'
+                    && ($other['status'] ?? '') === 'VERIFIED' && $itemBase($term['item'] ?? '') !== ''
+                    && $itemBase($other['item'] ?? '') === $itemBase($term['item'] ?? '')) {
+                    $term['status'] = 'VERIFIED';
+                    $note($term, 'satisfied_by_hand_over');
+                    return $term;
+                }
+            }
+        }
         $age = $now - intval($term['dispatched_unix']);
         if (in_array($kind, ['STOP_ATTACK','SAFE_PASSAGE'], true)) {
             $record = stobeNegStopAttackRecord($npc, $since);
@@ -760,7 +799,7 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
         }
         $bridge = ['FIRST_AID'=>'FIRST_AID','SURRENDER'=>'SURRENDER','RELEASE_PRISONER'=>'RELEASE_PRISONER','UNEQUIP_ITEM'=>'UNEQUIP_ITEM','EQUIP_ITEM'=>'EQUIP_ITEM'];
         if (isset($bridge[$kind])) {
-            $result = $serial > 0 ? stobeNegBridgeResult($bridge[$kind], $serial, $since) : '';
+            $result = $serial > 0 ? stobeNegBridgeResult($bridge[$kind], $serial, $since, $kind === 'UNEQUIP_ITEM' ? strval($term['item'] ?? '') : '') : '';
             if ($result === 'ok') {
                 $term['status'] = 'VERIFIED';
                 $note($term, 'bridge_result_ok');
@@ -847,7 +886,13 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
         }
     }
     $expired = ($deadline > 0 && $now > $deadline);
-    if (!$expired && $gametsDeadline > 0) {
+    if ($gametsDeadline > 0 && stobeNegDealKindIsHostile($deal)) {
+        // Bug 41: both clocks must run out (real time AND game time); a paused game stops the window.
+        if ($expired) {
+            $latest = stobeNegLatestGamets();
+            $expired = $latest > 0 ? $latest > $gametsDeadline : ($now > $deadline + STOBE_NEG_PAY_WINDOW_REAL_CAP);
+        }
+    } elseif (!$expired && $gametsDeadline > 0) {
         $latest = stobeNegLatestGamets();
         $expired = $latest > 0 && $latest > $gametsDeadline;
     }
@@ -985,7 +1030,7 @@ function stobeNegTickDeal(array $deal, string $player, int $now): void {
     $fields = ['term_state'=>$state, 'betrayal'=>$betrayal];
     if ($final !== '') {
         $fields['status'] = $final;
-        $fields['resolved_at'] = gmdate('Y-m-d H:i:s');
+        $fields['resolved_at'] = true; // database clock, see stobeNegSaveDeal
     } elseif (!$changed) {
         return;
     }
@@ -1022,6 +1067,16 @@ function stobeNegResolveStatus(array $state, array $betrayal): string {
         if (($t['by'] ?? '') === 'player' && ($t['status'] ?? '') === 'UNMET') $playerUnmet = true;
     }
     $inFlight = array_intersect($statuses, ['PENDING','DISPATCHED','AWAITING_PLAYER','WAITING_FOR_PLAYER','SETTLE_QUEUED','REISSUE_QUEUED']);
+    // The NPC can't do their part: the deal fails (anything paid is refunded), and an
+    // unpaid or refused player side is not the player's breach.
+    $npcImpossible = false;
+    foreach ($required as $t) {
+        if (($t['by'] ?? '') === 'npc' && ($t['status'] ?? '') === 'IMPOSSIBLE') $npcImpossible = true;
+    }
+    if ($npcImpossible) {
+        $npcInFlight = array_filter($required, static fn($t) => ($t['by'] ?? '') === 'npc' && in_array($t['status'] ?? '', ['DISPATCHED','REISSUE_QUEUED'], true));
+        return count($npcInFlight) > 0 ? '' : 'IMPOSSIBLE';
+    }
     if ($playerUnmet) {
         // Wait for NPC actions already in flight so evidence is complete, then call it.
         $npcInFlight = array_filter($required, static fn($t) => ($t['by'] ?? '') === 'npc' && in_array($t['status'] ?? '', ['DISPATCHED','REISSUE_QUEUED'], true));
@@ -1030,6 +1085,57 @@ function stobeNegResolveStatus(array $state, array $betrayal): string {
     if (count($inFlight) > 0) return '';
     if (in_array('IMPOSSIBLE', $statuses, true)) return 'IMPOSSIBLE';
     return 'COMPLETE';
+}
+
+/**
+ * The NPC announces putting on / taking off clothing ("let me put the sandals back on")
+ * but sent no EQUIP/UNEQUIP action. Returns the one action that fits, or ''.
+ */
+function stobeInferClothingAction(string $text, array|false $npcData, array $actions): string {
+    if (!is_array($npcData) || trim($text) === '') return '';
+    foreach ($actions as $action) {
+        if (preg_match('/^(UN)?EQUIP_ITEM@/i', strval($action))) return '';
+    }
+    $lower = strtolower($text);
+    $sentence = '';
+    $mode = '';
+    foreach (preg_split('/(?<=[.!?])\s+/', $lower) ?: [] as $s) {
+        $on = preg_match("/\b(put|putting|get|getting|strap|strapping|pull|pulling|slip|slipping)\b[^.!?]{0,40}\bon\b/", $s);
+        $off = preg_match("/\b(take|taking|get|getting|pull|pulling|strip|stripping|slip|slipping)\b[^.!?]{0,40}\boff\b/", $s);
+        if ($on xor $off) {
+            // Negated, conditional or later: not an action now.
+            if (preg_match("/\b(not|never|won'?t|don'?t|can'?t|if|unless|until|once|when|after|first|then|later|pay)\b/", $s)) return '';
+            if ($mode !== '' && $mode !== ($on ? 'equip' : 'unequip')) return '';
+            $mode = $on ? 'equip' : 'unequip';
+            $sentence .= ' ' . $s;
+        }
+    }
+    if ($mode === '') return '';
+    $source = strval($mode === 'equip' ? ($npcData['inventory'] ?? '') : ($npcData['equipment'] ?? ''));
+    $names = function_exists('stobeNegInventoryDisplayNames') ? stobeNegInventoryDisplayNames($source) : [];
+    $synonyms = ['hat'=>['hat','helm','cap','zukin','hood'], 'shoes'=>['sandal','boot','shoe'], 'sandals'=>['sandal'],
+        'boots'=>['boot'], 'shirt'=>['shirt'], 'vest'=>['rag shirt','vest'], 'pants'=>['pants','shorts','trousers'],
+        'shorts'=>['shorts'], 'trousers'=>['trousers','pants'], 'coat'=>['coat'], 'gloves'=>['glove'], 'mask'=>['mask']];
+    $best = [];
+    $bestScore = 0;
+    foreach ($names as $base => $display) {
+        $score = 0;
+        foreach (preg_split('/[^a-z]+/', $base) ?: [] as $word) {
+            if (strlen($word) >= 4 && preg_match('/\b' . preg_quote($word, '/') . 's?\b/', $sentence)) $score += 2;
+        }
+        foreach ($synonyms as $said => $matches) {
+            if (!preg_match('/\b' . $said . '\b/', $sentence)) continue;
+            foreach ($matches as $m) {
+                if (str_contains($base, $m)) { $score += 1; break; }
+            }
+        }
+        if (preg_match('/\b(katana|sword|sabre|saber|blade|knife|bow|crossbow|club|hammer|spear|axe|polearm|nodachi|wakizashi|machete)\b/', $base)) $score = 0;
+        if ($score > $bestScore) { $best = [$display]; $bestScore = $score; }
+        elseif ($score > 0 && $score === $bestScore) { $best[] = $display; }
+    }
+    if (count($best) !== 1) return '';
+    $item = trim(preg_replace('/\s*\[[^\]]*\]/', '', strval($best[0])) ?? strval($best[0]));
+    return ($mode === 'equip' ? 'EQUIP_ITEM@' : 'UNEQUIP_ITEM@') . $item;
 }
 
 /** Run verification for open deals. Cheap when nothing is open; throttled by caller. */
@@ -1138,9 +1244,14 @@ function stobeNegPersonalFightsEnabled(): bool {
     return function_exists('getSettingBool') ? getSettingBool('PERSONAL_FIGHTS', true) : true;
 }
 
+/** The NPC's line calls her friends into the fight (J3: then they may join). */
+function stobeNegCalledForHelp(string $replyText): bool {
+    return preg_match("/\b(help me|get (him|her|them)|guards?|boys|lads|friends|everyone|all of you|grab (him|her|them))\b/i", $replyText) === 1;
+}
+
 function stobeNegRegisterPersonalFight(string $npc, array $npcData, string $replyText): void {
     if (!stobeNegPersonalFightsEnabled()) return;
-    if (preg_match("/\b(help me|get (him|her|them)|guards?|boys|lads|friends|everyone|all of you|grab (him|her|them))\b/i", $replyText)) {
+    if (stobeNegCalledForHelp($replyText)) {
         stobeLogInfo('Personal fight not registered: NPC called for help', ['npc'=>$npc]);
         return;
     }
@@ -1224,6 +1335,43 @@ function stobeNegDirectivePending(string $contractId, int $termIndex): bool {
         if (in_array($termIndex, array_map('intval', $payload['term_indexes'] ?? []), true)) return true;
     }
     return false;
+}
+
+/**
+ * Bug 34: the player just handed something over in this chat request. Tick the deal until the
+ * payment is confirmed and her waiting terms are queued (or nothing waits), up to $maxMs.
+ */
+function stobeNegSettleAfterHandover(string $npc, int $maxMs = 4000): void {
+    $until = microtime(true) + $maxMs / 1000;
+    do {
+        stobeNegTick($npc);
+        $deal = $GLOBALS['db']->fetchOne(
+            "SELECT term_state FROM stobe_social_contract WHERE LOWER(npc_name)=LOWER($1) AND status='AWAITING_PERFORMANCE' ORDER BY updated_at DESC LIMIT 1",
+            [$npc]
+        );
+        if (!is_array($deal)) return;
+        $waiting = false;
+        foreach (stobeNegDecode($deal['term_state'] ?? []) as $t) {
+            if (($t['by'] ?? '') === 'npc' && ($t['status'] ?? '') === 'WAITING_FOR_PLAYER') { $waiting = true; break; }
+        }
+        if (!$waiting) return;
+        usleep(400000);
+    } while (microtime(true) < $until);
+    stobeLogInfo('Settle after hand-over: payment not confirmed in time; her side waits', ['npc'=>$npc]);
+}
+
+/** Bug 42: instructions of directives about to ride on this NPC's chat reply (same windows as the attach). */
+function stobeNegPendingDirectiveNotes(string $npc): array {
+    $rows = $GLOBALS['db']->fetchAll(
+        "SELECT kind, payload FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE kind WHEN 'refund' THEN 600 ELSE 45 END) AND LOWER(npc_name)=LOWER($2) AND kind = ANY($3::text[]) ORDER BY id",
+        [time(), $npc, '{settle,reissue_truce,betray,breach_react,refund}']
+    );
+    $notes = [];
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        $text = trim(strval(stobeNegDecode($row['payload'] ?? [])['instruction'] ?? ''));
+        if ($text !== '' && !in_array($text, $notes, true)) $notes[] = $text;
+    }
+    return $notes;
 }
 
 /** Take the oldest fresh directive for one of the nearby NPCs (bored path). */
@@ -1321,6 +1469,16 @@ function stobeNegCompleteDirective(array $directive, string $raw, string $npc, s
         } elseif (in_array($kind, ['surrender','assist'], true)) {
             $result = stobeDealCaptureResponse($raw, $npc, $player, $npcData, '', $kind === 'surrender' ? 'surrender' : 'assist', 'npc');
             stobeLogInfo('NPC-initiated negotiation', ['npc'=>$npc, 'kind'=>$kind, 'result'=>$result]);
+            if (!empty($result['ok']) && function_exists('stobeDealSpeechAmountCheck')) {
+                $amountCheck = stobeDealSpeechAmountCheck($text, $npc, $result);
+                if ($amountCheck !== null) {
+                    stobeLogWarn('Negotiation speech amounts differ from recorded terms; rewritten', [
+                        'npc'=>$npc, 'decision'=>strval($result['decision'] ?? ''), 'text'=>$text,
+                        'spoken'=>$amountCheck['spoken'], 'wrong'=>$amountCheck['wrong'], 'line'=>$amountCheck['line'],
+                    ]);
+                    $text = $amountCheck['line'];
+                }
+            }
             if (empty($result['ok']) || !in_array(strval($result['decision'] ?? ''), ['PROPOSE','ACCEPT'], true)) {
                 // No valid offer: keep the line only if it does not promise terms.
                 if (function_exists('stobeDealSpeechClaimsCeasefire') && stobeDealSpeechClaimsCeasefire($text)) $text = '';
@@ -1445,6 +1603,16 @@ function stobeNegPartnerForUnnamedLine(string $targetNpc, string $message, strin
 function stobeNegLooksLikeSocialOffer(string $message): bool {
     if (!stobeNegPhaseEnabled(6)) return false;
     $message = function_exists('stobeNegWordsToNumbers') ? stobeNegWordsToNumbers(strtolower($message)) : $message;
+    // Bug 36: a price with "deal" ("Four hundred then... Deal?"), or "<number> then / it is".
+    if (preg_match_all('/\b(\d[\d,]*)\b/', $message, $numMatches)) {
+        $bigNumber = false;
+        foreach ($numMatches[1] as $n) { if (intval(str_replace(',', '', $n)) >= 10) { $bigNumber = true; break; } }
+        if ($bigNumber && preg_match("/\bdeal\b|\b\d[\d,]*\s*(then|it is|it'?s a deal|and we'?re square)\b/", $message)) return true;
+    }
+    // Asking for her price is an offer too (bug 28).
+    if (preg_match("/\b(name your price|what'?s your (price|counter|offer)|what is your (price|counter|offer)|your counter\b|how much (for|to|would|do you want|you want)|what would (it|that) (take|cost)|what'?d (it|that) take|what do you want for|make me an offer|what would you take)/", strtolower($message))) {
+        return true;
+    }
     if (preg_match("/\\bwhat if i\\b|\\b(you give me|give me|trade me|hand me) [^.?!]{1,60}\\b(and|then) i('?ll| will)\\b|\\bi('?ll| will) (heal|bandage|patch|free|feed|help|protect|carry|rescue)\\b[^.?!]{0,60}\\b(if|for) you\\b|\\bif you [^.?!]{1,60}\\bi('?ll| will) (heal|bandage|patch|free|feed|give|pay|help|protect)\\b/i", $message) === 1) {
         return true;
     }
@@ -1660,6 +1828,18 @@ function stobeNegDealPromptExtras(string $npc, array $npcData, array $openDeal =
                     . ': ' . strtolower(strval($t['status'] ?? '')) . ($left >= 0 && ($t['status'] ?? '') === 'AWAITING_PLAYER' ? ' (' . $left . 's left)' : '');
             }
             $lines[] = 'Deal progress (observed, authoritative): ' . implode('; ', $parts) . '.';
+            if (function_exists('stobeDealMoneyTotalsLine')) {
+                $moneyLine = stobeDealMoneyTotalsLine($state, $player);
+                if ($moneyLine !== '') $lines[] = $moneyLine;
+            }
+        }
+        if (function_exists('stobeDealIsUnderway') && stobeDealIsUnderway($openDeal)) {
+            $owed = stobeDealOutstanding($openDeal);
+            $still = [];
+            if (count($owed['player']) > 0) $still[] = $player . ' still has to ' . str_replace([' me ', ' me'], [' you ', ' you'], implode(' and ', $owed['player']));
+            if (count($owed['npc']) > 0) $still[] = 'you still have to ' . str_replace([' you ', ' you'], [' ' . $player . ' ', ' ' . $player], implode(' and ', $owed['npc']));
+            $lines[] = 'This deal is underway and not finished (' . implode('; ', $still) . '). Do not agree to or offer any new or different deal until it is settled. '
+                . 'If ' . $player . ' proposes one, tell them to finish this deal first and say what is still owed, with deal_decision NONE.';
         }
         $betrayal = stobeNegDecode($openDeal['betrayal'] ?? []);
         if (!empty($betrayal['planned']) && empty($betrayal['executed'])) {
@@ -1669,6 +1849,10 @@ function stobeNegDealPromptExtras(string $npc, array $npcData, array $openDeal =
     }
     $rep = stobeNegPhaseEnabled(7) ? stobeNegReputationLine($player) : '';
     if ($rep !== '') $lines[] = $rep;
+    if (function_exists('stobeDealWeaponPromptLine')) {
+        $weaponLine = stobeDealWeaponPromptLine($npcData, $player, count($openDeal) > 0 ? strval($openDeal['kind'] ?? '') : stobeDealKindFor($npcData));
+        if ($weaponLine !== '') $lines[] = $weaponLine;
+    }
     if (stobeNegPhaseEnabled(8)) {
         $lines[] = 'Tolls, ransoms, bribes, prisoner exchanges and safe passage are all valid deals. Threats and leverage are fair game, but terms must be things either side can actually do.';
     }

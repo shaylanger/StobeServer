@@ -396,7 +396,8 @@ function stobeLifelikeNearbySquadLines(array $npcData, string $npcName): array
 
         $bits = [$name];
         if (function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($other)) {
-            $bits[] = 'squadmate';
+            // Bug 38: "squadmate" only when the viewer is in the player's squad too.
+            $bits[] = npcIsInPlayerFaction($npcData) ? 'squadmate' : "player's squad";
         }
 
         $meta = function_exists('normalizeNpcMetadataPayload')

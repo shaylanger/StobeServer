@@ -30,3 +30,9 @@
 *.log
 
 /conf/stobe_interaction/
+
+# Shay local/runtime artifacts
+*.bak_*
+*_backup_*/
+/.token_optimization_backup_*/
+/data/portraits/

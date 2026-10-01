@@ -89,6 +89,24 @@ function stobeConnectorUsesReasoning(string $model, array $connectorConfig): boo
  * DeepSeek V4 Flash, 2026-09-29 benchmark: Alibaba 1.8-4 s per reply, Mancer/StreamLake 2-7 s,
  * the rest 7-25 s or unable to serve the JSON-schema request.
  */
+/**
+ * Round 13: DeepInfra prefix caching. One stable key per NPC chat stream keeps her
+ * consecutive turns on the same cache. Only sent to DeepInfra.
+ */
+function stobeApplyPromptCacheKey(array &$payload, string $url, array $meta): void {
+    if (isset($payload['prompt_cache_key']) || stripos($url, 'deepinfra.com') === false) {
+        return;
+    }
+    $eventType = strtolower(trim(strval($meta['event_type'] ?? '')));
+    if (!in_array($eventType, ['chat', 'rechat'], true)) {
+        return;
+    }
+    $npc = strtolower(trim(preg_replace('/[^A-Za-z0-9]+/', '_', strval($meta['npc_name'] ?? '')) ?? '', '_'));
+    if ($npc !== '') {
+        $payload['prompt_cache_key'] = 'stobe:' . $npc . ':chat';
+    }
+}
+
 function stobeApplyOpenRouterProviderPin(array &$payload, string $connectorType, string $model): void {
     if ($connectorType !== 'openrouterjson' || isset($payload['provider'])) {
         return;
@@ -624,8 +642,23 @@ function stobeRecordAuditRequest(array $entry): void {
         $totalTokens = $promptTokens + $completionTokens;
     }
 
-    $requestPayload = stobeSerializeAuditPayload($entry['request_payload'] ?? [], 24000);
-    $resultPayload = stobeSerializeAuditPayload($entry['result_payload'] ?? '', 24000);
+    // Round 14: keep prompt-cache info in the audit trail.
+    $cachedTokens = intval($usage['prompt_tokens_details']['cached_tokens'] ?? ($usage['prompt_cache_hit_tokens'] ?? 0));
+    $requestForAudit = $entry['request_payload'] ?? [];
+    $promptCacheKey = is_array($requestForAudit) ? strval($requestForAudit['prompt_cache_key'] ?? '') : '';
+    $serviceTier = is_array($requestForAudit) ? strval($requestForAudit['service_tier'] ?? '') : '';
+    if (is_array($requestForAudit) && array_key_exists('messages', $requestForAudit)) {
+        // Small fields first, so the 24,000-char cut drops message text, not prompt_cache_key.
+        $messagesForAudit = $requestForAudit['messages'];
+        unset($requestForAudit['messages']);
+        $requestForAudit['messages'] = $messagesForAudit;
+    }
+    $resultForAudit = $entry['result_payload'] ?? '';
+    if (is_array($resultForAudit) && count($usage) > 0) {
+        $resultForAudit['cached_tokens'] = $cachedTokens;
+    }
+    $requestPayload = stobeSerializeAuditPayload($requestForAudit, 24000);
+    $resultPayload = stobeSerializeAuditPayload($resultForAudit, 24000);
 
     try {
         $db = $GLOBALS['db'] ?? null;
@@ -697,7 +730,10 @@ function stobeRecordAuditRequest(array $entry): void {
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,
             'total_tokens' => $totalTokens,
+            'cached_tokens' => $cachedTokens,
         ],
+        'prompt_cache_key' => $promptCacheKey,
+        'service_tier' => $serviceTier,
         'error' => $error,
         'url' => $url,
         'request' => $requestPayload,
@@ -746,6 +782,7 @@ function callLLM(array $messages, array $config, array $meta = []): string|false
     stobeApplyConnectorExtraPayload($payload, $connectorConfig, false);
 
     stobeApplyOpenRouterProviderPin($payload, strval($connectorType), strval($model));
+    stobeApplyPromptCacheKey($payload, strval($url), is_array($meta) ? $meta : []);
 
     if ($usesReasoning) {
         $payload['reasoning'] = stobeReasoningPayload($meta);
@@ -1106,6 +1143,7 @@ function callLLMStream(
     stobeApplyConnectorExtraPayload($payload, $connectorConfig, true);
 
     stobeApplyOpenRouterProviderPin($payload, strval($connectorType), strval($model));
+    stobeApplyPromptCacheKey($payload, strval($url), is_array($meta) ? $meta : []);
 
     if ($usesReasoning) {
         $payload['reasoning'] = stobeReasoningPayload($meta);
@@ -1172,6 +1210,7 @@ function callLLMStream(
     $streamError = '';
     $finishReason = '';
     $nativeFinishReason = '';
+    $firstTextAt = null;
     $writeCallback = function ($curlHandle, string $data) use (
         &$streamBuffer,
         &$rawStream,
@@ -1181,6 +1220,10 @@ function callLLMStream(
         &$streamError,
         &$finishReason,
         &$nativeFinishReason,
+        &$firstTextAt,
+        $requestStartedAt,
+        $meta,
+        $model,
         $onTextDelta
     ): int {
         if (!stobeInteractionAllowed()) return 0;
@@ -1248,6 +1291,19 @@ function callLLMStream(
             }
             if ($deltaText === '') {
                 continue;
+            }
+
+            if ($firstTextAt === null) {
+                $firstTextAt = microtime(true);
+                stobeLogInfo('Latency stage llm first text', [
+                    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+                    'event_type' => strval($meta['event_type'] ?? ''),
+                    'npc_name' => strval($meta['npc_name'] ?? ''),
+                    'model' => $model,
+                    'llm_ttft_ms' => intval(round(($firstTextAt - $requestStartedAt) * 1000)),
+                    'unix_ms' => intval(round($firstTextAt * 1000)),
+                    'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round(($firstTextAt - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
+                ]);
             }
 
             $fullContent .= $deltaText;
@@ -1481,6 +1537,22 @@ function callLLMStream(
         return false;
     }
 
+    $llmCompletedAt = microtime(true);
+    $llmTotalMs = intval(round(($llmCompletedAt - $requestStartedAt) * 1000));
+    $llmAfterFirstTextMs = $firstTextAt !== null
+        ? intval(round(($llmCompletedAt - $firstTextAt) * 1000))
+        : 0;
+    stobeLogInfo('Latency stage llm complete', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'event_type' => strval($meta['event_type'] ?? ''),
+        'npc_name' => strval($meta['npc_name'] ?? ''),
+        'model' => $model,
+        'llm_total_ms' => $llmTotalMs,
+        'llm_after_first_text_ms' => $llmAfterFirstTextMs,
+        'unix_ms' => intval(round($llmCompletedAt * 1000)),
+        'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round(($llmCompletedAt - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
+    ]);
+
     stobeRecordLlmAudit(
         strval($meta['npc_name'] ?? ''),
         $model,
@@ -1495,6 +1567,9 @@ function callLLMStream(
         'connector_type' => $connectorType,
         'model' => $model,
         'usage' => is_array($usage) ? $usage : [],
+        'llm_ttft_ms' => $firstTextAt !== null
+            ? intval(round(($firstTextAt - $requestStartedAt) * 1000))
+            : 0,
         'finish_reason' => $finishReason,
         'native_finish_reason' => $nativeFinishReason,
         'response_text' => $fullContent,
@@ -1518,6 +1593,9 @@ function callLLMStream(
         'request_payload' => $payload,
         'result_payload' => [
             'response_text' => $fullContent,
+            'llm_ttft_ms' => $firstTextAt !== null
+                ? intval(round(($firstTextAt - $requestStartedAt) * 1000))
+                : 0,
             'finish_reason' => $finishReason,
             'native_finish_reason' => $nativeFinishReason,
         ],

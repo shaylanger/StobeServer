@@ -2502,6 +2502,7 @@ function stobeRegularMemorySearchByVector(
     int $timeThreshold = 0,
     bool $useContextKw = false
 ): ?array {
+    $stobeVectorSearchStartedAt = microtime(true);
     $db = $GLOBALS['db'] ?? null;
     if (!$db || !stobeRegularMemorySummaryTableAvailable()) {
         return null;
@@ -2527,8 +2528,18 @@ function stobeRegularMemorySearchByVector(
         $keywords = trim($queryText) !== '' ? trim($queryText) : 'memory';
     }
 
+    $stobeEmbeddingStartedAt = microtime(true);
     $embedding = stobeRegularMemoryEmbedText($keywords);
+    $stobeEmbeddingMs = intval(round((microtime(true) - $stobeEmbeddingStartedAt) * 1000));
     $vectorLiteral = stobeRegularMemoryVectorLiteral($embedding);
+    stobeLogInfo('Latency memory embedding', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'npc_name' => $safeNpc,
+        'use_context_keywords' => $useContextKw,
+        'duration_ms' => $stobeEmbeddingMs,
+        'vector_dims' => count($embedding),
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+    ]);
     if ($vectorLiteral === '') {
         return null;
     }
@@ -2556,6 +2567,7 @@ function stobeRegularMemorySearchByVector(
         }
     }
 
+    $stobePgVectorStartedAt = microtime(true);
     try {
         $rows = $db->fetchAll(
             "SELECT
@@ -2602,6 +2614,16 @@ function stobeRegularMemorySearchByVector(
         return null;
     }
 
+    $stobePgVectorMs = intval(round((microtime(true) - $stobePgVectorStartedAt) * 1000));
+    stobeLogInfo('Latency memory vector query', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'npc_name' => $safeNpc,
+        'use_context_keywords' => $useContextKw,
+        'duration_ms' => $stobePgVectorMs,
+        'rows' => is_array($rows) ? count($rows) : 0,
+        'total_search_ms' => intval(round((microtime(true) - $stobeVectorSearchStartedAt) * 1000)),
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+    ]);
     if (!is_array($rows) || count($rows) === 0) {
         return null;
     }
@@ -2636,6 +2658,7 @@ function stobeRegularMemoryRecallRows(
     int $currentGamets,
     int $maxEntries
 ): array {
+    $stobeRecallStartedAt = microtime(true);
     $safeNpc = normalizeParticipantNameToken($npcName);
     if ($safeNpc === '') {
         return [];
@@ -2661,6 +2684,13 @@ function stobeRegularMemoryRecallRows(
         $selected = $resWithoutContext;
     }
 
+    stobeLogInfo('Latency memory recall total', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'npc_name' => $safeNpc,
+        'duration_ms' => intval(round((microtime(true) - $stobeRecallStartedAt) * 1000)),
+        'found' => is_array($selected),
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+    ]);
     if (!is_array($selected)) {
         return [];
     }

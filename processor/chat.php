@@ -276,7 +276,9 @@ if (!function_exists('stobeRefreshNpcDataForTraderInventory')) {
 
         $likelyTrader = stobeNpcLikelyTraderFromData($npcData);
         $tradeIntent = stobeMessageLooksTradeIntent($message);
-        if (!$likelyTrader && !$tradeIntent) {
+        // Round 12: the DLL only captures trader inventory for real traders, so waiting
+        // on a non-trader (e.g. "here are 300 cats" to Malzin) always timed out (~806 ms).
+        if (!$likelyTrader) {
             return $npcData;
         }
 
@@ -331,6 +333,7 @@ $sanitizeChatMessage = static function (string $value): string {
     }
     return trim($clean);
 };
+$stobeEventStoreStageStartedAt = microtime(true);
 $message = $sanitizeChatMessage($message);
 $GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] = $message;
 if ($message === '') {
@@ -655,6 +658,11 @@ stobeLogInfo('Chat input received', [
     'event_type' => $eventType,
     'speaker' => $speaker,
     'target_npc' => $targetNpc,
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+    'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) && is_float($GLOBALS['__stobe_request_start'])
+        ? intval(round((microtime(true) - $GLOBALS['__stobe_request_start']) * 1000))
+        : 0,
+    'message_sha1' => sha1(trim(strval($message ?? ''))),
     'mode' => $dialogueMode,
     'manual_action' => $manualActionActive ? $manualActionKey : '',
     'manual_action_actor' => $manualActionActor,
@@ -665,6 +673,7 @@ stobeLogInfo('Chat input received', [
     'message_preview' => $messagePreview,
 ]);
 
+$stobeProfileStageStartedAt = microtime(true);
 $npcData = false;
 if ($narratorMode) {
     $npcData = stobeBuildNarratorNpcData();
@@ -714,6 +723,12 @@ if ($manualActionActive) {
         $manualActionActive = false;
     }
 }
+stobeLogInfo('Latency pre-llm stage npc_profile', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeProfileStageStartedAt) * 1000)),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
 $manualActionLimbToken = stobeManualChatActionLimbToken($manualActionKey);
 $manualActionLimbLabel = stobeManualChatActionLimbLabel($manualActionKey);
 $manualActionType = stobeManualChatActionType($manualActionKey);
@@ -745,6 +760,7 @@ if ($injectionMode && !$injectionChatMode) {
     return;
 }
 
+$stobeTraderStageStartedAt = microtime(true);
 $npcData = stobeRefreshNpcDataForTraderInventory($targetNpc, is_array($npcData) ? $npcData : [], $message);
 $traderInventoryEntryCount = stobeTraderInventoryEntryCountFromNpcData($npcData);
 if ($traderInventoryEntryCount > 0 || stobeMessageLooksTradeIntent($message)) {
@@ -755,6 +771,12 @@ if ($traderInventoryEntryCount > 0 || stobeMessageLooksTradeIntent($message)) {
         'is_trader' => stobeNpcLikelyTraderFromData($npcData),
     ]);
 }
+
+stobeLogInfo('Latency pre-llm stage trader_refresh', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeTraderStageStartedAt) * 1000)),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
 
 $contextHistory = getNpcProfileIntegerSetting(
     $npcData,
@@ -767,9 +789,17 @@ $contextHistory = getNpcProfileIntegerSetting(
 $historyAliases = $narratorMode
     ? []
     : stobeResolveNpcEventHistoryAliases($npcData, $targetNpc);
+$stobeEventHistoryStageStartedAt = microtime(true);
 $eventHistory = $narratorMode
     ? DataEventLog($contextHistory)
     : DataEventLog($contextHistory, $targetNpc, '', $historyAliases);
+stobeLogInfo('Latency pre-llm stage event_history_query', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeEventHistoryStageStartedAt) * 1000)),
+    'rows' => is_array($eventHistory) ? count($eventHistory) : 0,
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+$stobeHistoryFormatStageStartedAt = microtime(true);
 $eventHistory = stobeFilterNarratorRowsForContext($eventHistory, $targetNpc, $dialogueMode, $speaker);
 if (!$narratorMode && is_array($npcData)) {
     $npcData = stobeAttachRecentCombatPromptEvents($npcData, $eventHistory, intval($gamets));
@@ -789,12 +819,26 @@ $historyMessages = stobeBuildRecentContextMessages(
     $narratorMode ? '' : $targetNpc,
     true
 );
+stobeLogInfo('Latency pre-llm stage recent_history_build', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeHistoryFormatStageStartedAt) * 1000)),
+    'history_messages' => count($historyMessages),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
+$stobeRegularMemoryStageStartedAt = microtime(true);
 $memoryContextMessages = stobeBuildMemoryEventContextMessages(
     is_array($npcData) ? $npcData : [],
     $targetNpc,
     $message,
     intval($gamets)
 );
+stobeLogInfo('Latency pre-llm stage regular_memory_context', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeRegularMemoryStageStartedAt) * 1000)),
+    'memory_messages' => count($memoryContextMessages),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
 
 $enginePath = $GLOBALS["ENGINE_PATH"] ?? dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR;
 require_once($enginePath . 'connector/llm_dispatcher.php');
@@ -894,10 +938,17 @@ if (!$narratorMode && !$injectionMode) {
     );
 }
 
+stobeLogInfo('Latency pre-llm stage event_store_and_misc', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeEventStoreStageStartedAt) * 1000)),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
 $manualActionCannotSpeak = $manualActionActive
     ? stobeManualActionTargetCannotSpeak($npcData, $manualActionKey)
     : false;
 
+$stobePromptHydrationStageStartedAt = microtime(true);
 $promptNpcData = $npcData;
 if (
     !$narratorMode &&
@@ -948,6 +999,13 @@ if (
     }
 }
 
+stobeLogInfo('Latency pre-llm stage scene_hydration', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobePromptHydrationStageStartedAt) * 1000)),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
+$stobeSystemPromptStageStartedAt = microtime(true);
 $systemPrompt = buildSystemPrompt(
     $targetNpc,
     $promptNpcData,
@@ -967,6 +1025,13 @@ $nearbyPartyPrompt = stobeBuildNearbyPlayerFactionPartyPrompt($npcData, $targetN
 if ($nearbyPartyPrompt !== '') {
     $systemPrompt .= "\n\n" . $nearbyPartyPrompt;
 }
+stobeLogInfo('Latency pre-llm stage system_prompt_and_scene', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeSystemPromptStageStartedAt) * 1000)),
+    'system_prompt_chars' => strlen($systemPrompt),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
 $deliveryStyleInstruction = '';
 if ($dialogueMode === 'whisper') {
     $deliveryStyleInstruction = 'The player is whispering. Respond in a quiet, discreet tone.';
@@ -1048,6 +1113,7 @@ if ($dialogueMode === 'cheat') {
         . "</cheat_request>";
 }
 $compactHistoryEnabled = stobeShouldCompactChatHistory($targetNpc);
+$stobeShortTermStageStartedAt = microtime(true);
 $shortTermMemory = stobeBuildShortTermMemoryContext(
     $npcData,
     $targetNpc,
@@ -1059,6 +1125,14 @@ $shortTermMemory = stobeBuildShortTermMemoryContext(
 if ($shortTermMemory !== '') {
     $systemPrompt .= "\n\n" . $shortTermMemory;
 }
+stobeLogInfo('Latency pre-llm stage short_term_memory', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeShortTermStageStartedAt) * 1000)),
+    'included' => $shortTermMemory !== '',
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
+$stobeCompactHistoryStageStartedAt = microtime(true);
 $compactHistory = stobeApplyCompactChatHistory(
     $systemPrompt,
     $historyMessages,
@@ -1070,6 +1144,14 @@ $systemPrompt = strval($compactHistory['system_prompt'] ?? $systemPrompt);
 $historyMessages = is_array($compactHistory['history_messages'] ?? null)
     ? $compactHistory['history_messages']
     : $historyMessages;
+stobeLogInfo('Latency pre-llm stage compact_history', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeCompactHistoryStageStartedAt) * 1000)),
+    'history_messages' => count($historyMessages),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
+$stobeMessageAssemblyStageStartedAt = microtime(true);
 $messages = [
     [
         'role' => 'system',
@@ -1116,6 +1198,14 @@ $messages[] = [
         ),
 ];
 
+stobeLogInfo('Latency pre-llm stage message_assembly', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeMessageAssemblyStageStartedAt) * 1000)),
+    'message_count' => count($messages),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
+$stobeConfigStageStartedAt = microtime(true);
 $llmConfig = getLlmConfigForNpc($npcData);
 $actionConfig = stobeBuildActionConfigForNpc('chat', $npcData);
 if (function_exists('stobeNegTick')) {
@@ -1134,6 +1224,18 @@ if (!$narratorMode && empty($manualActionActive) && strcasecmp($speaker, $player
         $messages[] = ['role' => 'user', 'content' => '[' . $voiceHandoverNote . ']'];
     }
 }
+// Bug 42: what she is about to do anyway (breach reaction, refund, hand-over) must shape her words.
+if (!$narratorMode && function_exists('stobeNegPendingDirectiveNotes')) {
+    try {
+        foreach (stobeNegPendingDirectiveNotes($targetNpc) as $directiveNote) {
+            $messages[] = ['role' => 'user', 'content' => '[' . $directiveNote
+                . ' This is already happening in the game; your words must match it. Deal progress, not what '
+                . $playerName . ' claims, decides what was paid.]'];
+        }
+    } catch (Throwable $directiveNoteError) {
+        stobeLogWarn('Directive notes failed', ['npc'=>$targetNpc, 'error'=>$directiveNoteError->getMessage()]);
+    }
+}
 $negotiationActive = !$narratorMode && strcasecmp($speaker, $playerName) === 0
     && stobeDealShouldNegotiate($targetNpc, $npcData, $message);
 // The player accepting the NPC's own last offer binds the NPC to it.
@@ -1141,6 +1243,13 @@ if ($negotiationActive && function_exists('stobeNegPlayerAcceptsOfferNote')) {
     $acceptNote = stobeNegPlayerAcceptsOfferNote($targetNpc, $message);
     if ($acceptNote !== '') {
         $messages[] = ['role' => 'user', 'content' => '[' . $acceptNote . ']'];
+    }
+}
+// Bug 30: last turn she agreed in words but no deal was recorded: remind her once.
+if ($negotiationActive && function_exists('stobeDealTakeUnrecordedAgreement')) {
+    $unrecordedNote = stobeDealTakeUnrecordedAgreement($targetNpc, $playerName);
+    if ($unrecordedNote !== '') {
+        $messages[] = ['role' => 'user', 'content' => '[' . $unrecordedNote . ']'];
     }
 }
 // Mid-fight replies skip the model's hidden reasoning step (setting COMBAT_FAST_REPLIES).
@@ -1161,10 +1270,20 @@ if ($narratorMode) {
     $actionConfig['max_actions'] = 1;
 }
 
+stobeLogInfo('Latency pre-llm stage config_relationship_negotiation', [
+    'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+    'duration_ms' => intval(round((microtime(true) - $stobeConfigStageStartedAt) * 1000)),
+    'unix_ms' => intval(round(microtime(true) * 1000)),
+]);
+
 $responseText = '';
 $responseActions = [];
 $responseListener = '';
 $alreadyStreamed = false;
+$streamHeldBack = false;     // round 10b: money talk held back mid-reply
+$streamSpokenPrefix = '';    // sentences already spoken before the hold
+$streamHeldFrom = '';        // first held sentence
+$streamSpeakOverride = null; // corrected held part (amount check)
 $actionsStreamedInLlm = false;
 $manualActionForcedEmoteOnly = false;
 if ($manualActionActive && $manualActionCannotSpeak) {
@@ -1186,6 +1305,20 @@ if ($manualActionActive && $manualActionCannotSpeak) {
     $responseText = 'No OpenRouter API key configured yet.';
     stobeLogWarn('LLM call skipped because API key is missing', ['target_npc' => $targetNpc]);
 } else {
+    $stobePreLlmMs = isset($GLOBALS['__stobe_request_start']) && is_float($GLOBALS['__stobe_request_start'])
+        ? intval(round((microtime(true) - $GLOBALS['__stobe_request_start']) * 1000))
+        : 0;
+    stobeLogInfo('Latency stage pre-llm complete', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'target_npc' => $targetNpc,
+        'speaker' => $speaker,
+        'pre_llm_ms' => $stobePreLlmMs,
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+        'message_sha1' => sha1(trim(strval($message ?? ''))),
+        'message_count' => count($messages),
+        'model' => strval($llmConfig['model'] ?? ''),
+    ]);
+
     $streamResult = stobeStreamDialogueViaLlm(
         $targetNpc,
         $npcData,
@@ -1200,6 +1333,7 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             'stream_event_type' => 'chat',
             'stream_gamets' => $gamets,
             'defer_structured_stream' => $negotiationDefer,
+            'hold_stream_on_money' => $negotiationActive && !$negotiationDefer,
             'response_format' => $narratorMode
                 ? null
                 : ($negotiationActive
@@ -1213,15 +1347,67 @@ if ($manualActionActive && $manualActionCannotSpeak) {
         $responseActions = is_array($streamResult['actions'] ?? null) ? $streamResult['actions'] : [];
         $responseListener = normalizeParticipantNameToken(strval($streamResult['listener'] ?? ''));
         $alreadyStreamed = intval($streamResult['chunks_emitted'] ?? 0) > 0;
+        if (!empty($streamResult['held_back'])) {
+            // Part of the reply is still unspoken: check it, then speak it at the end.
+            $streamHeldBack = true;
+            $streamSpokenPrefix = trim(strval($streamResult['spoken_text'] ?? ''));
+            $streamHeldFrom = trim(strval($streamResult['held_from'] ?? ''));
+            $alreadyStreamed = false;
+        }
         $actionsStreamedInLlm = boolval($streamResult['actions_streamed'] ?? false);
         if ($negotiationActive) {
             $dealResult = stobeDealCaptureResponse(
                 strval($streamResult['raw_response'] ?? ''), $targetNpc, $playerName, $npcData, $message,
                 $negotiationKind !== '' ? $negotiationKind : 'combat'
             );
+            if (!empty($dealResult['blocked_by_active'])) {
+                // A different deal while the last one is underway: finish that one first.
+                $responseText = strval($dealResult['blocked_line'] ?? "Let's finish our last deal first.");
+                $responseActions = array_values(array_filter($responseActions, static fn($a) =>
+                    !preg_match('/^(STOP_ATTACK|GIVE_CATS|GIVE_ITEM|TAKE_CATS|TAKE_ITEM|UNEQUIP_ITEM|EQUIP_ITEM)@/i', strval($a))));
+            }
+            if (!empty($dealResult['ok']) && strval($dealResult['decision'] ?? '') === 'NONE'
+                && empty($dealResult['blocked_by_active']) && empty($dealResult['duplicate_of'])
+                && $negotiationOpenDeal === null && function_exists('stobeDealSpeechAgrees')
+                && stobeDealSpeechAgrees($responseText) && stobeNegLooksLikeSocialOffer($message)) {
+                // Bug 30: she agreed in words, but nothing was recorded.
+                stobeDealRememberUnrecordedAgreement($targetNpc, $message, $responseText);
+            }
+            if (!empty($dealResult['ok']) && empty($dealResult['blocked_by_active'])
+                && function_exists('stobeDealSpeechAmountCheck')) {
+                // Bug 26: numbers she says must be the recorded ones.
+                try {
+                    $underwayStatus = strval($negotiationOpenDeal['status'] ?? '');
+                    if (in_array($underwayStatus, ['ACCEPTED','AWAITING_PERFORMANCE'], true)
+                        && (strval($dealResult['decision'] ?? '') === 'NONE' || !empty($dealResult['already_active']))
+                        && function_exists('stobeDealProgressAmountCheck')) {
+                        // Talk about the deal that's underway: amounts must be its paid/owed figures.
+                        $amountCheck = stobeDealProgressAmountCheck($responseText, $targetNpc, $message);
+                    } else {
+                        $amountCheck = stobeDealSpeechAmountCheck($responseText, $targetNpc, $dealResult);
+                    }
+                } catch (Throwable $amountError) {
+                    $amountCheck = null;
+                }
+                if ($amountCheck !== null) {
+                    stobeLogWarn($alreadyStreamed
+                        ? 'Negotiation speech amounts differ from recorded terms (already spoken)'
+                        : 'Negotiation speech amounts differ from recorded terms; rewritten', [
+                        'npc'=>$targetNpc, 'decision'=>strval($dealResult['decision'] ?? ''), 'text'=>$responseText,
+                        'spoken'=>$amountCheck['spoken'], 'wrong'=>$amountCheck['wrong'], 'line'=>$amountCheck['line'],
+                    ]);
+                    if (!$alreadyStreamed) {
+                        $responseText = trim($streamSpokenPrefix . ' ' . $amountCheck['line']);
+                        if ($streamSpokenPrefix !== '') $streamSpeakOverride = $amountCheck['line'];
+                    }
+                }
+            }
             if (empty($dealResult['ok'])) {
                 // Malformed terms: record nothing, but keep the NPC's own words unless they claim a deal.
-                if (stobeDealSpeechClaimsCeasefire($responseText)
+                if (strval($dealResult['error'] ?? '') === 'weapon_not_negotiable') {
+                    // Bug 32: whatever she said, her weapon isn't part of the deal.
+                    $responseText = strval($dealResult['refusal_line'] ?? 'My weapon stays with me.');
+                } elseif (stobeDealSpeechClaimsCeasefire($responseText)
                     || preg_match("/\\b(deal|agreed|you'?ve got it|you got it)\\b/i", $responseText)) {
                     $responseText = "Let's get the terms straight first.";
                 }
@@ -1230,6 +1416,12 @@ if ($manualActionActive && $manualActionCannotSpeak) {
                 stobeLogWarn('Negotiation rejected by deterministic validation', [
                     'npc'=>$targetNpc, 'error'=>strval($dealResult['error'] ?? 'unknown')
                 ]);
+                // Bug 37: an offer or agreement with no readable terms: remind her next turn.
+                if (strval($dealResult['error'] ?? '') === 'invalid_terms_json'
+                    && in_array(strval($dealResult['decision'] ?? ''), ['ACCEPT','COUNTER','PROPOSE'], true)
+                    && function_exists('stobeDealRememberUnrecordedAgreement')) {
+                    stobeDealRememberUnrecordedAgreement($targetNpc, $message, $responseText, strval($dealResult['decision']));
+                }
             } elseif (($dealResult['decision'] ?? '') === 'ACCEPT') {
                 // Ceasefire first, then the NPC's own terms that are due now. Everything the
                 // player owes, and every outcome, is verified later from game evidence.
@@ -1248,6 +1440,7 @@ if ($manualActionActive && $manualActionCannotSpeak) {
                 }
                 // Words must not promise a ceasefire the NPC did not actually accept.
                 if (in_array(($dealResult['decision'] ?? ''), ['COUNTER','REJECT'], true)
+                    && in_array(strval($dealResult['kind'] ?? ($negotiationKind ?: 'combat')), ['combat','surrender'], true)
                     && stobeDealSpeechClaimsCeasefire($responseText)) {
                     stobeLogWarn('Negotiation speech implied ceasefire without ACCEPT; rewritten', [
                         'npc'=>$targetNpc, 'decision'=>strval($dealResult['decision'] ?? ''), 'text'=>$responseText,
@@ -1281,6 +1474,17 @@ $responseActions = stobeDedupeActionList($responseActions, 'chat', $actionConfig
 if ($narratorMode) {
     $responseActions = [];
 }
+// Anything added from here on was not streamed with the LLM's own actions.
+$preLateActions = $responseActions;
+$dealTurnDecision = isset($dealResult) && is_array($dealResult) ? strval($dealResult['decision'] ?? '') : '';
+if (!$narratorMode && function_exists('stobeInferClothingAction')
+    && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+    $inferredAction = stobeInferClothingAction($responseText, $npcData, $responseActions);
+    if ($inferredAction !== '') {
+        $responseActions[] = $inferredAction;
+        stobeLogInfo('Clothing action inferred from speech', ['npc'=>$targetNpc, 'action'=>$inferredAction, 'text'=>$responseText]);
+    }
+}
 if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
     try {
         $responseActions = stobeNegAttachPendingForChat($targetNpc, $responseActions);
@@ -1288,12 +1492,27 @@ if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
         stobeLogWarn('Negotiation dispatch attach failed', ['npc'=>$targetNpc, 'error'=>$negAttachError->getMessage()]);
     }
 }
+// Bug 32: an NPC doesn't give up the weapon she's using unless she's surrendering or trusts the player.
+if (!$narratorMode && is_array($npcData) && function_exists('stobeDealFilterWeaponActions')) {
+    [$responseActions, $weaponActionsRemoved] = stobeDealFilterWeaponActions(
+        $responseActions, $npcData, $playerName, strval($dealResult['kind'] ?? ($negotiationKind ?? ''))
+    );
+    if (count($weaponActionsRemoved) > 0) {
+        stobeLogWarn('Weapon hand-over blocked (not surrendering, not trusted)', [
+            'npc'=>$targetNpc, 'removed'=>$weaponActionsRemoved, 'text'=>$responseText,
+        ]);
+    }
+}
 // An NPC attacking the player over a private matter keeps it one-on-one.
 if (!$narratorMode && function_exists('stobeNegRegisterPersonalFight') && is_array($npcData) && !npcIsInPlayerFaction($npcData)) {
-    foreach ($responseActions as $responseAction) {
+    foreach ($responseActions as $actionIndex => $responseAction) {
         if (preg_match('/^ATTACK@(.+)$/i', strval($responseAction), $attackMatch)
             && strcasecmp(normalizeParticipantNameToken($attackMatch[1]), $playerName) === 0) {
             try { stobeNegRegisterPersonalFight($targetNpc, $npcData, strval($responseText ?? '')); } catch (Throwable $e) {}
+            // She called for help: tell the DLL not to stand her faction-mates down.
+            if (function_exists('stobeNegCalledForHelp') && stobeNegCalledForHelp(strval($responseText ?? ''))) {
+                $responseActions[$actionIndex] = 'ATTACK@' . $attackMatch[1] . '@help';
+            }
             break;
         }
     }
@@ -1355,12 +1574,28 @@ storeActionEvents($targetNpc, $responseActions, $gamets, $replyTarget, 'chat');
 if ($alreadyStreamed) {
     if (count($responseActions) > 0 && !$actionsStreamedInLlm) {
         streamResponse($targetNpc, 'ScriptQueue', '', $npcData, $responseActions, 'chat', $replyTarget, $gamets);
+    } elseif ($actionsStreamedInLlm) {
+        $lateActions = array_values(array_diff($responseActions, $preLateActions ?? $responseActions));
+        if (count($lateActions) > 0) {
+            streamResponse($targetNpc, 'ScriptQueue', '', $npcData, $lateActions, 'chat', $replyTarget, $gamets);
+        }
     }
 } else {
+    $textToSpeak = $responseText;
+    if ($streamHeldBack && $streamSpokenPrefix !== '') {
+        // The start was already spoken; speak only the held part.
+        if ($streamSpeakOverride !== null) {
+            $textToSpeak = $streamSpeakOverride;
+        } elseif ($streamHeldFrom !== '' && ($heldPos = strpos($responseText, $streamHeldFrom)) !== false) {
+            $textToSpeak = substr($responseText, $heldPos);
+        } else {
+            stobeLogWarn('Held-back reply: held part not found, speaking the full line', ['npc'=>$targetNpc, 'text'=>$responseText]);
+        }
+    }
     stobeStreamDialogueResponse(
         $targetNpc,
         $npcData,
-        $responseText,
+        $textToSpeak,
         $responseActions,
         'chat',
         $replyTarget,
@@ -1375,5 +1610,25 @@ if (isset($dealResult) && ($dealResult['decision'] ?? '') === 'ACCEPT'
     if (($voiceHandoverNote ?? '') === '' && !$narratorMode && empty($manualActionActive)
         && function_exists('stobeNegVoiceHandover')) {
         stobeNegVoiceHandover($targetNpc, $npcData, $playerName, $message, intval($gamets));
+    }
+}
+// Bug 34: the player handed something over in this request; wait (briefly) for the game to
+// confirm it so her side is queued now and goes out below.
+if (!$narratorMode && !empty($GLOBALS['STOBE_VOICE_HANDOVER_NPC']) && function_exists('stobeNegSettleAfterHandover')) {
+    try { stobeNegSettleAfterHandover($targetNpc); } catch (Throwable $settleError) {
+        stobeLogWarn('Settle after hand-over failed', ['npc'=>$targetNpc, 'error'=>$settleError->getMessage()]);
+    }
+}
+// Bug 29: payment verified during this request queued her side (or a refund) after the
+// reply went out. Send those actions now instead of waiting for the next line.
+if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
+    try {
+        $lateDirectiveActions = stobeNegAttachPendingForChat($targetNpc, []);
+        if (count($lateDirectiveActions) > 0) {
+            streamResponse($targetNpc, 'ScriptQueue', '', $npcData, $lateDirectiveActions, 'chat', $replyTarget, $gamets);
+            stobeLogInfo('Negotiation directive sent in the same turn (after the reply)', ['npc'=>$targetNpc, 'actions'=>$lateDirectiveActions]);
+        }
+    } catch (Throwable $lateDirectiveError) {
+        stobeLogWarn('Late negotiation directive send failed', ['npc'=>$targetNpc, 'error'=>$lateDirectiveError->getMessage()]);
     }
 }

@@ -42,6 +42,13 @@ function stobeTranscribeAudio(string $filePath, ?array $connector = null): array
     $url = trim(strval($connector['url'] ?? '')) ?: $manager->getDefaultUrlForDriver($driver);
     $apiKey = stobeSttApiKey($connector);
     $text = '';
+    $sttStartedAt = microtime(true);
+    stobeLogInfo('Latency stage stt provider dispatch', [
+        'provider' => $driver,
+        'endpoint' => $url,
+        'unix_ms' => intval(round($sttStartedAt * 1000)),
+        'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round(($sttStartedAt - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
+    ]);
 
     if (in_array($driver, ['parakeet', 'localwhisper', 'whisper'], true)) {
         if ($driver === 'whisper' && $apiKey === '') throw new RuntimeException('The selected OpenAI API badge has no key.');
@@ -76,6 +83,14 @@ function stobeTranscribeAudio(string $filePath, ?array $connector = null): array
         $text = trim(strval($json['transcription']['transcript'] ?? ''));
     }
     if ($text === '') throw new RuntimeException('No speech was detected.');
-    stobeLogInfo('STT transcription completed', ['provider' => $driver, 'characters' => strlen($text)]);
+    $sttCompletedAt = microtime(true);
+    stobeLogInfo('STT transcription completed', [
+        'provider' => $driver,
+        'characters' => strlen($text),
+        'text_sha1' => sha1($text),
+        'stt_service_ms' => intval(round(($sttCompletedAt - $sttStartedAt) * 1000)),
+        'unix_ms' => intval(round($sttCompletedAt * 1000)),
+        'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round(($sttCompletedAt - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
+    ]);
     return ['text' => $text, 'provider' => $driver];
 }

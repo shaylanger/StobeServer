@@ -1733,6 +1733,13 @@ function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcD
 
     if (is_file($localPath) && filesize($localPath) > 44) {
         $durationMs = stobeReadWavDurationMsFromFile($localPath);
+        stobeLogInfo('Latency stage tts cache hit', [
+            'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+            'npc_name' => $npcName,
+            'provider' => $provider,
+            'unix_ms' => intval(round(microtime(true) * 1000)),
+            'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round((microtime(true) - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
+        ]);
         stobeRecordSpeechCacheForProvider($npcName, $speechText, $hash, $relativePath, $provider, $voiceId, $durationMs);
         stobeLogInfo('TTS cache hit', [
             'npc_name' => $npcName,
@@ -1744,6 +1751,16 @@ function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcD
         return ['hash' => $hash, 'audio_path' => $relativePath, 'duration_ms' => $durationMs, 'cached' => true];
     }
 
+    $ttsSynthesisStartedAt = microtime(true);
+    stobeLogInfo('Latency stage tts start', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'npc_name' => $npcName,
+        'provider' => $provider,
+        'endpoint' => $endpoint,
+        'voiceid' => $voiceId,
+        'unix_ms' => intval(round($ttsSynthesisStartedAt * 1000)),
+        'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round(($ttsSynthesisStartedAt - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
+    ]);
     $binary = false;
     if ($provider === 'pocket_tts') {
         $binary = stobeSynthesizeViaPocketTts($speechText, $runtime);
@@ -1763,7 +1780,17 @@ function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcD
         $voiceId = trim(strval($runtime['voiceid'] ?? $voiceId));
     }
 
+    $ttsSynthesisMs = intval(round((microtime(true) - $ttsSynthesisStartedAt) * 1000));
     if (!is_string($binary) || $binary === '') {
+        stobeLogWarn('TTS synthesis latency', [
+            'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+            'npc_name' => $npcName,
+            'provider' => $provider,
+            'tts_synthesis_ms' => $ttsSynthesisMs,
+            'unix_ms' => intval(round(microtime(true) * 1000)),
+            'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round((microtime(true) - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
+            'success' => false,
+        ]);
         return [];
     }
     if (substr($binary, 0, 4) !== "RIFF") {
@@ -1789,11 +1816,15 @@ function stobeSynthesizeTtsLine(string $npcName, string $line, array|false $npcD
     $durationMs = stobeEstimateWavDurationMs($binary);
     stobeRecordSpeechCacheForProvider($npcName, $speechText, $hash, $relativePath, $provider, $voiceId, $durationMs);
     stobeLogInfo('TTS audio synthesized', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
         'npc_name' => $npcName,
         'provider' => $provider,
         'voiceid' => $voiceId,
         'hash' => $hash,
         'duration_ms' => $durationMs,
+        'tts_synthesis_ms' => $ttsSynthesisMs,
+        'unix_ms' => intval(round(microtime(true) * 1000)),
+        'request_elapsed_ms' => isset($GLOBALS['__stobe_request_start']) ? intval(round((microtime(true) - $GLOBALS['__stobe_request_start']) * 1000)) : 0,
     ]);
     return ['hash' => $hash, 'audio_path' => $relativePath, 'duration_ms' => $durationMs, 'cached' => false];
 }
