@@ -350,6 +350,25 @@ function stobeNegOfferCap(string $npc, array $npcData): array {
     return [max(0, $cap), $carried, $tier];
 }
 
+/**
+ * Bug 90: a ceasefire deal with this NPC that completed recently (default 10 min).
+ * Returns the contract row or null.
+ */
+function stobeDealRecentCompletedCeasefire(string $npc, int $seconds = 600): ?array {
+    try {
+        $row = $GLOBALS['db']->fetchOne(
+            "SELECT contract_id, kind FROM stobe_social_contract
+              WHERE LOWER(npc_name)=LOWER($1) AND kind IN ('combat','surrender') AND status='COMPLETE'
+                AND updated_at > NOW() - ($2 || ' seconds')::interval
+              ORDER BY updated_at DESC LIMIT 1",
+            [$npc, strval(max(1, $seconds))]
+        );
+        return is_array($row) ? $row : null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
 function stobeDealCaptureResponse(string $raw, string $npc, string $player, array $npcData, string $playerMessage, string $kind = 'combat', string $proposer = 'player'): array {
     $response = function_exists('stobeDecodeStructuredDialoguePayload')
         ? stobeDecodeStructuredDialoguePayload($raw) : json_decode($raw, true);

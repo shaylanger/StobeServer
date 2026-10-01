@@ -97,7 +97,7 @@ check('ceasefire dispatched', termStatus($id, 1) === 'DISPATCHED');
 stobeLine("ACTION_EXEC: STOP_ATTACK actor=NegTestBandit target=$player speaker_faction='X' target_faction='Y' applied=1 truce_registered=1 reason=", time());
 stobeNegTick();
 check('truce not verified before 30s', termStatus($id, 1) === 'DISPATCHED', termStatus($id, 1));
-backdate($id, 31);
+backdate($id, STOBE_NEG_TRUCE_OBSERVE_SECONDS + 1);
 stobeNegTick();
 check('truce verified after quiet window', termStatus($id, 1) === 'VERIFIED', termStatus($id, 1));
 stobeLine("ACTION_EXEC: GIVE_CATS actor=$player recipient=NegTestBandit amount=100", time());
@@ -129,7 +129,7 @@ check('re-acquire queues reissue', termStatus($id, 0) === 'REISSUE_QUEUED', term
 $acts = stobeNegAttachPendingForChat('NegTestBandit', []);
 check('reissue attached to chat reply', $acts === ['STOP_ATTACK@' . $player], $acts);
 check('reissue dispatched', termStatus($id, 0) === 'DISPATCHED', termStatus($id, 0));
-for ($attempt = 0; $attempt < 2; $attempt++) {
+for ($attempt = 0; $attempt < STOBE_NEG_TRUCE_MAX_REISSUE; $attempt++) {
     backdate($id, 10);
     storeEvent('combat', time(), 1000, "NegTestBandit: Initiated attack (talking to: $player)");
     stobeNegTick();

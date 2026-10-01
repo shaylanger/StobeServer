@@ -1477,12 +1477,23 @@ if ($manualActionActive && $manualActionCannotSpeak) {
                 if (strval($dealResult['error'] ?? '') === 'weapon_not_negotiable') {
                     // Bug 32: whatever she said, her weapon isn't part of the deal.
                     $responseText = strval($dealResult['refusal_line'] ?? 'My weapon stays with me.');
+                } elseif ((stobeDealSpeechClaimsCeasefire($responseText)
+                    || preg_match("/\\b(deal|agreed|you'?ve got it|you got it)\\b/i", $responseText))
+                    && function_exists('stobeDealRecentCompletedCeasefire')
+                    && ($honoured = stobeDealRecentCompletedCeasefire($targetNpc)) !== null) {
+                    // Bug 90: the paid ceasefire still stands; keep her words and stop again.
+                    $honourCeasefire = 'STOP_ATTACK@' . $playerName;
+                    stobeLogInfo('Ceasefire honoured from a completed deal (bug 90)', ['npc'=>$targetNpc, 'contract_id'=>$honoured['contract_id'] ?? '']);
                 } elseif (stobeDealSpeechClaimsCeasefire($responseText)
                     || preg_match("/\\b(deal|agreed|you'?ve got it|you got it)\\b/i", $responseText)) {
                     $responseText = "Let's get the terms straight first.";
                 }
                 $responseActions = array_values(array_filter($responseActions, static fn($a) =>
                     !preg_match('/^(STOP_ATTACK|GIVE_CATS|GIVE_ITEM|TAKE_CATS|TAKE_ITEM)@/i', strval($a))));
+                if (!empty($honourCeasefire)) {
+                    $responseActions[] = $honourCeasefire;
+                    $actionConfig['deal_sanctioned_give'] = true; // let the STOP_ATTACK through (bug 88)
+                }
                 stobeLogWarn('Negotiation rejected by deterministic validation', [
                     'npc'=>$targetNpc, 'error'=>strval($dealResult['error'] ?? 'unknown')
                 ]);
