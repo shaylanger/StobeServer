@@ -14508,7 +14508,7 @@ function stobeQueueKenshiFpActionRequest(
         $safeArgument = substr($safeArgument, 0, 180);
     }
 
-    $actorSerial = stobeResolveLiveParticipantSerial($safeActor);
+    $actorSerial = stobeResolveLiveParticipantSerial($safeActor, true);
     if ($actorSerial <= 0) {
         stobeLogWarn('KenshiFP action request skipped because actor serial was unavailable', [
             'actor' => $safeActor,
