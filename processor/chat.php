@@ -1505,6 +1505,14 @@ if (!$narratorMode && function_exists('stobeInferClothingAction')
         stobeLogInfo('Clothing action inferred from speech', ['npc'=>$targetNpc, 'action'=>$inferredAction, 'text'=>$responseText]);
     }
 }
+if (!$narratorMode && function_exists('stobeInferWorkGoalFromOrder')
+    && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+    $inferredGoal = stobeInferWorkGoalFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions);
+    if ($inferredGoal !== '') {
+        $responseActions[] = $inferredGoal;
+        stobeLogInfo('Work goal inferred from a direct order (bug 76)', ['npc'=>$targetNpc, 'action'=>$inferredGoal]);
+    }
+}
 if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
     try {
         $responseActions = stobeNegAttachPendingForChat($targetNpc, $responseActions);
