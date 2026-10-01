@@ -1563,6 +1563,15 @@ if (!$narratorMode && function_exists('stobeInferWorkGoalFromOrder')
         stobeLogInfo('Work goal inferred from a direct order (bug 76)', ['npc'=>$targetNpc, 'action'=>$inferredGoal]);
     }
 }
+if (!$narratorMode && function_exists('stobeInferFollowFromOrder')
+    && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+    $inferredFollow = stobeInferFollowFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
+        trim(strval(getSetting('PLAYER_NAME', ''))));
+    if ($inferredFollow !== '') {
+        $responseActions[] = $inferredFollow;
+        stobeLogInfo('Follow inferred from a direct request (bug 87)', ['npc'=>$targetNpc, 'action'=>$inferredFollow]);
+    }
+}
 if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
     try {
         $responseActions = stobeNegAttachPendingForChat($targetNpc, $responseActions);

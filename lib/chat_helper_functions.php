@@ -14592,6 +14592,21 @@ function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, a
     return 'WORK_GOAL@' . $item . '@' . $qty;
 }
 
+/**
+ * Bug 87: "follow me" / "guard me" to a squad member answered without a
+ * movement action -> BODYGUARD@<player>.
+ */
+function stobeInferFollowFromOrder(string $playerLine, array|false $npcData, array $actions, string $playerName): string {
+    if ($playerName === '' || !is_array($npcData) || !function_exists('npcIsInPlayerFaction') || !npcIsInPlayerFaction($npcData)) return '';
+    foreach ($actions as $a) {
+        if (preg_match('/^(FOLLOW|BODYGUARD|GUARD_TARGET|MOVE_TO|MOVE_TO_TARGET|HOLD_POSITION|PATROL|ATTACK|STOP_ATTACK|TRAVEL_LOCATION|WORK_GOAL|TASK_GOAL)@/i', strval($a))) return '';
+    }
+    $line = trim($playerLine);
+    if ($line === '' || preg_match("/\b(don'?t|do\s+not|stop|quit|no\s+longer|never)\b/i", $line)) return '';
+    if (!preg_match('/\b(follow\s+me|guard\s+me|protect\s+me|cover\s+me|watch\s+my\s+back|come\s+with\s+me|stay\s+(?:close|with\s+me|near\s+me)|stick\s+(?:close|with\s+me)|keep\s+up\s+with\s+me)\b/i', $line)) return '';
+    return 'BODYGUARD@' . $playerName;
+}
+
 /** Work orders a non-faction NPC never takes from the player (feature 1). */
 function stobeNonFactionWorkOrderCommands(): array {
     return ['WORK_GOAL','TASK_GOAL','TASK_CONTROL','LOOT_TARGET','REPAIR','BUILD','OPERATE_OBJECT','TASK',
