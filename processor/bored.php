@@ -89,6 +89,7 @@ if (is_array($negDirective)) {
         $speakerData = $negSpeakerData;
         if (strval($negDirective['kind'] ?? '') === 'goal_report') {
             $forceDirectiveTurn = true;
+            $forceDirectorMode = false; // the DLL may have asked for director mode (bug 72)
         } else {
             $forceDirectorMode = true;
         }
@@ -179,11 +180,13 @@ if ($forceDirectorMode) {
     try {
         stobeGenerateDirectorScene($candidateNames, $speakerNpc, $listener,
             (string)($_GET['direction'] ?? ''), (int)$gamets);
+        return;
     } catch (Throwable $error) {
-        stobeLogWarn('Director scene failed', ['error' => $error->getMessage()]);
-        echo 'error';
+        // e.g. "No eligible Director cast" with only the player and one NPC:
+        // speak a normal turn instead of dropping it (bug 72)
+        stobeLogWarn('Director scene failed; normal turn instead', ['error' => $error->getMessage(), 'speaker' => $speakerNpc]);
+        $forceDirectorMode = false;
     }
-    return;
 }
 
 $cuePool = [
