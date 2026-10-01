@@ -5517,6 +5517,13 @@ function stobeResolveStructuredDialogueContractParts(
     }
     $actions[] = 'TravelLocation';
     $actions[] = 'MoveTo';
+    if ($inPlayerFaction !== true) {
+        // Feature 1: outsiders don't take work orders from the player.
+        $nonFactionHidden = ['LootTarget','Repair','Build','OperateObject','Task','SetBlock','SetHold','SetPassive',
+            'SetJobs','SetRanged','SetTaunt','SetSneak','SetResource','SetMedic','Patrol','Rescue','PutInBed',
+            'Imprison','ReleasePrisoner','FirstAid'];
+        $actions = array_values(array_filter($actions, static fn($a) => !in_array($a, $nonFactionHidden, true)));
+    }
 
     $moodsCsv = '';
     if (is_array($npcData)) {
@@ -5748,6 +5755,8 @@ function stobeBuildOutputContractUserPrompt(
     } else {
         $actionLine .= " PROPERTY/GEAR RULE: This NPC is outside the player's faction and personally owns their possessions. Current affinity toward the player is " . strval($propertyAffinity) . "/100. Equipped weapons, armor, clothing, medical gear, money, and other valuable/essential possessions must be treated as meaningful property, not casual dialogue props.";
         $actionLine .= " Do NOT use GiveItem to permanently hand the player currently equipped gear at low or neutral trust merely because the player asks, flatters, pressures, bets, or invents a reason. A stranger or merely wary/neutral acquaintance should normally refuse to surrender a weapon or other essential equipment. Very high trust can justify a gift or loan.";
+        $orderTrust = function_exists('stobeNonFactionOrderTrustMin') ? stobeNonFactionOrderTrustMin() : 56;
+        $actionLine .= " ORDERS RULE: You are not in the player's faction and do not work for them. Refuse work orders (making, looting, hauling, building, repairing, operating machines, patrols, jobs, healing others). Minor requests (follow, come here, wait, guard them, go somewhere) only if you trust them (affinity " . strval($orderTrust) . "+; yours is " . strval($propertyAffinity) . ") or as part of a paid deal you have agreed to; otherwise refuse in character or name your price.";
         $giftThreshold = max(0, min(100, intval(getSettingInt('GIFT_TRUST_THRESHOLD', 56))));
         $actionLine .= " GIFT RULE: Kenshi is harsh and poor; nobody hands out goods or Cats for nothing. Do NOT use GiveItem or GiveCats toward the player unless (a) it is your side of a trade or deal the player has agreed to, or (b) you trust them deeply (affinity " . strval($giftThreshold) . "+; yours is " . strval($propertyAffinity) . "). Asking, flattery, a sad story, or 'I'll pay you later' is not enough. A trader sells: name a price and hand the goods over only once the player has paid or you have both agreed the deal. Never say 'take it, it's free' or 'consider it good faith' below that trust.";
         $actionLine .= " To hand the player something you are wearing, use GiveItem directly (it comes off and goes to them); UnequipItem only takes it off and you keep it.";
@@ -14506,6 +14515,45 @@ function stobeTaskItemListFromTurn(string $item): array {
     return array_slice($out, 0, 6);
 }
 
+/** Work orders a non-faction NPC never takes from the player (feature 1). */
+function stobeNonFactionWorkOrderCommands(): array {
+    return ['WORK_GOAL','TASK_GOAL','TASK_CONTROL','LOOT_TARGET','REPAIR','BUILD','OPERATE_OBJECT','TASK',
+        'SET_BLOCK','SET_HOLD','SET_PASSIVE','SET_JOBS','SET_RANGED','SET_TAUNT','SET_SNEAK','SET_RESOURCE','SET_MEDIC',
+        'PATROL','RESCUE','PUT_IN_BED','IMPRISON','RELEASE_PRISONER','FIRST_AID'];
+}
+
+/** Minor requests a non-faction NPC takes only with trust or an agreed deal. */
+function stobeNonFactionMinorOrderCommands(): array {
+    return ['FOLLOW','MOVE_TO_TARGET','HOLD_POSITION','BODYGUARD','GUARD_TARGET','TRAVEL_LOCATION','MOVE_TO'];
+}
+
+function stobeNonFactionOrderTrustMin(): int {
+    $gift = intval(getSettingInt('GIFT_TRUST_THRESHOLD', 56));
+    return max(0, min(100, intval(getSettingInt('MINOR_ORDER_TRUST_MIN', $gift))));
+}
+
+/**
+ * '' when the NPC may carry out this action for the player; otherwise an in-character
+ * refusal line. Faction members and non-order actions always pass.
+ */
+function stobePlayerOrderGate(string $actor, array|false $npcData, string $normalizedAction): string {
+    if (!is_array($npcData) || count($npcData) === 0) return '';
+    if (function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData)) return '';
+    $at = strpos($normalizedAction, '@');
+    $cmd = strtoupper(trim($at === false ? $normalizedAction : substr($normalizedAction, 0, $at)));
+    if (in_array($cmd, stobeNonFactionWorkOrderCommands(), true)) {
+        return "I don't take orders like that from you - I'm not one of yours.";
+    }
+    if (!in_array($cmd, stobeNonFactionMinorOrderCommands(), true)) return '';
+    $trust = function_exists('stobeNpcPlayerAffinity') ? intval(stobeNpcPlayerAffinity($npcData)) : 0;
+    if ($trust >= stobeNonFactionOrderTrustMin()) return '';
+    try {
+        if (function_exists('stobeDealOpenForNpc') && stobeDealOpenForNpc($actor) !== null) return '';
+    } catch (Throwable $e) {
+    }
+    return "Why would I do that for you? Make it worth my while first.";
+}
+
 function stobeResolveLiveParticipantSerial(string $name, bool $allowStoredFallback = false): int {
     $safeName = normalizeParticipantNameToken($name);
     if ($safeName === '') {
@@ -14668,6 +14716,16 @@ function streamResponse(
                 if (!$alreadyRefusal) {
                     $message = "No. I'm not handing over my equipped gear.";
                 }
+            }
+            continue;
+        }
+        $orderRefusal = function_exists('stobePlayerOrderGate')
+            ? stobePlayerOrderGate($actor, is_array($actorData) ? $actorData : false, $normalizedAction)
+            : '';
+        if ($orderRefusal !== '') {
+            stobeLogInfo('Order refused: NPC is not in the player faction', ['actor' => $actor, 'action' => $normalizedAction]);
+            if (preg_match('/\b(no|not|won(?:\'|’)t|refuse|can(?:\'|’)t|cannot|why would|price|pay)\b/i', $message) !== 1) {
+                $message = trim($message . ' ' . $orderRefusal);
             }
             continue;
         }
