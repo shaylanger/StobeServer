@@ -14619,13 +14619,38 @@ function streamResponse(
             } elseif (count($goalParts) === 1) {
                 $goalItem = trim(strval($goalParts[0]));
             }
-            $goalResult = stobeQueueWorkGoalRequest(
-                $actor,
-                $goalItem,
-                $goalQuantity,
-                $goalDestination,
-                $effectiveDeliveryGamets
-            );
+            $goalResult = null;
+            $resumeLine = strtolower(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''));
+            if ($goalItem !== '' && $resumeLine !== '' && function_exists('stobeAnyGoalControl')
+                && preg_match('/\b(resume|continue|carry\s+on|keep\s+going|pick\s+(?:it\s+)?(?:back\s+)?up|try\s+(?:\w+\s+){0,3}again|start\s+(?:\w+\s+){0,3}again|unpause)\b/', $resumeLine) === 1) {
+                try {
+                    if (function_exists('stobeWorkGoalSyncStatusFile')) stobeWorkGoalSyncStatusFile();
+                    $paused = $GLOBALS['db']->fetchOne(
+                        "SELECT goal_id FROM stobe_work_goal WHERE LOWER(actor_name)=LOWER($1)
+                           AND status IN ('PAUSED','BLOCKED') AND LOWER(item_name)=LOWER($2)
+                         ORDER BY updated_at DESC LIMIT 1",
+                        [normalizeParticipantNameToken($actor), $goalItem]
+                    );
+                    if (is_array($paused)) {
+                        $resumeResult = stobeAnyGoalControl($actor, 'RESUME', $goalItem);
+                        if (boolval($resumeResult['ok'] ?? false)) {
+                            stobeLogInfo('WORK_GOAL turned into RESUME of the existing goal', ['actor' => $actor, 'item' => $goalItem, 'goal_id' => strval($resumeResult['goal_id'] ?? '')]);
+                            $goalResult = ['ok' => true, 'goal_id' => strval($resumeResult['goal_id'] ?? ''), 'resumed' => true];
+                        }
+                    }
+                } catch (Throwable $e) {
+                    stobeLogWarn('Resume lookup failed', ['error' => $e->getMessage()]);
+                }
+            }
+            if ($goalResult === null) {
+                $goalResult = stobeQueueWorkGoalRequest(
+                    $actor,
+                    $goalItem,
+                    $goalQuantity,
+                    $goalDestination,
+                    $effectiveDeliveryGamets
+                );
+            }
             if (boolval($goalResult['ok'] ?? false)) {
                 $queuedActions++;
             } else {
