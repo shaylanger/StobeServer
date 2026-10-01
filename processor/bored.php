@@ -77,6 +77,9 @@ foreach ($candidateNames as $candidateName) {
 
 // Negotiation directives (surrender offers, help requests, settlements, truce
 // re-issues, betrayal, breach reactions) take over this spontaneous turn.
+if (function_exists('stobeGoalReportQueuePending')) {
+    try { stobeGoalReportQueuePending(); } catch (Throwable $e) { stobeLogWarn('Goal report queue failed', ['error' => $e->getMessage()]); }
+}
 $negDirective = function_exists('stobeNegClaimDirective') ? stobeNegClaimDirective($candidateNames) : null;
 if (is_array($negDirective)) {
     $negSpeakerData = getNpcData(strval($negDirective['npc_name']));
