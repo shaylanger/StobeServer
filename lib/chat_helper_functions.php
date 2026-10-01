@@ -6170,6 +6170,18 @@ function stobeBuildActionTagFromStructuredPayload(
     $actionUpper = stobeCanonicalizeActionCommand($actionUpper);
     $explicitAmount = stobeParseStructuredPositiveAmount($amount);
 
+    // "Put those back in storage": the model sometimes picks GiveItem -> player.
+    if ($actionUpper === 'GIVE_ITEM' && $item !== '') {
+        $playerLine = strtolower(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''));
+        if ($playerLine !== ''
+            && preg_match('/\b(storage|chests?|stash|stockpile|put\s+(?:\w+\s+){0,3}(?:away|back\s+in)|store\s+(?:it|them|those|these|that))\b/', $playerLine) === 1
+            && preg_match('/\b(give|hand|pass|bring)\s+(?:\w+\s+){0,3}(?:me|to\s+me)\b/', $playerLine) !== 1) {
+            stobeLogInfo('GiveItem rewritten to StoreItems (player asked for storage)', ['item' => $item, 'target' => $target]);
+            $actionUpper = 'STORE_ITEMS';
+            $target = '';
+        }
+    }
+
     $plannerKinds = [
         'LOOTAREA'=>'LOOT_AREA','LOOTSTORE'=>'LOOT_STORE','STOREITEMS'=>'STORE',
         'FETCHITEMS'=>'FETCH','DELIVERITEMS'=>'DELIVER','RECOVERGROUND'=>'RECOVER_GROUND',
