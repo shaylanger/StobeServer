@@ -1576,7 +1576,8 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
         return '';
     }
     if (boolval($config['disallow_stop_attack'] ?? false) &&
-        $command === 'STOP_ATTACK') {
+        $command === 'STOP_ATTACK' &&
+        !boolval($config['deal_sanctioned_give'] ?? false)) { // an accepted deal's ceasefire always goes (bug 88)
         return '';
     }
     if ($command === 'TRAVEL_LOCATION' && !boolval($config['allow_travel_location'] ?? false)) {
