@@ -1021,6 +1021,48 @@ $systemPrompt = buildSystemPrompt(
     'chat',
     intval($gamets)
 );
+
+// Cache-friendly normal-chat contract: these blocks are unchanged across ordinary
+// repeated turns with the same NPC. Put them before volatile Current Situation data
+// so provider prefix caching can reuse them. Special chat modes keep the old path.
+$cacheableDialogueContractEmbedded = false;
+if (!$narratorMode && !$injectionChatMode && $dialogueMode !== 'cheat') {
+    $cacheableTurnGuidance = stobeBuildTurnGuidanceUserPrompt(
+        $targetNpc,
+        $speaker,
+        false,
+        false,
+        '',
+        $speaker
+    );
+    $cacheableOutputContract = stobeBuildOutputContractUserPrompt(
+        $targetNpc,
+        false,
+        false,
+        npcIsInPlayerFaction($npcData),
+        'chat',
+        $speaker,
+        $npcData
+    );
+    $cacheableContractBlock = "# Dialogue Contract\n\n"
+        . $cacheableTurnGuidance
+        . "\n\n"
+        . $cacheableOutputContract;
+
+    foreach (["\n\n# Current Situation", "\n\n<current_situation>"] as $cacheMarker) {
+        $cacheMarkerPos = strpos($systemPrompt, $cacheMarker);
+        if ($cacheMarkerPos !== false) {
+            $systemPrompt = substr_replace(
+                $systemPrompt,
+                "\n\n" . $cacheableContractBlock,
+                $cacheMarkerPos,
+                0
+            );
+            $cacheableDialogueContractEmbedded = true;
+            break;
+        }
+    }
+}
 $gameTimePrompt = stobeBuildGameTimePromptBlock($gamets, $npcData);
 if ($gameTimePrompt !== '') {
     // Keep volatile time data after the stable character prompt so provider-side
@@ -1171,37 +1213,39 @@ foreach ($memoryContextMessages as $memoryContextMessage) {
     $messages[] = $memoryContextMessage;
 }
 
-// Cache-friendly ordering: turn/output guidance is stable across repeated turns with
-// the same NPC, so place it before the changing player message.
-$messages[] = [
-    'role' => 'user',
-    'content' => $narratorMode
-        ? stobeBuildNarratorDirectReplyGuidanceUserPrompt($speaker, $message)
-        : ($injectionChatMode
-            ? 'Resolve the Shift+U action request from the target NPC perspective. Preserve NPC agency: refusal is allowed. On compliance, prefer a real supported gameplay action; only use RoleplayAction when no matching real gameplay action exists. Never claim the requested action happened unless the chosen action represents it.'
-            : stobeBuildTurnGuidanceUserPrompt(
-            $targetNpc,
-            $speaker,
-            false,
-            $dialogueMode === 'cheat',
-            $dialogueMode === 'cheat' ? $message : '',
-            $speaker
-        )),
-];
-$messages[] = [
-    'role' => 'user',
-    'content' => $narratorMode
-        ? 'Output contract: return only a direct conversational reply to the current speaker. Do not include scene narration, atmospheric description, third-person prose, or action tags.'
-        : stobeBuildOutputContractUserPrompt(
-            $targetNpc,
-            $dialogueMode === 'cheat',
-            false,
-            npcIsInPlayerFaction($npcData),
-            'chat',
-            $speaker,
-            $npcData
-        ),
-];
+// Normal chat embeds these blocks in the stable system prefix. Special modes retain
+// the original user-message guidance because their instructions are turn-specific.
+if (!$cacheableDialogueContractEmbedded) {
+    $messages[] = [
+        'role' => 'user',
+        'content' => $narratorMode
+            ? stobeBuildNarratorDirectReplyGuidanceUserPrompt($speaker, $message)
+            : ($injectionChatMode
+                ? 'Resolve the Shift+U action request from the target NPC perspective. Preserve NPC agency: refusal is allowed. On compliance, prefer a real supported gameplay action; only use RoleplayAction when no matching real gameplay action exists. Never claim the requested action happened unless the chosen action represents it.'
+                : stobeBuildTurnGuidanceUserPrompt(
+                $targetNpc,
+                $speaker,
+                false,
+                $dialogueMode === 'cheat',
+                $dialogueMode === 'cheat' ? $message : '',
+                $speaker
+            )),
+    ];
+    $messages[] = [
+        'role' => 'user',
+        'content' => $narratorMode
+            ? 'Output contract: return only a direct conversational reply to the current speaker. Do not include scene narration, atmospheric description, third-person prose, or action tags.'
+            : stobeBuildOutputContractUserPrompt(
+                $targetNpc,
+                $dialogueMode === 'cheat',
+                false,
+                npcIsInPlayerFaction($npcData),
+                'chat',
+                $speaker,
+                $npcData
+            ),
+    ];
+}
 $messages[] = [
     'role' => 'user',
     'content' => $userContent,
