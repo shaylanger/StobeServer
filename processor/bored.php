@@ -9,6 +9,7 @@ storeEvent($eventType, $timestamp, $gamets, $eventData);
 $campaign = 'Default';
 $requestMode = strtolower(trim(strval($_GET['mode'] ?? '')));
 $forceDirectorMode = ($requestMode === 'director');
+$forceDirectiveTurn = false; // goal reports: skip the chance gate, no director (bug 66)
 $playerName = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
 $incomingProfile = normalizeParticipantNameToken(trim(strval($_GET['profile'] ?? '')));
 $peopleRaw = strval($GLOBALS["CACHE_PEOPLE"] ?? ($_GET['people'] ?? ''));
@@ -86,7 +87,11 @@ if (is_array($negDirective)) {
     if (is_array($negSpeakerData)) {
         $speakerNpc = strval($negDirective['npc_name']);
         $speakerData = $negSpeakerData;
-        $forceDirectorMode = true;
+        if (strval($negDirective['kind'] ?? '') === 'goal_report') {
+            $forceDirectiveTurn = true;
+        } else {
+            $forceDirectorMode = true;
+        }
         stobeLogInfo('Bored event taken by negotiation directive', ['speaker'=>$speakerNpc, 'kind'=>$negDirective['kind']]);
     } else {
         $negDirective = null;
@@ -126,7 +131,7 @@ if (function_exists('stobeLifelikeFetchEvents') && function_exists('stobeLifelik
     }
 }
 $roll = mt_rand(0, 99);
-if (!$forceDirectorMode && $roll >= $boredChance) {
+if (!$forceDirectorMode && !$forceDirectiveTurn && $roll >= $boredChance) {
     stobeLogInfo('Bored event skipped: chance gate', [
         'speaker' => $speakerNpc,
         'roll' => $roll,

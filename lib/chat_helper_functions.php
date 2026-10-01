@@ -14469,6 +14469,43 @@ function stobeQueueUnequipItemRequest(string $actor, string $itemQuery): bool {
     return true;
 }
 
+/**
+ * Items for FETCH/STORE/DELIVER: the model's item field split on "," "&" "and";
+ * if that gives one item, the player's own line may list more (bug 60:
+ * "fetch the vodka and the mead" came back as item=Vodka).
+ */
+function stobeTaskItemListFromTurn(string $item): array {
+    $split = static fn(string $v): array => array_values(array_filter(array_map('trim',
+        preg_split('/\s*(?:,|&|\band\b)\s*/i', $v) ?: []), static fn($x) => $x !== ''));
+    $list = $split($item);
+    if (count($list) !== 1) return $list;
+    $line = trim(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''));
+    if ($line === '' || !preg_match('/\b(?:fetch|get|grab|bring|take|put|store|stash|stow|give|hand)\b\s+(?:me\s+|us\s+)?(.+?)(?:\s+\b(?:from|in|into|to|back|at|for|out)\b|[.?!;]|$)/i', $line, $m)) {
+        return $list;
+    }
+    $words = [];
+    foreach ($split($m[1]) as $part) {
+        $part = trim(preg_replace('/^(?:the|a|an|some|my|our|your|those|these|that|this|all|\d+)\s+/i', '', $part) ?? '');
+        $part = trim(preg_replace('/^(?:the|a|an|some)\s+/i', '', $part) ?? '');
+        if ($part !== '' && strlen($part) <= 40) $words[] = $part;
+    }
+    if (count($words) < 2) return $list;
+    $one = strtolower($list[0]);
+    $hit = false;
+    foreach ($words as $w) {
+        $lw = strtolower($w);
+        if (str_contains($one, $lw) || str_contains($lw, $one)) { $hit = true; break; }
+    }
+    if (!$hit) return $list;
+    $out = [$list[0]];
+    foreach ($words as $w) {
+        $lw = strtolower($w);
+        if (str_contains($one, $lw) || str_contains($lw, $one)) continue;
+        $out[] = $w;
+    }
+    return array_slice($out, 0, 6);
+}
+
 function stobeResolveLiveParticipantSerial(string $name, bool $allowStoredFallback = false): int {
     $safeName = normalizeParticipantNameToken($name);
     if ($safeName === '') {
@@ -14735,8 +14772,7 @@ function streamResponse(
                     true,0,0,false
                 );
             } elseif (in_array($taskKind, ['FETCH','STORE','DELIVER'], true)
-                && count($taskItemList = array_values(array_filter(array_map('trim',
-                    preg_split('/\s*(?:,|&|\band\b)\s*/i', strval($taskItem)) ?: []), static fn($v) => $v !== ''))) > 1) {
+                && count($taskItemList = stobeTaskItemListFromTurn($taskItem)) > 1) {
                 foreach (array_slice($taskItemList, 0, 6) as $oneItem) {
                     $taskResults[] = $queueOne(
                         $taskKind, $oneItem, $taskTarget, $taskDestination,
