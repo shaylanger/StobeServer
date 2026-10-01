@@ -12689,6 +12689,8 @@ function buildSystemPrompt(
         && (!function_exists('getSettingBool') || getSettingBool('PROMPT_CACHE_STABLE_FIRST', true));
     if ($stableFirst) {
         $prompt = str_replace('#NPC_CHARACTER_STATE#', '', $prompt);
+        $prompt = str_replace($npcSkills, '', $prompt);
+        $liveSkills = trim($npcSkills);
         $liveRelationships = '';
         if (preg_match('/<relationships>.*?<\/relationships>/s', $prompt, $relMatch, PREG_OFFSET_CAPTURE) === 1) {
             $liveRelationships = $relMatch[0][0];
@@ -12697,7 +12699,7 @@ function buildSystemPrompt(
         if ($includeActionGuidance) {
             $prompt = appendStableActionReferenceToPrompt($prompt, $eventType);
         }
-        $liveBlock = trim(trim($worldStateBlock) . "\n" . $liveRelationships);
+        $liveBlock = trim(trim($worldStateBlock) . "\n" . $liveSkills . "\n" . $liveRelationships);
         if ($liveBlock !== '') {
             $prompt .= "\n\n<current_situation>\n" . $liveBlock . "\n</current_situation>";
         }
