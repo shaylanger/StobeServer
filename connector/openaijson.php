@@ -1,5 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/lib/stobe_interaction.php';
+require_once dirname(__DIR__) . '/lib/training_capture.php';
 
 
 /**
@@ -657,6 +658,39 @@ function stobeRecordAuditRequest(array $entry): void {
     if (is_array($resultForAudit) && count($usage) > 0) {
         $resultForAudit['cached_tokens'] = $cachedTokens;
     }
+
+    // Full-fidelity chat capture for prompt-cache analysis. Unlike audit_request,
+    // this intentionally preserves the complete request/messages and response.
+    if (strtolower($eventType) === 'chat') {
+        $fullChatCapture = [
+            'request_id' => $requestId,
+            'event_type' => $eventType,
+            'npc_name' => $npcName,
+            'connector_type' => $connectorType,
+            'model' => $model,
+            'status' => $status,
+            'http_code' => $httpCode,
+            'duration_ms' => $durationMs,
+            'is_stream' => $isStream,
+            'usage' => [
+                'prompt_tokens' => $promptTokens,
+                'completion_tokens' => $completionTokens,
+                'total_tokens' => $totalTokens,
+                'cached_tokens' => $cachedTokens,
+            ],
+            'prompt_cache_key' => $promptCacheKey,
+            'service_tier' => $serviceTier,
+            'url' => $url,
+            'request' => $requestForAudit,
+            'result' => $resultForAudit,
+            'error' => $error,
+        ];
+        stobeAppendLlmDebugLog('chat_llm_full_capture.log', 'chat_llm_full_capture', $fullChatCapture);
+        if (function_exists('stobeTrainingCapture')) {
+            stobeTrainingCapture('llm_exchange', $fullChatCapture);
+        }
+    }
+
     $requestPayload = stobeSerializeAuditPayload($requestForAudit, 24000);
     $resultPayload = stobeSerializeAuditPayload($resultForAudit, 24000);
 

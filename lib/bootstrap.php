@@ -70,6 +70,7 @@ if (empty($GLOBALS['STOBE_DATABASE_UPGRADE_IN_PROGRESS'])) {
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'narrator.class.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'settings.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'server_logger.php');
+require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'training_capture.php');
 if (function_exists('stobeConfigurePhpErrorLogging')) {
     stobeConfigurePhpErrorLogging();
 }

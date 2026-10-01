@@ -1632,3 +1632,31 @@ if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
         stobeLogWarn('Late negotiation directive send failed', ['npc'=>$targetNpc, 'error'=>$lateDirectiveError->getMessage()]);
     }
 }
+
+if (function_exists('stobeTrainingCapture')) {
+    stobeTrainingCapture('chat_turn_final', [
+        'request_id' => strval($GLOBALS['__stobe_request_id'] ?? ''),
+        'gamets' => intval($gamets),
+        'target_npc' => $targetNpc,
+        'speaker' => $speaker,
+        'player_name' => $playerName,
+        'input_text' => $message,
+        'dialogue_mode' => $dialogueMode,
+        'narrator_mode' => $narratorMode,
+        'injection_mode' => $injectionMode,
+        'injection_chat_mode' => $injectionChatMode,
+        'manual_action' => $manualActionActive ? $manualActionKey : '',
+        'model' => strval($llmConfig['model'] ?? ''),
+        'final_response_text' => $responseText,
+        'final_actions' => $responseActions,
+        'late_directive_actions' => isset($lateDirectiveActions) && is_array($lateDirectiveActions) ? $lateDirectiveActions : [],
+        'reply_target' => $replyTarget,
+        'negotiation_active' => $negotiationActive,
+        'negotiation_kind' => strval($negotiationKind ?? ''),
+        'deal_decision' => isset($dealResult) && is_array($dealResult) ? strval($dealResult['decision'] ?? '') : '',
+        'deal_status' => isset($dealResult) && is_array($dealResult) ? strval($dealResult['status'] ?? '') : '',
+        'deal_id' => isset($dealResult) && is_array($dealResult) ? strval($dealResult['id'] ?? '') : '',
+        'already_streamed' => $alreadyStreamed,
+        'actions_streamed_in_llm' => $actionsStreamedInLlm,
+    ]);
+}
