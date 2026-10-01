@@ -14620,7 +14620,17 @@ function streamResponse(
                 $goalItem = trim(strval($goalParts[0]));
             }
             $goalResult = null;
-            $resumeLine = strtolower(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''));
+            $stockLine = strtolower(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''));
+            if ($goalItem !== '' && $goalQuantity > 0 && function_exists('stobeTaskGoalQueue')
+                && preg_match('/\b(stocked|in\s+stock|on\s+hand|always\s+have|never\s+run\s+(?:out|low)|maintain|keep\s+(?:\w+\s+){0,4}(?:topped|stocked|in\s+stock|on\s+hand|around|supplied))\b/', $stockLine) === 1) {
+                $stockResult = stobeTaskGoalQueue(
+                    $actor, 'STOCK', $goalItem, '', $goalDestination, $goalQuantity,
+                    false, $goalQuantity, 0, false, $effectiveDeliveryGamets
+                );
+                stobeLogInfo('WORK_GOAL turned into STOCK goal (player asked to keep a stock)', ['actor' => $actor, 'item' => $goalItem, 'minimum' => $goalQuantity, 'ok' => boolval($stockResult['ok'] ?? false)]);
+                $goalResult = $stockResult;
+            }
+            $resumeLine = $goalResult === null ? strtolower(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? '')) : '';
             if ($goalItem !== '' && $resumeLine !== '' && function_exists('stobeAnyGoalControl')
                 && preg_match('/\b(resume|continue|carry\s+on|keep\s+going|pick\s+(?:it\s+)?(?:back\s+)?up|try\s+(?:\w+\s+){0,3}again|start\s+(?:\w+\s+){0,3}again|unpause)\b/', $resumeLine) === 1) {
                 try {
