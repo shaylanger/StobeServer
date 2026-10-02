@@ -1405,6 +1405,7 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             'speaker' => $speaker,
             'action_config' => $actionConfig,
             'stream_event_type' => 'chat',
+            'stream_listener' => $speaker, // bug 95: replies go to whoever spoke
             'stream_gamets' => $gamets,
             'defer_structured_stream' => $negotiationDefer,
             'hold_stream_on_money' => $negotiationActive && !$negotiationDefer,

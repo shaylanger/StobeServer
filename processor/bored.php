@@ -328,6 +328,7 @@ $streamResult = stobeStreamDialogueViaLlm(
         'event_type' => 'bored',
         'action_config' => $actionConfig,
         'stream_event_type' => 'bored',
+        'stream_listener' => $listener, // bug 95: the turn's real addressee
         'stream_gamets' => $gamets,
         'defer_structured_stream' => is_array($negDirective),
         'response_format' => (is_array($negDirective) && in_array(strval($negDirective['kind']), ['surrender','assist'], true))
