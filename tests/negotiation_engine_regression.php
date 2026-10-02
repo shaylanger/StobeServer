@@ -473,10 +473,12 @@ $t46d = stobeDealFixTargetField([['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player'
 check("item 46: the player's SAFE_PASSAGE becomes SPARE", ($t46d[1]['kind'] ?? '') === 'SPARE' && stobeDealValidate(['parties'=>['npc'=>'a','player'=>'b'],'terms'=>$t46d])['ok'] === true, $t46d);
 
 // ---------------------------------------------------------------- 12l. item 49: paid after being named
-check('item 49: "Weth [Dust Bandit]" matches the deal\'s "Dust Bandit"', stobeNegCharMatches('Weth [Dust Bandit]', 'Dust Bandit') === true);
-check('item 49: and the other way round', stobeNegCharMatches('Dust Bandit', 'Weth [Dust Bandit]') === true);
-check('item 49: a different generic name does not match', stobeNegCharMatches('Weth [Dust Bandit]', 'Dust Bandit Bowman') === false);
-check('item 49: two different named NPCs do not match', stobeNegCharMatches('Weth [Dust Bandit]', 'Yarel [Dust Bandit]') === false);
+fixtureNpc('Weth49 [Dust Bandit]', ['money'=>10, 'storage_id'=>'hand_4949'], 'Bread x1 value 10', '', '100/100');
+check('item 49: named after the deal, same serial: his payment counts', stobeNegRecipientMatches('Weth49 [Dust Bandit]', 'Dust Bandit', 4949) === true);
+check('item 49: another serial (a gang-mate or an old deal) does not', stobeNegRecipientMatches('Weth49 [Dust Bandit]', 'Dust Bandit', 4950) === false);
+check('item 49: no serial, no rename match', stobeNegRecipientMatches('Weth49 [Dust Bandit]', 'Dust Bandit', 0) === false);
+check('item 49: attacks/actor matching stays exact', stobeNegCharMatches('Yarel [Dust Bandit]', 'Dust Bandit') === false);
+$db->exec("DELETE FROM core_npc_master WHERE name='Weth49 [Dust Bandit]'");
 
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");

@@ -416,22 +416,32 @@ function stobeNegCharMatches(string $a, string $b): bool {
     $a1 = strtolower(trim($a));
     $b1 = strtolower(trim($b));
     if ($a1 === '' || $b1 === '') return false;
-    // Item 49: named after the deal: "Weth [Dust Bandit]" is the "Dust Bandit" of the deal.
-    foreach ([[$a1, $b1], [$b1, $a1]] as [$named, $generic]) {
-        if (preg_match('/^.+\[\s*(.+?)\s*\]$/', $named, $bm) && $bm[1] === $generic) return true;
-    }
     if ($a1 === $b1) return true;
     return $norm($a) !== '' && $norm($a) === $norm($b);
 }
 
+/**
+ * Item 49: the recipient in a game record is the deal's NPC: same name, or the name he
+ * was given after the deal ("Weth [Dust Bandit]" for "Dust Bandit") when that name's
+ * stored serial is the deal's serial.
+ */
+function stobeNegRecipientMatches(string $recipient, string $npc, int $serial = 0): bool {
+    if (stobeNegCharMatches($recipient, $npc)) return true;
+    if ($serial <= 0 || !preg_match('/^.+\[\s*(.+?)\s*\]$/', trim($recipient), $bm)) return false;
+    if (strcasecmp($bm[1], trim($npc)) !== 0) return false;
+    $row = $GLOBALS['db']->fetchOne(
+        "SELECT metadata->>'storage_id' AS sid FROM core_npc_master WHERE LOWER(name)=LOWER($1) LIMIT 1", [trim($recipient)]);
+    return is_array($row) && strval($row['sid'] ?? '') === 'hand_' . $serial;
+}
+
 /** Cats moved from $from to $to per the game's GIVE_CATS execution records. */
-function stobeNegCatsExecuted(string $from, string $to, int $sinceUnix): array {
+function stobeNegCatsExecuted(string $from, string $to, int $sinceUnix, int $toSerial = 0): array {
     $total = 0;
     $skipped = '';
     foreach (stobeNegStobeActionRecords($sinceUnix) as $r) {
         if ($r['cmd'] !== 'GIVE_CATS') continue;
         if (preg_match('/^actor=(.+?) recipient=(.+?) amount=(\d+)/', $r['body'], $m)
-            && stobeNegCharMatches($m[1], $from) && stobeNegCharMatches($m[2], $to)) {
+            && stobeNegCharMatches($m[1], $from) && stobeNegRecipientMatches($m[2], $to, $toSerial)) {
             $total += intval($m[3]);
         } elseif (preg_match('/^actor=(.+?) skipped reason=(\S+)/', $r['body'], $m) && stobeNegCharMatches($m[1], $from)) {
             $skipped = $m[2];
@@ -440,13 +450,13 @@ function stobeNegCatsExecuted(string $from, string $to, int $sinceUnix): array {
     return ['amount'=>$total, 'skipped'=>$skipped];
 }
 
-function stobeNegItemExecuted(string $from, string $to, string $item, int $sinceUnix): array {
+function stobeNegItemExecuted(string $from, string $to, string $item, int $sinceUnix, int $toSerial = 0): array {
     $transferred = 0;
     $blocked = '';
     foreach (stobeNegStobeActionRecords($sinceUnix) as $r) {
         if ($r['cmd'] !== 'GIVE_ITEM') continue;
         if (preg_match("/^actor=(.+?) recipient=(.+?) requested=\\d+ transferred=(\\d+) item='([^']*)'/", $r['body'], $m)
-            && stobeNegCharMatches($m[1], $from) && stobeNegCharMatches($m[2], $to)
+            && stobeNegCharMatches($m[1], $from) && stobeNegRecipientMatches($m[2], $to, $toSerial)
             && stobeNegItemMatchesTerm($m[4], $item)) {
             $transferred += intval($m[3]);
         } elseif (preg_match('/^blocked actor=(.+?) reason=(\S+)/', $r['body'], $m) && stobeNegCharMatches($m[1], $from)) {
@@ -851,7 +861,7 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
     if ($kind === 'GIVE_CATS') {
         $need = intval($term['amount'] ?? 0);
         $before = max(0, intval($term['cats_before'] ?? 0)); // earlier installments take the first Cats
-        $exec = stobeNegCatsExecuted($player, $npc, $start - 3);
+        $exec = stobeNegCatsExecuted($player, $npc, $start - 3, intval($serial)); // item 49
         $money = stobeNegMoney(stobeNegNpcRow($npc, $serial));
         $base = $baseline['npc_money'] ?? ['known'=>false];
         $delta = (!empty($base['known']) && $money['known'] && $money['observed_at'] > $start)
@@ -867,7 +877,7 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
     } elseif (in_array($kind, ['GIVE_ITEM','RETURN_ITEM'], true)) {
         $qty = max(1, intval($term['quantity'] ?? 1));
         $item = strval($term['item'] ?? '');
-        $exec = stobeNegItemExecuted($player, $npc, $item, $start - 3);
+        $exec = stobeNegItemExecuted($player, $npc, $item, $start - 3, intval($serial)); // item 49
         $row = stobeNegNpcRow($npc, $serial);
         $nowCount = stobeNegItemCount(stobeNegInventoryCounts(strval($row['inventory'] ?? '') . ', ' . strval($row['equipment'] ?? '')), $item);
         $baseCount = stobeNegItemCount(is_array($baseline['npc_inventory'] ?? null) ? $baseline['npc_inventory'] : [], $item);
