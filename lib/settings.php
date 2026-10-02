@@ -12,7 +12,17 @@ function getSetting(string $id, string $default = ''): string {
         "SELECT value FROM general_settings WHERE id = $1",
         [$id]
     );
-    return $row ? $row['value'] : $default;
+    $value = $row ? $row['value'] : $default;
+    if ($id === 'PLAYER_NAME' && $value !== '' && strtolower($value) === $value) {
+        // Typed as "shay" in settings: use the in-game casing ("Shay") in prompts and actions.
+        static $playerNameCase = [];
+        if (!isset($playerNameCase[$value])) {
+            $named = $db->fetchOne("SELECT name FROM core_npc_master WHERE LOWER(name) = LOWER($1) LIMIT 1", [$value]);
+            $playerNameCase[$value] = is_array($named) && trim(strval($named['name'] ?? '')) !== '' ? strval($named['name']) : $value;
+        }
+        $value = $playerNameCase[$value];
+    }
+    return $value;
 }
 
 function getConfOpt(string $id, string $default = ''): string {

@@ -382,6 +382,13 @@ check('bug 117: snapshot with his serial is', (resolveSnapshotTargetNpcName('Gen
 check('bug 117: snapshot without a serial keeps the old match', (resolveSnapshotTargetNpcName('Gen117 Bandit', '')['name'] ?? '') === 'Garvtest [Gen117 Bandit]');
 $db->exec("DELETE FROM core_npc_master WHERE name='Garvtest [Gen117 Bandit]'");
 
+// ---------------------------------------------------------------- 12e. player name typed lowercase in settings: in-game casing
+$savedPlayerName = $db->fetchOne("SELECT value FROM general_settings WHERE id='PLAYER_NAME'");
+$db->exec("DELETE FROM general_settings WHERE id='PLAYER_NAME'");
+$db->exec("INSERT INTO general_settings (id, value) VALUES ('PLAYER_NAME', $1)", [strtolower($player)]);
+check('player name in-game casing from a lowercase setting', getSetting('PLAYER_NAME') === $player, getSetting('PLAYER_NAME'));
+$db->exec("UPDATE general_settings SET value=$1 WHERE id='PLAYER_NAME'", [strval($savedPlayerName['value'] ?? $player)]);
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");
