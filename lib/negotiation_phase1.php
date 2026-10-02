@@ -354,6 +354,39 @@ function stobeNegOfferCap(string $npc, array $npcData): array {
  * Bug 90: a ceasefire deal with this NPC that completed recently (default 10 min).
  * Returns the contract row or null.
  */
+/**
+ * Bug 116: a paid ceasefire covers the NPC's whole faction for 10 minutes.
+ * True when $action is ATTACK on the player side and must be dropped.
+ */
+function stobeNegCeasefireBlocksAttack(string $npc, string $action): bool {
+    if (!preg_match('/^ATTACK@([^@]+)(?:@help)?$/i', trim($action), $m)) return false;
+    try {
+        $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+        $target = normalizeParticipantNameToken(trim($m[1]));
+        if (!function_exists('stobeNegIsPlayerSide') || !stobeNegIsPlayerSide($target, $player)) return false;
+        $me = $GLOBALS['db']->fetchOne("SELECT faction FROM core_npc_master WHERE LOWER(name)=LOWER($1) LIMIT 1", [$npc]);
+        $faction = trim(strval($me['faction'] ?? ''));
+        $deal = $faction === '' ? stobeDealRecentCompletedCeasefire($npc) : $GLOBALS['db']->fetchOne(
+            "SELECT c.contract_id FROM stobe_social_contract c JOIN core_npc_master m ON LOWER(m.name)=LOWER(c.npc_name)
+              WHERE c.kind IN ('combat','surrender') AND c.status='COMPLETE'
+                AND c.updated_at > NOW() - interval '600 seconds' AND LOWER(m.faction)=LOWER($1)
+              ORDER BY c.updated_at DESC LIMIT 1",
+            [$faction]
+        );
+        if (!is_array($deal)) return false;
+        if (function_exists('stobeNegCombatEvents')) {
+            foreach (stobeNegCombatEvents(time() - 60, $npc) as $ev) {
+                if (stobeNegCharMatches($ev['target'], $npc) && stobeNegIsPlayerSide($ev['attacker'], $player)) return false;
+            }
+        }
+        stobeLogInfo('Attack on the player dropped: paid ceasefire stands (bug 116)',
+            ['npc'=>$npc, 'action'=>$action, 'faction'=>$faction, 'contract_id'=>$deal['contract_id'] ?? '']);
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 function stobeDealRecentCompletedCeasefire(string $npc, int $seconds = 600): ?array {
     try {
         $row = $GLOBALS['db']->fetchOne(

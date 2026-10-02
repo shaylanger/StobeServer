@@ -14798,6 +14798,9 @@ function streamResponse(
             array_unshift($actions, $structuredAction);
         }
     }
+    if (count($actions) > 0 && function_exists('stobeNegCeasefireBlocksAttack')) { // bug 116
+        $actions = array_values(array_filter($actions, static fn($a) => !stobeNegCeasefireBlocksAttack($actor, strval($a))));
+    }
 
     $queuedActions = 0;
     $effectiveDeliveryGamets = $deliveryGamets > 0

@@ -259,6 +259,12 @@ $dir98b = $db->fetchOne("SELECT kind FROM stobe_negotiation_directive WHERE npc_
 check('defending against counts as a fight with the player (bug 98)', ($dir98b['kind'] ?? '') === 'surrender', $dir98b);
 check('a defence is not an attack for deals (SPARE/truce)', count(stobeNegCombatEvents(time() - 60, 'NegTestBandit98b')) === 0 && count(stobeNegCombatEvents(time() - 60, 'NegTestBandit98b', true)) === 1);
 $db->exec("DELETE FROM stobe_negotiation_directive WHERE npc_name='NegTestBandit98b'");
+// Bug 116: a gang-mate of an NPC with a completed paid ceasefire can't attack the player; after the player attacks, he can.
+$db->exec("UPDATE stobe_social_contract SET status='COMPLETE', updated_at=NOW() WHERE contract_id=$1", [strval($r96['id'] ?? '')]);
+check('paid ceasefire blocks a gang-mate attacking the player (bug 116)', stobeNegCeasefireBlocksAttack('NegTestBandit98b', 'ATTACK@' . $player) === true);
+storeEvent('combat', time(), 1001, "$player: Initiated attack (talking to: NegTestBandit98b)");
+check('...but not after the player attacks him (bug 116)', stobeNegCeasefireBlocksAttack('NegTestBandit98b', 'ATTACK@' . $player) === false);
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE contract_id=$1", [strval($r96['id'] ?? '')]);
 
 // ---------------------------------------------------------------- 12. partner lock (Phase 3)
 $db->exec("UPDATE stobe_social_contract SET updated_at=NOW() WHERE contract_id=$1", [$r['id']]);
