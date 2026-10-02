@@ -5818,6 +5818,82 @@ function stobeBuildStructuredDialogueResponseFormat(
     return $stobeSchema;
 }
 
+function stobeBuildStableDialogueContractPrompt(
+    string $npcName,
+    string $strictListener = ''
+): string {
+    $safeNpc = normalizeParticipantNameToken($npcName);
+    if ($safeNpc === '') {
+        $safeNpc = 'the NPC';
+    }
+    $safeStrictListener = normalizeParticipantNameToken($strictListener);
+    $listenerRule = $safeStrictListener !== ''
+        ? 'Address ' . $safeStrictListener . ' directly and nobody else.'
+        : 'Address whoever just spoke directly.';
+
+    return 'Dialogue turn for ' . $safeNpc . '. ' . $listenerRule
+        . ' Write the next dialogue line naturally, stay in character, and avoid repeating recent phrasing.'
+        . "\n\nOnly use actions that the later Action State and API response schema currently allow; those live sections are authoritative for availability."
+        . "\n\nCommand semantics: GIVE_ITEM hands over an item; GIVE_CATS gives away this NPC's own money and is not trade pricing. For GIVE_CATS/TAKE_CATS put the recipient or victim in target and the numeric count in amount; do not put money in item. For GIVE_ITEM/TAKE_ITEM put only the exact item name in item and use amount only for stack count."
+        . "\n\nPROPERTY/GEAR RULES: Treat possessions according to the later live faction/relationship state. Player-faction squadmates effectively share inventory access, so ordinary squad inventory management is not theft. NPCs outside the player's faction personally own their possessions and should not casually surrender weapons, armor, clothing, medical gear, money, or other valuable/essential property just because the player asks, flatters, pressures, bets, or invents a reason. Genuine barter should be roughly fair using live item values. A temporary loan remains the NPC's property and refusing to return it is a property violation, not permission or a gift. React to a broken loan according to personality, role, strength, allies, danger, and the later live relationship state. To hand the player something currently worn, use GiveItem directly; UnequipItem only removes it while the NPC keeps it."
+        . "\n\nORDERS/GIFTS: Use the later live faction and relationship state to decide willingness. Outsiders do not automatically work for the player and should normally refuse work orders unless trust or an agreed paid deal justifies them. Gifts from outsiders require a real deal or sufficiently high trust; asking, flattery, a sad story, or 'I'll pay you later' is not enough. A trader sells rather than giving goods away for free."
+        . "\n\nPHYSICAL ACTION RULES: KNOCKOUT leaves the target alive and is valid on self or an already helpless target. KILL and FORCE_DRINK require a helpless target. PICKUP_NPC requires a nearby helpless target and is only valid when currently available. CUT_HORNS requires a helpless Shek target whose horns are not already cut and a hacksaw. When the player clearly asks for a supported gameplay action, choose the matching real action instead of merely saying it happened. RoleplayAction must not fake a supported real gameplay action."
+        . "\n\nUse EquipItem for carried gear, UnequipItem for worn gear, SheatheWeapon/DrawWeapon for weapon readiness, FaceTarget for turning toward someone, FirstAid for immediate treatment, Bodyguard for protecting a named actor, Patrol for patrolling the current area, Rescue or PutInBed for incapacitated people, LootTarget for a valid loot target, Imprison/ReleasePrisoner for cage interactions, MoveToTarget for moving near someone without following indefinitely, Repair/Build for nearby structures, and Sit/Sleep/OperateObject for nearby usable world objects when those actions are currently available."
+        . "\n\nTreat CURRENT live equipment/state as authoritative over older dialogue or action history. If an item is still listed as equipped, it is still on even if older text claimed it was removed. If it is in Personal Inventory and not Equipment, it is not being worn. Do not claim a supported physical action already happened unless current world state confirms it."
+        . "\n\nUNEQUIP/EQUIP SPEECH RULE: these actions execute only after the dialogue response is generated. When emitting UnequipItem, speak as intent or action-in-progress such as 'Fine, I'll take it off', never as completed fact such as 'It's off'. When emitting EquipItem, say intent such as 'Let me put it on', never claim it is already on in that same response."
+        . "\n\nDropWeapon physically drops the equipped weapon. Surrender/Disarm removes it from the equipped slot but keeps it in inventory. HoldPosition is a real hold-position order. Requests to wait for a named person should use WaitForGoal instead when that action is available."
+        . "\n\nWorkGoal is for finite autonomous production or gathering requests. Put the desired final output/resource in item, requested count in amount, and only an explicitly requested destination/base/location in target. Persistent planner actions should be used only when currently available. Buying is a last resort and requires explicit player approval when planning discovers it; never sell possessions automatically to fund another goal."
+        . "\n\nImmediate healing requests should use FirstAid when available; SetMedic is for an ongoing medic-job preference. Follow/StopFollow, TravelLocation, PickupNpc, HoldPosition, and StopAttack should be used for their literal supported intents when currently available. If the NPC agrees to end active hostilities, use StopAttack rather than merely claiming peace in dialogue."
+        . "\n\nUse <speech_style> for reference. Return only the structured JSON required by the API response schema.";
+}
+
+function stobeBuildDynamicDialogueContractStatePrompt(
+    string $npcName,
+    array|false $npcData = false,
+    ?bool $inPlayerFaction = null,
+    string $eventType = 'chat'
+): string {
+    $safeNpc = normalizeParticipantNameToken($npcName);
+    if ($safeNpc === '') {
+        $safeNpc = 'the NPC';
+    }
+    if (!is_array($npcData) || count($npcData) === 0) {
+        $npcData = getNpcData($safeNpc);
+    }
+    if (!is_bool($inPlayerFaction) && is_array($npcData) && count($npcData) > 0) {
+        $inPlayerFaction = npcIsInPlayerFaction($npcData);
+    }
+
+    $affinity = is_array($npcData) ? stobeNpcPlayerAffinity($npcData) : 0;
+    $orderTrust = function_exists('stobeNonFactionOrderTrustMin') ? stobeNonFactionOrderTrustMin() : 56;
+    $giftThreshold = max(0, min(100, intval(getSettingInt('GIFT_TRUST_THRESHOLD', 56))));
+    $parts = stobeResolveStructuredDialogueContractParts($safeNpc, $npcData, $inPlayerFaction, $eventType);
+    $actions = is_array($parts['actions'] ?? null) ? $parts['actions'] : [];
+
+    $lines = ['# Dialogue Contract State'];
+    if ($inPlayerFaction === true) {
+        $lines[] = '- Faction status: player faction/squad member; ordinary squad inventory handling is shared-access behavior.';
+    } elseif ($inPlayerFaction === false) {
+        $lines[] = '- Faction status: outside the player faction; this NPC personally owns their possessions and does not work for the player by default.';
+        $lines[] = '- Current player affinity: ' . strval($affinity) . '/100.';
+        $lines[] = '- Minor outsider orders normally require affinity ' . strval($orderTrust) . '+ or an agreed paid deal.';
+        $lines[] = '- Uncompensated outsider gifts normally require affinity ' . strval($giftThreshold) . '+ or an agreed deal.';
+    } else {
+        $lines[] = '- Faction status: uncertain; use the later live relationship/action state conservatively.';
+        $lines[] = '- Current player affinity: ' . strval($affinity) . '/100.';
+    }
+
+    if (stobeCurrentRequestClaimsKeepingProperty()) {
+        $lines[] = '- CURRENT PROPERTY ALERT: the player is explicitly claiming they will keep/take property or refuse its return. If recent context shows a loan or expected return, treat this as a live property violation; do not reinterpret it as a gift or permission.';
+    }
+
+    if (count($actions) > 0) {
+        $lines[] = '- Current schema-allowed actions: ' . implode(', ', $actions) . '.';
+    }
+
+    return implode("\n", $lines);
+}
+
 function stobeBuildOutputContractUserPrompt(
     string $npcName,
     bool $preferAction = false,

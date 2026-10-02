@@ -1027,27 +1027,11 @@ $systemPrompt = buildSystemPrompt(
 // so provider prefix caching can reuse them. Special chat modes keep the old path.
 $cacheableDialogueContractEmbedded = false;
 if (!$narratorMode && !$injectionChatMode && $dialogueMode !== 'cheat') {
-    $cacheableTurnGuidance = stobeBuildTurnGuidanceUserPrompt(
-        $targetNpc,
-        $speaker,
-        false,
-        false,
-        '',
-        $speaker
-    );
-    $cacheableOutputContract = stobeBuildOutputContractUserPrompt(
-        $targetNpc,
-        false,
-        false,
-        npcIsInPlayerFaction($npcData),
-        'chat',
-        $speaker,
-        $npcData
-    );
     $cacheableContractBlock = "# Dialogue Contract\n\n"
-        . $cacheableTurnGuidance
-        . "\n\n"
-        . $cacheableOutputContract;
+        . stobeBuildStableDialogueContractPrompt(
+            $targetNpc,
+            $speaker
+        );
 
     foreach (["\n\n# Current Situation", "\n\n<current_situation>"] as $cacheMarker) {
         $cacheMarkerPos = strpos($systemPrompt, $cacheMarker);
@@ -1061,6 +1045,17 @@ if (!$narratorMode && !$injectionChatMode && $dialogueMode !== 'cheat') {
             $cacheableDialogueContractEmbedded = true;
             break;
         }
+    }
+}
+if ($cacheableDialogueContractEmbedded) {
+    $dynamicDialogueContractState = stobeBuildDynamicDialogueContractStatePrompt(
+        $targetNpc,
+        $npcData,
+        npcIsInPlayerFaction($npcData),
+        'chat'
+    );
+    if ($dynamicDialogueContractState !== '') {
+        $systemPrompt .= "\n\n" . $dynamicDialogueContractState;
     }
 }
 $gameTimePrompt = stobeBuildGameTimePromptBlock($gamets, $npcData);
