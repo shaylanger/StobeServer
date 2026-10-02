@@ -230,6 +230,26 @@ $propose = json_encode(['message'=>'Mercy!','deal_decision'=>'PROPOSE','deal_ter
 $r = stobeDealCaptureResponse($propose, 'NegTestBandit', $player, getNpcData('NegTestBandit') ?: [], '', 'surrender', 'npc');
 $row = stobeNegFetchDeal(strval($r['id'] ?? ''));
 check('NPC offer recorded as PROPOSED by npc', ($row['status'] ?? '') === 'PROPOSED' && ($row['proposer'] ?? '') === 'npc', $row ? [$row['status'], $row['proposer']] : $r);
+// Bug 96: "We're done here." doesn't accept an NPC's own offer even if the model says ACCEPT; "Deal." does.
+fixtureNpc('NegTestBandit96', ['money'=>50,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x2', 'A timid coward.', '20/100');
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit96' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");
+$r96 = stobeDealCaptureResponse($propose, 'NegTestBandit96', $player, getNpcData('NegTestBandit96') ?: [], '', 'surrender', 'npc');
+$acceptNpc = json_encode(['message'=>'Done, then.','deal_decision'=>'ACCEPT','deal_terms'=>'']);
+$rd = stobeDealCaptureResponse($acceptNpc, 'NegTestBandit96', $player, getNpcData('NegTestBandit96') ?: [], "We're done here.", 'surrender');
+$rowd = stobeNegFetchDeal(strval($r96['id'] ?? ''));
+check("conversation-ender doesn't accept an NPC offer (bug 96)", ($rd['decision'] ?? '') === 'NONE' && ($rowd['status'] ?? '') === 'PROPOSED', [$rd, $rowd['status'] ?? null]);
+$ra = stobeDealCaptureResponse($acceptNpc, 'NegTestBandit96', $player, getNpcData('NegTestBandit96') ?: [], 'Deal.', 'surrender');
+check('"Deal." accepts an NPC offer (bug 96)', ($ra['decision'] ?? '') === 'ACCEPT', $ra);
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit96' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");
+// Bug 98: stored health says 100 %, the live "(health N%)" event decides; it isn't throttled.
+fixtureNpc('NegTestBandit98', ['money'=>50,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x2', 'A timid coward.', '100/100');
+$db->exec("UPDATE stobe_negotiation_directive SET created_unix = created_unix - 5000 WHERE npc_name LIKE 'NegTestBandit%'");
+storeEvent('combat', time(), 1000, "NegTestBandit98: Initiated attack (talking to: $player)");
+@touch(stobeNegThrottleMarker('initiative')); // a fresh check just ran
+stobeNegConsiderInitiatives('major_damage', 'NegTestBandit98: took a major hit (health 20%)', "[\"$player|hand_1\",\"NegTestBandit98|hand_3\"]", 1000);
+$dir98 = $db->fetchOne("SELECT kind FROM stobe_negotiation_directive WHERE npc_name='NegTestBandit98' ORDER BY id DESC LIMIT 1");
+check('live health event triggers a surrender offer (bug 98)', ($dir98['kind'] ?? '') === 'surrender', $dir98);
+$db->exec("DELETE FROM stobe_negotiation_directive WHERE npc_name='NegTestBandit98'");
 
 // ---------------------------------------------------------------- 12. partner lock (Phase 3)
 $db->exec("UPDATE stobe_social_contract SET updated_at=NOW() WHERE contract_id=$1", [$r['id']]);

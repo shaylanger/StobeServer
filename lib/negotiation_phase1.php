@@ -382,6 +382,14 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     }
     if ($decision === 'NONE' || $decision === 'REJECT') return ['ok'=>true,'decision'=>$decision];
     if (!in_array($decision, ['ACCEPT','COUNTER','PROPOSE'], true)) return ['ok'=>false,'error'=>'invalid_decision'];
+    // Bug 96: on an NPC's own offer, ACCEPT stands only if the player's line accepts it.
+    if ($decision === 'ACCEPT' && $open !== null && strval($open['proposer'] ?? 'player') === 'npc'
+        && function_exists('stobeNegLooksLikeAcceptance')
+        && !stobeNegLooksLikeAcceptance(strtolower(trim($playerMessage)))) {
+        stobeDealLog('warn', 'Negotiation: ACCEPT ignored, the player did not accept the NPC offer (bug 96)',
+            ['npc'=>$npc, 'message'=>$playerMessage]);
+        return ['ok'=>true,'decision'=>'NONE'];
+    }
     $termsRaw = trim(strval($response['deal_terms'] ?? ''));
     $terms = json_decode($termsRaw, true);
     if (!is_array($terms) && $termsRaw !== '') {
