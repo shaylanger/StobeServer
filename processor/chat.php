@@ -1476,7 +1476,7 @@ if ($manualActionActive && $manualActionCannotSpeak) {
                         // Talk about the deal that's underway: amounts must be its paid/owed figures.
                         $amountCheck = stobeDealProgressAmountCheck($responseText, $targetNpc, $message);
                     } else {
-                        $amountCheck = stobeDealSpeechAmountCheck($responseText, $targetNpc, $dealResult);
+                        $amountCheck = stobeDealSpeechAmountCheck($responseText, $targetNpc, $dealResult, $message); // item 51
                     }
                 } catch (Throwable $amountError) {
                     $amountCheck = null;

@@ -486,6 +486,15 @@ $db->exec("INSERT INTO stobe_negotiation_reputation (player_name, player_kept, p
 check('item 50: reputation read for "NegTestCase50" finds the lower-case row', str_contains(stobeNegReputationLine('NegTestCase50'), 'breaking deals'));
 $db->exec("DELETE FROM stobe_negotiation_reputation WHERE LOWER(player_name)='negtestcase50'");
 
+// ---------------------------------------------------------------- 12n. item 51: quoting the player's offer is not a misquote
+$r51 = ['decision'=>'COUNTER', 'terms'=>[['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>80], ['kind'=>'GIVE_ITEM','by'=>'npc','to'=>'player','item'=>'Black Rag Shirt']]];
+check('item 51: "Sixty cats...? Tell you what - eighty" is left alone',
+    stobeDealSpeechAmountCheck("Sixty cats for the black rag? That's generous. Tell you what - eighty, and I'll hand it over.", 'NegTest51', $r51, "I'll give you 60 cats for that rag shirt. Deal?") === null);
+check('item 51: without the player line it is still flagged',
+    stobeDealSpeechAmountCheck("Sixty cats for the black rag? Tell you what - eighty.", 'NegTest51', $r51) !== null);
+check('item 51: only the player\'s number, never hers: still rewritten',
+    stobeDealSpeechAmountCheck("Sixty cats? For this? Insult money.", 'NegTest51', $r51, "I'll give you 60 cats for that rag shirt.") !== null);
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

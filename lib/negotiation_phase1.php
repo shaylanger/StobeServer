@@ -1090,7 +1090,7 @@ function stobeDealProgressAmountCheck(string $text, string $npc, string $playerM
     return ['line'=>$line, 'spoken'=>$spoken, 'wrong'=>$wrong, 'allowed'=>array_keys($allowed)];
 }
 
-function stobeDealSpeechAmountCheck(string $text, string $npc, array $dealResult): ?array {
+function stobeDealSpeechAmountCheck(string $text, string $npc, array $dealResult, string $playerMessage = ''): ?array {
     $decision = strtoupper(strval($dealResult['decision'] ?? ''));
     if (!in_array($decision, ['ACCEPT','COUNTER','PROPOSE'], true)) return null;
     $terms = is_array($dealResult['terms'] ?? null) ? $dealResult['terms'] : [];
@@ -1106,6 +1106,19 @@ function stobeDealSpeechAmountCheck(string $text, string $npc, array $dealResult
     }
     $allowed = stobeDealAllowedCatsAmounts($terms, is_array($state) ? $state : [], stobeDealNpcPurse($npc));
     $wrong = array_values(array_filter($spoken, static fn($n) => !isset($allowed[$n])));
+    if (count($wrong) > 0 && trim($playerMessage) !== '') {
+        // Item 51: she repeats the player's offer, then names a recorded amount
+        // (often bare: "Tell you what - eighty").
+        $bare = function_exists('stobeNegWordsToNumbers') ? stobeNegWordsToNumbers($text) : $text;
+        $namesHers = false;
+        if (preg_match_all('/\b(\d+)\b/', preg_replace('/(\d),(?=\d{3}\b)/', '$1', $bare) ?? $bare, $bm)) {
+            foreach ($bm[1] as $n) if (isset($allowed[intval($n)])) { $namesHers = true; break; }
+        }
+        if ($namesHers) {
+            $theirs = array_flip(stobeDealSpokenCatsAmounts($playerMessage));
+            $wrong = array_values(array_filter($wrong, static fn($n) => !isset($theirs[$n])));
+        }
+    }
     $capped = is_array($dealResult['capped'] ?? null) ? $dealResult['capped'] : null;
     if ($capped !== null && (count($spoken) === 0 || count($wrong) > 0)) {
         // Bug 130: the cap lowered what she agreed to; say the capped terms, not hers.
