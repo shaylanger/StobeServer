@@ -407,6 +407,19 @@ $dropBlock = stobeRemovedClothingPromptBlock('NegTestDrop', getNpcData('NegTestD
 check('dropped at your feet (full pack): the next turn knows', str_contains($dropBlock, 'Iron Hat') && str_contains($dropBlock, 'at your feet'), $dropBlock);
 $db->exec("DELETE FROM core_npc_master WHERE name='NegTestDrop'");
 
+// ---------------------------------------------------------------- 12h. bug 39: "Already done." to a take-off order
+$npc39 = ['equipment'=>'Black Cloth Shirt [Shoddy] x1 value 202 (A shirt), Chisa Katana [Ancient] x1 value 2789 (A katana)'];
+check('bug 39: done-claim without action gets UNEQUIP_ITEM',
+    stobeTakeOffOrderGuard([], 'Yes. Take the katana off and keep it in your pack.', "Already done. It's in the pack, edge wrapped.", $npc39) === ['UNEQUIP_ITEM@Chisa Katana']);
+check('bug 39: stow in pack -> SHEATHE replaced by UNEQUIP_ITEM',
+    stobeTakeOffOrderGuard(['SHEATHE_WEAPON@'], 'Malzin, stow your katana in your pack for now.', "Fine. I'll put it away.", $npc39) === ['UNEQUIP_ITEM@Chisa Katana']);
+check('bug 39: a refusal adds nothing',
+    stobeTakeOffOrderGuard([], 'Take your katana off.', 'No. The katana stays on my hip.', $npc39) === null);
+check('bug 39: an UNEQUIP already there is left alone',
+    stobeTakeOffOrderGuard(['UNEQUIP_ITEM@Chisa Katana'], 'Take your katana off.', "Fine, I'll take it off.", $npc39) === null);
+check('bug 39: an item she is not wearing adds nothing',
+    stobeTakeOffOrderGuard([], 'Take your hat off.', 'Already done.', $npc39) === null);
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

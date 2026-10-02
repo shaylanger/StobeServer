@@ -1152,6 +1152,46 @@ function stobeDealFixTakeOffTerms(array $terms, array|false $npcData, string $pl
     return $terms;
 }
 
+// ---- Bug 39: "Already done." to a take-off order with no action ----------------------
+
+/**
+ * The player told her to take off / stow a worn item, she agreed or claimed it's done,
+ * but no take-off action came back: returns the fixed action list, or null.
+ */
+function stobeTakeOffOrderGuard(array $actions, string $playerMessage, string $reply, array|false $npcData): ?array {
+    if (!is_array($npcData) || trim($playerMessage) === '') return null;
+    $m = strtolower($playerMessage);
+    $toPack = preg_match('/\b(pack|bag|backpack|inventory)\b/', $m) === 1;
+    $order = preg_match("/\b(take (it|them|that|those|the [a-z' -]{1,40}|your [a-z' -]{1,40}) off|take off|remove|unequip|strip)\b/", $m) === 1
+        || ($toPack && preg_match('/\b(stow|put|keep|pack)\b/', $m) === 1);
+    if (!$order) return null;
+    if (preg_match("/\b(hand|give|pass|toss|throw)\b[^.?!]{0,40}\b(me|over)\b|\bto me\b/", $m)) return null;
+    foreach ($actions as $a) {
+        if (preg_match('/^(UNEQUIP_ITEM|DROP_WEAPON|DROP_ITEM|SURRENDER|DISARM|GIVE_ITEM)@/i', strval($a))) return null;
+    }
+    $r = strtolower($reply);
+    $claimsDone = preg_match("/\b(already done|done|it'?s (off|away|in (the|my) (pack|bag))|in the pack|in my pack|taken (it )?off)\b/", $r) === 1;
+    $agrees = preg_match("/\b(fine|sure|alright|all right|okay|ok|i'?ll|will do|as you say|if you say so)\b/", $r) === 1;
+    $refuses = preg_match("/\b(no|not|won'?t|never|stays|rather not|refuse|can'?t)\b/", $r) === 1;
+    if (!$claimsDone && !($agrees && !$refuses)) return null;
+    if (!function_exists('stobeNegInventoryDisplayNames')) return null;
+    $worn = stobeNegInventoryDisplayNames(strval($npcData['equipment'] ?? ''));
+    $pick = '';
+    foreach ($worn as $lower => $display) {
+        foreach (preg_split('/\s+/', $lower) ?: [] as $word) {
+            if (strlen($word) >= 4 && preg_match('/\b' . preg_quote($word, '/') . 's?\b/', $m)) { $pick = $display; break 2; }
+        }
+    }
+    if ($pick === '') return null;
+    $fixed = [];
+    foreach ($actions as $a) {
+        if ($toPack && preg_match('/^SHEATHE_WEAPON@/i', strval($a))) continue;
+        $fixed[] = $a;
+    }
+    $fixed[] = 'UNEQUIP_ITEM@' . $pick;
+    return $fixed;
+}
+
 // ---- Bug 30: agreed in words, nothing recorded -------------------------------------------
 
 /** Her line agrees to the offer on the table. */

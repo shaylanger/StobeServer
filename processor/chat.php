@@ -1554,6 +1554,14 @@ if ($manualActionActive && $manualActionCannotSpeak) {
                 }
             }
         }
+        if (function_exists('stobeTakeOffOrderGuard')
+            && ($takeOffFixed = stobeTakeOffOrderGuard($responseActions, $message, $responseText, $npcData)) !== null) {
+            // Bug 39: she said it's done / agreed, but no take-off action came back.
+            stobeLogWarn('Take-off order: reply had no take-off action; UNEQUIP_ITEM added (bug 39)', [
+                'npc'=>$targetNpc, 'text'=>$responseText, 'before'=>$responseActions, 'after'=>$takeOffFixed,
+            ]);
+            $responseActions = $takeOffFixed;
+        }
         stobeLogInfo('LLM stream response generated', [
             'target_npc' => $targetNpc,
             'model' => $llmConfig['model'] ?? '',
