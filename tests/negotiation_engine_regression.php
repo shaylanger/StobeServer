@@ -180,6 +180,14 @@ backdate($id, 7);
 storeEvent('combat', time(), 1000, "$player: Initiated attack (talking to: NegTestBandit)");
 stobeNegTick();
 check('bug 127: an attack 12 s after sparing is', termStatus($id, 0) === 'UNMET', [status($id), termStatus($id, 0)]);
+
+// ---------------------------------------------------------------- 6d. bug 128: a directive follows an NPC named mid-fight
+$db->exec("DELETE FROM stobe_negotiation_directive");
+stobeNegQueueDirective('NegTest Bowman', 'surrender', '', ['actions'=>[]], false);
+check('bug 128: another titled NPC does not take it', stobeNegClaimDirective(['Gost [NegTest Archer]']) === null);
+$claimed = stobeNegClaimDirective(['Shay', 'Gost [NegTest Bowman]']);
+check('bug 128: "Gost [NegTest Bowman]" takes the "NegTest Bowman" directive', is_array($claimed) && $claimed['npc_name'] === 'Gost [NegTest Bowman]', $claimed);
+$db->exec("DELETE FROM stobe_negotiation_directive");
 $db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE contract_id=$1", [$id]);
 $db->exec("DELETE FROM eventlog WHERE data LIKE '%NegTestBandit%' AND type='combat'");
 $db->exec("DELETE FROM stobe_negotiation_directive");

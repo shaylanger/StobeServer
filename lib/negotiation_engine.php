@@ -1453,8 +1453,15 @@ function stobeNegClaimDirective(array $candidateNames, string $onlyNpc = ''): ?a
             $npc = strval($row['npc_name']);
             if ($onlyNpc !== '' && strcasecmp($npc, $onlyNpc) !== 0) continue;
             $present = $onlyNpc !== '';
+            $renamed = '';
             foreach ($candidateNames as $candidate) {
-                if (strcasecmp(normalizeParticipantNameToken(strval($candidate)), $npc) === 0) $present = true;
+                $candidate = normalizeParticipantNameToken(strval($candidate));
+                if (strcasecmp($candidate, $npc) === 0) $present = true;
+                // Bug 128: named mid-fight: "Dust Bandit Bowman" is now "Gost [Dust Bandit Bowman]".
+                elseif (preg_match('/^.+\[\s*(.+?)\s*\]$/', $candidate, $bm) && strcasecmp($bm[1], $npc) === 0) {
+                    $present = true;
+                    $renamed = $candidate;
+                }
             }
             if (!$present) continue;
             $claimed = $GLOBALS['db']->exec(
@@ -1462,6 +1469,11 @@ function stobeNegClaimDirective(array $candidateNames, string $onlyNpc = ''): ?a
                 [intval($row['id']), time()]
             );
             if ($claimed === false || $GLOBALS['db']->affectedRows($claimed) !== 1) continue;
+            if ($renamed !== '') {
+                $GLOBALS['db']->exec("UPDATE stobe_negotiation_directive SET npc_name=$2 WHERE id=$1", [intval($row['id']), $renamed]);
+                stobeLogInfo('Directive follows the NPC\'s new name (bug 128)', ['from'=>$npc, 'to'=>$renamed, 'kind'=>$row['kind'] ?? '']);
+                $row['npc_name'] = $renamed;
+            }
             $row['payload'] = stobeNegDecode($row['payload'] ?? []);
             return $row;
         }
