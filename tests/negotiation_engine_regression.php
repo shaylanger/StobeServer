@@ -462,6 +462,13 @@ $t44e = stobeDealFixCatsDirectionFromWords(
     [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>50]], "I'll give you 50 cats for your hat.");
 check('item 44: "I\'ll give you 50" is left alone', ($t44e[0]['by'] ?? '') === 'player');
 
+$t46c = stobeDealFixTargetField([
+    ['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>100],
+    ['kind'=>'STOP_ATTACK','by'=>'player','target'=>'npc'],
+]);
+check("item 46: the player's STOP_ATTACK becomes SPARE", ($t46c[1]['kind'] ?? '') === 'SPARE' && ($t46c[1]['target'] ?? '') === 'npc', $t46c);
+check('item 46: that deal validates', stobeDealValidate(['parties'=>['npc'=>'a','player'=>'b'],'terms'=>$t46c])['ok'] === true);
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");
