@@ -495,6 +495,13 @@ check('item 51: without the player line it is still flagged',
 check('item 51: only the player\'s number, never hers: still rewritten',
     stobeDealSpeechAmountCheck("Sixty cats? For this? Insult money.", 'NegTest51', $r51, "I'll give you 60 cats for that rag shirt.") !== null);
 
+// ---------------------------------------------------------------- 12o. item 52: "gives 50 cats now" is not an item
+foreach (['npc gives 50 cats up front', 'npc returns 50 cats'] as $x52) {
+    $t52 = stobeDealParseTermsText($x52);
+    $items52 = array_filter(is_array($t52) ? $t52 : [], static fn($t) => in_array($t['kind'] ?? '', ['GIVE_ITEM','RETURN_ITEM'], true));
+    check('item 52: "' . $x52 . '" is not an item term', count($items52) === 0, $t52);
+}
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

@@ -723,9 +723,9 @@ function stobeDealParseTermsText(string $text): ?array {
             foreach ($splitItems($m[2]) as $item) $terms[] = ['kind'=>'EQUIP_ITEM', 'by'=>trim($m[1]), 'item'=>$item];
         } elseif (preg_match('/^(.+?)\s+promises?\s*:?\s*(.+)$/i', $part, $m)) {
             $terms[] = ['kind'=>'PROMISE', 'by'=>trim($m[1]), 'text'=>trim($m[2])];
-        } elseif (preg_match('/^(.+?)\s+(?:returns?\s+item|returns?)\s+([^,]+)$/i', $part, $m) && !preg_match('/\d+\s*cats?/i', $m[2])) {
+        } elseif (preg_match('/^(.+?)\s+(?:returns?\s+item|returns?)\s+([^,]+)$/i', $part, $m) && !preg_match('/\d+\s*cats?\b/i', $m[2])) {
             $terms[] = ['kind'=>'RETURN_ITEM', 'by'=>trim($m[1]), 'item'=>trim($m[2])];
-        } elseif (preg_match('/^(.+?)\s+(?:gives?\s+item|gives?)\s+([^,]+)$/i', $part, $m) && !preg_match('/\d+\s*cats?/i', $m[2])) {
+        } elseif (preg_match('/^(.+?)\s+(?:gives?\s+item|gives?)\s+([^,]+)$/i', $part, $m) && !preg_match('/\d+\s*cats?\b/i', $m[2])) {
             $terms[] = ['kind'=>'GIVE_ITEM', 'by'=>trim($m[1]), 'item'=>trim($m[2])];
         } elseif (preg_match('/^(.+?)\s+(?:stops?\s+attack(?:ing)?|stops?\s+fighting)$/i', $part, $m)) {
             $terms[] = ['kind'=>'STOP_ATTACK', 'by'=>trim($m[1]), 'target'=>'player'];
