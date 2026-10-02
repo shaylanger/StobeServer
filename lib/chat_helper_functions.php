@@ -418,6 +418,70 @@ function buildActionGuidanceFromRows(array $rows, array $npcData = [], bool $sta
 }
 
 /** Speech that states an equip already happened (it only executes after the reply). */
+/** "Black Rag Shirt [Shoddy] x1 value 96, ..." -> ['black rag shirt' => 'Black Rag Shirt'] */
+function stobeItemListDisplayNames(string $text): array {
+    $names = [];
+    foreach (preg_split('/,\s*(?=[^,]*\bx\d+)/', $text) ?: [] as $entry) {
+        if (!preg_match('/^\s*(.+?)\s+x\d+\b/', $entry, $m)) continue;
+        $display = trim(preg_replace('/\s*\[[^\]]*\]|\s*\([^)]*\)/', '', $m[1]) ?? '');
+        if ($display !== '') $names[strtolower($display)] = $display;
+    }
+    return $names;
+}
+
+/** A name matches an item: same name, one inside the other, or the same last word ("shirt"). */
+function stobeItemNameMatches(string $query, string $itemLower, bool $loose = true): bool {
+    $q = strtolower(trim(preg_replace('/\s*\[[^\]]*\]|\s*\([^)]*\)/', '', $query) ?? ''));
+    $q = trim(preg_replace('/^(?:your|my|her|his|the|that|this)\s+/', '', $q) ?? $q);
+    if ($q === '') return false;
+    if ($q === $itemLower || str_contains($itemLower, $q) || str_contains($q, $itemLower)) return true;
+    if (!$loose) return false;
+    $qWords = preg_split('/\s+/', $q) ?: [];
+    $iWords = preg_split('/\s+/', $itemLower) ?: [];
+    return count($qWords) > 1 && end($qWords) === end($iWords) && count(array_intersect($qWords, $iWords)) >= 2;
+}
+
+/**
+ * Bug 119: the worn item an equip request names, when she carries no unworn one like it.
+ * Returns the worn display names ('' list when it isn't a worn item).
+ */
+function stobeWornItemsMatching(string $query, array|false $npcData): array {
+    if (!is_array($npcData) || trim($query) === '') return [];
+    $worn = stobeItemListDisplayNames(strval($npcData['equipment'] ?? ''));
+    $carried = stobeItemListDisplayNames(strval($npcData['inventory'] ?? ''));
+    foreach ($carried as $lower => $display) {
+        if (stobeItemNameMatches($query, $lower)) return []; // an unworn one: equipping it is real
+    }
+    foreach ([false, true] as $loose) { // the exact item first, "same kind" only if none
+        $hits = [];
+        foreach ($worn as $lower => $display) {
+            if (stobeItemNameMatches($query, $lower, $loose)) $hits[] = $display;
+        }
+        if (count($hits) > 0) return $hits;
+    }
+    return [];
+}
+
+/** Bug 119: prompt note when the player asks her to put on what she already wears, or ''. */
+function stobeWornItemRequestNote(string $playerMessage, array|false $npcData): string {
+    $m = strtolower($playerMessage);
+    if (!preg_match("/\b(put|get|slip|pull|throw)\b[^.?!]{0,50}\bon\b|\b(wear|equip|don)\b/", $m)) return '';
+    if (preg_match("/\b(take|took|get|pull)\b[^.?!]{0,30}\boff\b|\bremove|unequip|strip/", $m)) return '';
+    if (!is_array($npcData)) return '';
+    $worn = stobeItemListDisplayNames(strval($npcData['equipment'] ?? ''));
+    $hits = [];
+    foreach ($worn as $lower => $display) {
+        $words = preg_split('/\s+/', $lower) ?: [];
+        // The full name, or "your <last word>" ("put your shirt back on").
+        if (str_contains($m, $lower) || preg_match('/\b' . preg_quote(end($words), '/') . 's?\b/', $m)) {
+            if (count(stobeWornItemsMatching($display, $npcData)) > 0) $hits[] = $display;
+        }
+    }
+    if (count($hits) === 0) return '';
+    return 'You are already wearing your ' . implode(' and your ', $hits)
+        . ': say it is already on; do not use EquipItem for it.';
+}
+
 function stobeSpeechClaimsEquipDone(string $message): bool {
     $done = '/\b(back\s+on|already\s+on|(?:it|they)(?:\'|’)(?:s|re)\s+on|(?:it|they)\s+(?:is|are)\s+on|(?:put|got)\s+(?:it|them|that|those)\s+(?:back\s+)?on)\b/i';
     $intent = '/\b(let me|i(?:\'|’)ll|gonna|going to)\b/i';
@@ -15023,6 +15087,15 @@ function streamResponse(
         }
         if (str_starts_with($normalizedAction, 'EQUIP_ITEM@')) {
             $equipQuery = trim(substr($normalizedAction, strlen('EQUIP_ITEM@')));
+            $wornHits = stobeWornItemsMatching($equipQuery, $actorData);
+            if (count($wornHits) > 0) {
+                // Bug 119: she already wears it; nothing to equip.
+                stobeLogInfo('Equip of an item she already wears dropped (bug 119)', ['actor'=>$actor, 'item'=>$equipQuery, 'worn'=>$wornHits]);
+                if ($message !== '' && preg_match("/\b(let me|i(?:'|’)ll|gonna|going to)\b[^.?!]{0,40}\bon\b/i", $message)) {
+                    $message = 'My ' . $wornHits[0] . "'s already on.";
+                }
+                continue;
+            }
             if (stobeSpeechClaimsEquipDone($message)) {
                 $message = "Alright. Let me put " . ($equipQuery !== '' ? $equipQuery : 'it') . " on.";
                 stobeLogInfo('Rewrote premature equip completion claim', [

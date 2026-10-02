@@ -352,6 +352,17 @@ $people = "[\"$player|hand_1\",\"NegTestBandit|hand_2\",\"Trella [Slaver Guard]|
 check('unnamed line routed to partner', stobeNegPartnerForUnnamedLine('Trella [Slaver Guard]', 'Do we have a deal?', $people) === 'NegTestBandit');
 check('named line respected', stobeNegPartnerForUnnamedLine('Trella [Slaver Guard]', 'Trella, back off.', $people) === '');
 
+// ---------------------------------------------------------------- 12b. bug 119: putting on what she already wears
+$wornNpc = ['equipment'=>'Black Cloth Shirt [Shoddy] x1 value 202, Black Rag Shirt [Shoddy] x1 value 96, Iron Hat [Shoddy] x1 value 526',
+    'inventory'=>'Basic First Aid Kit x1 value 67'];
+check('bug 119: worn item named in an equip action', stobeWornItemsMatching('Black Rag Shirt', $wornNpc) === ['Black Rag Shirt'], stobeWornItemsMatching('Black Rag Shirt', $wornNpc));
+check('bug 119: an unworn copy can be equipped', stobeWornItemsMatching('Black Rag Shirt', array_merge($wornNpc, ['inventory'=>'Black Rag Shirt x1 value 96'])) === []);
+check('bug 119: something she does not wear is not matched', stobeWornItemsMatching('Leather Vest', $wornNpc) === []);
+$note119 = stobeWornItemRequestNote('Put your black rag shirt back on.', $wornNpc);
+check('bug 119: note for "put your black rag shirt back on"', str_contains($note119, 'Black Rag Shirt') && !str_contains($note119, 'Iron Hat'), $note119);
+check('bug 119: no note for taking it off', stobeWornItemRequestNote('Take your black rag shirt off.', $wornNpc) === '');
+check('bug 119: no note for an item she does not wear', stobeWornItemRequestNote('Put on the leather vest.', $wornNpc) === '');
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

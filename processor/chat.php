@@ -1305,6 +1305,14 @@ if ($negotiationActive && function_exists('stobeDealTakeUnrecordedAgreement')) {
         $messages[] = ['role' => 'user', 'content' => '[' . $unrecordedNote . ']'];
     }
 }
+// Bug 119: asked to put on what she already wears: tell her it's on.
+if (!$narratorMode && strcasecmp($speaker, $playerName) === 0 && function_exists('stobeWornItemRequestNote')) {
+    $wornNote = stobeWornItemRequestNote($message, $npcData);
+    if ($wornNote !== '') {
+        $messages[] = ['role' => 'user', 'content' => '[' . $wornNote . ']'];
+        stobeLogInfo('Worn item note added (bug 119)', ['npc'=>$targetNpc, 'note'=>$wornNote]);
+    }
+}
 // Mid-fight replies skip the model's hidden reasoning step (setting COMBAT_FAST_REPLIES).
 $GLOBALS['STOBE_REASONING_OFF'] = is_array($npcData) && stobeNpcIsInCombat($npcData)
     && (function_exists('getSettingBool') ? getSettingBool('COMBAT_FAST_REPLIES', true) : true);
