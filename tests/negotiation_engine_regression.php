@@ -420,6 +420,17 @@ check('bug 39: an UNEQUIP already there is left alone',
 check('bug 39: an item she is not wearing adds nothing',
     stobeTakeOffOrderGuard([], 'Take your hat off.', 'Already done.', $npc39) === null);
 
+// ---------------------------------------------------------------- 12i. item 45: a 0-Cats term doesn't void the deal
+$t45 = stobeDealDropZeroCatsTerms([
+    ['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>0],
+    ['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>50],
+    ['kind'=>'SPARE','by'=>'player','target'=>'npc'],
+]);
+check('item 45: 0-Cats term dropped, the rest kept', count($t45) === 2 && ($t45[0]['by'] ?? '') === 'npc', $t45);
+check('item 45: the deal then validates', stobeDealValidate(['parties'=>['npc'=>'a','player'=>'b'],'terms'=>$t45])['ok'] === true);
+check('item 45: a lone 0-Cats term is left for validation to refuse',
+    count(stobeDealDropZeroCatsTerms([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>0]])) === 1);
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

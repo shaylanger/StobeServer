@@ -492,6 +492,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     $terms = stobeDealNormalizeConditionalTerms(array_values(array_filter($terms, 'is_array')), $npc, $player);
     $terms = stobeDealPromoteClothingPromises($terms, $npcData);
     $terms = stobeDealFixTakeOffTerms($terms, $npcData, $playerMessage);
+    $terms = stobeDealDropZeroCatsTerms($terms); // item 45
     // A social deal needs something from the NPC. Counters often restate only the price:
     // keep the NPC's side from the deal on the table, else refuse the one-sided terms.
     $effectiveKind = $open !== null ? (strval($open['kind'] ?? $kind) ?: $kind) : $kind;
@@ -1190,6 +1191,18 @@ function stobeTakeOffOrderGuard(array $actions, string $playerMessage, string $r
     }
     $fixed[] = 'UNEQUIP_ITEM@' . $pick;
     return $fixed;
+}
+
+// ---- Item 45: a 0-Cats term voids the deal ---------------------------------------------
+
+/** Drops GIVE_CATS terms of 0 Cats when other terms remain. */
+function stobeDealDropZeroCatsTerms(array $terms): array {
+    $kept = array_values(array_filter($terms, static fn($t) => !(is_array($t)
+        && strtoupper(strval($t['kind'] ?? '')) === 'GIVE_CATS'
+        && is_numeric($t['amount'] ?? null) && intval($t['amount']) === 0)));
+    if (count($kept) === count($terms) || count($kept) === 0) return $terms;
+    stobeDealLog('info', 'Negotiation term dropped: 0 Cats (item 45)', ['dropped'=>count($terms) - count($kept)]);
+    return $kept;
 }
 
 // ---- Bug 30: agreed in words, nothing recorded -------------------------------------------
