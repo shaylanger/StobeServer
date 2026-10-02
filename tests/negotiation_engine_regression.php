@@ -443,6 +443,17 @@ $t44c = stobeDealFixCatsDirection(
     [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>300]], ['action'=>'GiveCats','target'=>$player,'amount'=>50], $player);
 check('item 44: a different amount is left alone', ($t44c[0]['by'] ?? '') === 'player');
 
+// ---------------------------------------------------------------- 12k. item 46: SPARE with "to" instead of "target"
+$t46 = stobeDealFixTargetField([
+    ['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>50],
+    ['kind'=>'SPARE','by'=>'player','to'=>'npc'],
+]);
+check('item 46: SPARE target taken from "to"', ($t46[1]['target'] ?? '') === 'npc' && !isset($t46[1]['to']), $t46);
+check('item 46: the deal then validates', stobeDealValidate(['parties'=>['npc'=>'a','player'=>'b'],'terms'=>$t46])['ok'] === true);
+check('item 46: GIVE_CATS keeps its "to"', ($t46[0]['to'] ?? '') === 'player');
+$t46b = stobeDealFixTargetField([['kind'=>'STOP_ATTACK','by'=>'npc']]);
+check('item 46: an NPC STOP_ATTACK without target targets the player', ($t46b[0]['target'] ?? '') === 'player');
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

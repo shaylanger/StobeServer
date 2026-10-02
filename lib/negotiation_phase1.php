@@ -492,6 +492,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     $terms = stobeDealNormalizeConditionalTerms(array_values(array_filter($terms, 'is_array')), $npc, $player);
     $terms = stobeDealPromoteClothingPromises($terms, $npcData);
     $terms = stobeDealFixTakeOffTerms($terms, $npcData, $playerMessage);
+    $terms = stobeDealFixTargetField($terms); // item 46
     $terms = stobeDealFixCatsDirection($terms, $response, $player); // item 44
     $terms = stobeDealDropZeroCatsTerms($terms); // item 45
     // A social deal needs something from the NPC. Counters often restate only the price:
@@ -1229,6 +1230,26 @@ function stobeDealFixCatsDirection(array $terms, array $response, string $player
     $terms[$i]['by'] = 'npc';
     $terms[$i]['to'] = 'player';
     stobeDealLog('warn', 'Negotiation term fixed: her GiveCats action says she pays (item 44)', ['amount'=>$amount]);
+    return $terms;
+}
+
+// ---- Item 46: "to" instead of "target" ----------------------------------------------------
+
+/** STOP_ATTACK/FIRST_AID/SAFE_PASSAGE/SPARE/PROTECT terms get their target from "to" or the obvious default. */
+function stobeDealFixTargetField(array $terms): array {
+    foreach ($terms as $i => $t) {
+        if (!is_array($t)) continue;
+        $kind = strtoupper(strval($t['kind'] ?? ''));
+        if (!in_array($kind, ['STOP_ATTACK','FIRST_AID','SAFE_PASSAGE','SPARE','PROTECT'], true)) continue;
+        if (in_array(strval($t['target'] ?? ''), ['npc','player'], true)) continue;
+        $target = in_array(strval($t['to'] ?? ''), ['npc','player'], true) ? strval($t['to']) : '';
+        if ($target === '' && in_array($kind, ['SPARE','PROTECT'], true)) $target = 'npc';
+        if ($target === '' && $kind === 'STOP_ATTACK' && ($t['by'] ?? '') === 'npc') $target = 'player';
+        if ($target === '') continue;
+        $terms[$i]['target'] = $target;
+        unset($terms[$i]['to']);
+        stobeDealLog('info', 'Negotiation term fixed: target taken from "to" (item 46)', ['kind'=>$kind, 'target'=>$target]);
+    }
     return $terms;
 }
 
