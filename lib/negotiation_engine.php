@@ -1551,10 +1551,15 @@ function stobeNegHasHealthData(array $row): bool {
 function stobeNegConsiderInitiatives(string $eventType, string $eventData, string $peopleRaw, int $gamets): void {
     if (!stobeNegPhaseEnabled(4) && !stobeNegPhaseEnabled(5)) return;
     try {
-        $marker = stobeNegThrottleMarker('initiative');
-        $last = @filemtime($marker);
-        if (is_int($last) && (time() - $last) < 3) return;
-        @touch($marker);
+        // Bug 98: a health drop ("took a major hit (health N%)") is rare and decisive;
+        // only the frequent "Initiated attack" checks are throttled.
+        $healthEvent = strpos($eventData, 'took a major hit (health ') !== false;
+        if (!$healthEvent) {
+            $marker = stobeNegThrottleMarker('initiative');
+            $last = @filemtime($marker);
+            if (is_int($last) && (time() - $last) < 3) return;
+            @touch($marker);
+        }
         stobeNegEnsureSchema();
         $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
         $now = time();
@@ -1572,6 +1577,8 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
         $names = [];
         if (preg_match('/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)/', trim($eventData), $m)) {
             $names = [normalizeParticipantNameToken($m[1]), normalizeParticipantNameToken($m[2])];
+        } elseif (preg_match('/^(.+?):\s*took a major hit/', trim($eventData), $m)) {
+            $names = [normalizeParticipantNameToken($m[1])]; // bug 98: re-check as health drops
         }
         $playerNearby = stripos($peopleRaw, $player) !== false;
         foreach (array_unique(array_filter($names)) as $name) {
@@ -1590,6 +1597,11 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 $ratio = max(0.1, 1.0 - 0.35 * stobeNegMajorHitsOn($name, $now - 90));
             }
             $live = stobeNegLiveHealthRatio($name, $now - 90); // bug 98: stored health is stale mid-fight
+            // The event being handled isn't in the event log yet: read its own "(health N%)".
+            if (count($names) === 1 && preg_match('/\(health (\d+)%\)/', $eventData, $hm)) {
+                $eventLive = max(0.0, min(1.0, intval($hm[1]) / 100.0));
+                if ($live === null || $eventLive < $live) $live = $eventLive;
+            }
             if ($live !== null && $live < $ratio) $ratio = $live;
             $events = stobeNegCombatEvents($now - 90, $name);
             $hostileToPlayer = false;
@@ -1605,6 +1617,7 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
             $offerLine = $offerCap > 0
                 ? 'You carry about ' . $offerCarried . ' Cats; if you offer Cats, offer at most ' . $offerCap . ' (keep it modest). '
                 : 'You have next to no Cats: offer an item, information or just beg - do not offer Cats. ';
+            stobeLogDebug('Initiative check', ['npc'=>$name, 'ratio'=>round($ratio, 2), 'hostile_to_player'=>$hostileToPlayer, 'fighting_others'=>$fightingOthers, 'surrender_ready'=>$surrenderReady, 'threshold'=>round(stobeNegCourageThreshold($personality, 0.35), 2)]);
             if ($surrenderReady && $hostileToPlayer && stobeNegPhaseEnabled(4) && $ratio < stobeNegCourageThreshold($personality, 0.35)) {
                 stobeNegQueueDirective($name, 'surrender', '', [
                     'health_ratio'=>round($ratio, 2),
