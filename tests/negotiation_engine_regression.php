@@ -454,6 +454,14 @@ check('item 46: GIVE_CATS keeps its "to"', ($t46[0]['to'] ?? '') === 'player');
 $t46b = stobeDealFixTargetField([['kind'=>'STOP_ATTACK','by'=>'npc']]);
 check('item 46: an NPC STOP_ATTACK without target targets the player', ($t46b[0]['target'] ?? '') === 'player');
 
+$t44d = stobeDealFixCatsDirectionFromWords(
+    [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>50], ['kind'=>'SPARE','by'=>'player','target'=>'npc']],
+    "Quarl, let's settle it: you give me 50 cats and I let you go.");
+check('item 44: "you give me 50 cats" turns the term round', ($t44d[0]['by'] ?? '') === 'npc' && ($t44d[0]['to'] ?? '') === 'player', $t44d);
+$t44e = stobeDealFixCatsDirectionFromWords(
+    [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>50]], "I'll give you 50 cats for your hat.");
+check('item 44: "I\'ll give you 50" is left alone', ($t44e[0]['by'] ?? '') === 'player');
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

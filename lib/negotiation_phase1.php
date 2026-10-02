@@ -494,6 +494,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     $terms = stobeDealFixTakeOffTerms($terms, $npcData, $playerMessage);
     $terms = stobeDealFixTargetField($terms); // item 46
     $terms = stobeDealFixCatsDirection($terms, $response, $player); // item 44
+    $terms = stobeDealFixCatsDirectionFromWords($terms, $playerMessage); // item 44
     $terms = stobeDealDropZeroCatsTerms($terms); // item 45
     // A social deal needs something from the NPC. Counters often restate only the price:
     // keep the NPC's side from the deal on the table, else refuse the one-sided terms.
@@ -1193,6 +1194,25 @@ function stobeTakeOffOrderGuard(array $actions, string $playerMessage, string $r
     }
     $fixed[] = 'UNEQUIP_ITEM@' . $pick;
     return $fixed;
+}
+
+/** Item 44: the player said the NPC pays them N Cats, but the only Cats term says the player pays N. */
+function stobeDealFixCatsDirectionFromWords(array $terms, string $playerMessage): array {
+    $m = strtolower($playerMessage);
+    if (!preg_match('/\b(?:you\s+(?:give|pay|hand)\s+me|pay\s+me|give\s+me|hand\s+(?:me\s+)?over)\s+(\d{1,7})\b/', $m, $mm)) return $terms;
+    $amount = intval($mm[1]);
+    if ($amount < 1) return $terms;
+    $cats = [];
+    foreach ($terms as $i => $t) {
+        if (is_array($t) && strtoupper(strval($t['kind'] ?? '')) === 'GIVE_CATS') $cats[] = $i;
+    }
+    if (count($cats) !== 1) return $terms;
+    $i = $cats[0];
+    if (($terms[$i]['by'] ?? '') !== 'player' || intval($terms[$i]['amount'] ?? 0) !== $amount) return $terms;
+    $terms[$i]['by'] = 'npc';
+    $terms[$i]['to'] = 'player';
+    stobeDealLog('warn', 'Negotiation term fixed: the player said she pays (item 44)', ['amount'=>$amount]);
+    return $terms;
 }
 
 // ---- Item 45: a 0-Cats term voids the deal ---------------------------------------------
