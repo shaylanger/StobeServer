@@ -1527,6 +1527,9 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
     }
     if (stobeUnpaidGiftWouldBeBlocked($command, $argument, $config)) {
         stobeLogWarn('Blocked unpaid gift to player (not enough trust, no agreed deal)', [
+            'npc' => strval($config['npc_name'] ?? ''),
+            'in_player_faction' => boolval($config['in_player_faction'] ?? false),
+            'trace' => implode(' < ', array_map(static fn($f) => strval($f['function'] ?? ''), array_slice(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 6), 1, 5))),
             'command' => $command,
             'argument' => $argument,
             'affinity' => intval($config['player_affinity'] ?? 0),
@@ -6570,7 +6573,10 @@ function stobeParseStructuredDialogueResponse(string $rawResponse, string $event
                 $heuristicNpcData = $heuristicCharacter !== ''
                     ? getNpcData($heuristicCharacter)
                     : false;
-                $heuristicConfig = getActionRuntimeConfig($eventType);
+                // Bug 120: the speaker's own config (squadmate, trust), not the generic one.
+                $heuristicConfig = is_array($heuristicNpcData)
+                    ? stobeBuildActionConfigForNpc($eventType, $heuristicNpcData)
+                    : getActionRuntimeConfig($eventType);
                 $heuristicConfig['disallow_stop_attack'] = !stobeNpcIsInCombat($heuristicNpcData);
                 $fallbackActionTag = normalizeActionTagToken(
                     $fallbackActionTag,
@@ -6634,7 +6640,9 @@ function stobeParseStructuredDialogueResponse(string $rawResponse, string $event
     $actionTag = '';
     if ($rawActionTag !== '') {
         $speakerNpcData = $character !== '' ? getNpcData($character) : false;
-        $responseConfig = getActionRuntimeConfig($eventType);
+        $responseConfig = is_array($speakerNpcData) // bug 120
+            ? stobeBuildActionConfigForNpc($eventType, $speakerNpcData)
+            : getActionRuntimeConfig($eventType);
         $responseConfig['disallow_stop_attack'] = !stobeNpcIsInCombat($speakerNpcData);
         $actionTag = normalizeActionTagToken($rawActionTag, $responseConfig);
     }
@@ -14806,6 +14814,11 @@ function streamResponse(
     $effectiveDeliveryGamets = $deliveryGamets > 0
         ? $deliveryGamets
         : intval($_POST['gamets'] ?? $_GET['gamets'] ?? 0);
+    // Bug 120: some callers pass no NPC data; without it a squadmate looked like a
+    // low-trust outsider and her gift to the player was blocked.
+    if (!is_array($actorData) && trim($actor) !== '' && function_exists('getNpcData')) {
+        $actorData = getNpcData($actor);
+    }
     $actionConfig = stobeBuildActionConfigForNpc(
         'chat',
         is_array($actorData) ? $actorData : false
