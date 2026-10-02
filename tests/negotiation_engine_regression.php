@@ -431,6 +431,18 @@ check('item 45: the deal then validates', stobeDealValidate(['parties'=>['npc'=>
 check('item 45: a lone 0-Cats term is left for validation to refuse',
     count(stobeDealDropZeroCatsTerms([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>0]])) === 1);
 
+// ---------------------------------------------------------------- 12j. item 44: her GiveCats action decides who pays
+$t44 = stobeDealFixCatsDirection(
+    [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>50], ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']],
+    ['action'=>'GiveCats','target'=>$player,'amount'=>50], $player);
+check('item 44: her GiveCats to the player turns the term round', ($t44[0]['by'] ?? '') === 'npc' && ($t44[0]['to'] ?? '') === 'player', $t44);
+$t44b = stobeDealFixCatsDirection(
+    [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>50]], ['action'=>'Talk','target'=>$player], $player);
+check('item 44: no GiveCats action, terms unchanged', ($t44b[0]['by'] ?? '') === 'player');
+$t44c = stobeDealFixCatsDirection(
+    [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>300]], ['action'=>'GiveCats','target'=>$player,'amount'=>50], $player);
+check('item 44: a different amount is left alone', ($t44c[0]['by'] ?? '') === 'player');
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

@@ -492,6 +492,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     $terms = stobeDealNormalizeConditionalTerms(array_values(array_filter($terms, 'is_array')), $npc, $player);
     $terms = stobeDealPromoteClothingPromises($terms, $npcData);
     $terms = stobeDealFixTakeOffTerms($terms, $npcData, $playerMessage);
+    $terms = stobeDealFixCatsDirection($terms, $response, $player); // item 44
     $terms = stobeDealDropZeroCatsTerms($terms); // item 45
     // A social deal needs something from the NPC. Counters often restate only the price:
     // keep the NPC's side from the deal on the table, else refuse the one-sided terms.
@@ -1203,6 +1204,32 @@ function stobeDealDropZeroCatsTerms(array $terms): array {
     if (count($kept) === count($terms) || count($kept) === 0) return $terms;
     stobeDealLog('info', 'Negotiation term dropped: 0 Cats (item 45)', ['dropped'=>count($terms) - count($kept)]);
     return $kept;
+}
+
+// ---- Item 44: a Cats term the wrong way round -------------------------------------------
+
+/**
+ * Her own action pays the player N Cats, but the only Cats term says the player pays her
+ * N: the term is turned round.
+ */
+function stobeDealFixCatsDirection(array $terms, array $response, string $player): array {
+    $action = strtolower(preg_replace('/[^a-z]/i', '', strval($response['action'] ?? '')) ?? '');
+    if ($action !== 'givecats') return $terms;
+    $target = strtolower(trim(strval($response['target'] ?? '')));
+    if ($target === '' || ($target !== strtolower($player) && $target !== 'player')) return $terms;
+    $amount = intval($response['amount'] ?? 0);
+    if ($amount < 1) return $terms;
+    $cats = [];
+    foreach ($terms as $i => $t) {
+        if (is_array($t) && strtoupper(strval($t['kind'] ?? '')) === 'GIVE_CATS') $cats[] = $i;
+    }
+    if (count($cats) !== 1) return $terms;
+    $i = $cats[0];
+    if (($terms[$i]['by'] ?? '') !== 'player' || intval($terms[$i]['amount'] ?? 0) !== $amount) return $terms;
+    $terms[$i]['by'] = 'npc';
+    $terms[$i]['to'] = 'player';
+    stobeDealLog('warn', 'Negotiation term fixed: her GiveCats action says she pays (item 44)', ['amount'=>$amount]);
+    return $terms;
 }
 
 // ---- Bug 30: agreed in words, nothing recorded -------------------------------------------
