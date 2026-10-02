@@ -250,6 +250,14 @@ stobeNegConsiderInitiatives('major_damage', 'NegTestBandit98: took a major hit (
 $dir98 = $db->fetchOne("SELECT kind FROM stobe_negotiation_directive WHERE npc_name='NegTestBandit98' ORDER BY id DESC LIMIT 1");
 check('live health event triggers a surrender offer (bug 98)', ($dir98['kind'] ?? '') === 'surrender', $dir98);
 $db->exec("DELETE FROM stobe_negotiation_directive WHERE npc_name='NegTestBandit98'");
+// Bug 98: the player side only "defending against" the NPC still counts as fighting the player.
+fixtureNpc('NegTestBandit98b', ['money'=>50,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x2', 'A timid coward.', '100/100');
+$db->exec("UPDATE stobe_negotiation_directive SET created_unix = created_unix - 5000 WHERE kind='surrender' AND npc_name LIKE 'NegTestBandit%'");
+storeEvent('combat', time(), 1000, "$player: Defending against (talking to: NegTestBandit98b)");
+stobeNegConsiderInitiatives('major_damage', 'NegTestBandit98b: took a major hit (health 15%)', "[\"$player|hand_1\",\"NegTestBandit98b|hand_4\"]", 1000);
+$dir98b = $db->fetchOne("SELECT kind FROM stobe_negotiation_directive WHERE npc_name='NegTestBandit98b' ORDER BY id DESC LIMIT 1");
+check('defending against counts as a fight with the player (bug 98)', ($dir98b['kind'] ?? '') === 'surrender', $dir98b);
+$db->exec("DELETE FROM stobe_negotiation_directive WHERE npc_name='NegTestBandit98b'");
 
 // ---------------------------------------------------------------- 12. partner lock (Phase 3)
 $db->exec("UPDATE stobe_social_contract SET updated_at=NOW() WHERE contract_id=$1", [$r['id']]);

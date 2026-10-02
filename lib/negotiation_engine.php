@@ -296,7 +296,8 @@ function stobeNegCombatEvents(int $sinceUnix, string $involving = ''): array {
     );
     $events = [];
     foreach (is_array($rows) ? $rows : [] as $row) {
-        if (!preg_match('/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)\s*$/', trim(strval($row['data'] ?? '')), $m)) continue;
+        // Bug 98: "Defending against" is as much a fight as "Initiated attack".
+        if (!preg_match('/^(.+?):\s*(?:Initiated attack|Defending against)\s*\(talking to:\s*(.+?)\)\s*$/', trim(strval($row['data'] ?? '')), $m)) continue;
         $events[] = ['ts'=>intval($row['localts']), 'attacker'=>normalizeParticipantNameToken($m[1]), 'target'=>normalizeParticipantNameToken($m[2])];
     }
     return $events;
