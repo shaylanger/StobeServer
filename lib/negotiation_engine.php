@@ -1210,14 +1210,27 @@ function stobeNegNpcHasDealContext(string $npc): bool {
  * chat decision, not a call for help), faction-mates who pile in are stood down so
  * a grudge does not turn the whole bar hostile. Toggle PERSONAL_FIGHTS (default on).
  */
+/**
+ * Bug 96: does this player line accept an open offer? Clear acceptance words
+ * anywhere, or a short yes-type reply; never a conversation-ender ("we're done").
+ */
+function stobeNegLooksLikeAcceptance(string $text): bool {
+    $text = strtolower(trim($text));
+    if ($text === '' || str_ends_with($text, '?')) return false;
+    if (preg_match("/\b(no deal|not|don'?t|won'?t|never|nah|no way)\b/", $text)) return false;
+    if (preg_match("/\b(we'?re|we are|i'?m|i am) done\b|\bdone (here|talking|with)\b|\bthat'?s (it|enough)\b/", $text)) return false;
+    if (preg_match("/\b(deal|agreed|agree|accept|accepted|you got it|you'?re on)\b/", $text)) return true;
+    $words = array_values(array_filter(preg_split('/\s+/', trim(preg_replace("/[^a-z0-9' ]+/", ' ', $text))) ?: []));
+    return count($words) > 0 && count($words) <= 4
+        && preg_match("/\b(yes|yeah|yep|sure|ok|okay|fine|done)\b/", $text) === 1;
+}
+
 function stobeNegPlayerAcceptsOfferNote(string $npc, string $message): string {
     try {
         $open = stobeDealOpenForNpc($npc);
         if (!is_array($open) || !in_array(strval($open['status'] ?? ''), ['PROPOSED','COUNTERED'], true)) return '';
         $text = function_exists('stobeNegWordsToNumbers') ? stobeNegWordsToNumbers(strtolower(trim($message))) : strtolower(trim($message));
-        if ($text === '' || str_ends_with($text, '?')) return '';
-        if (!preg_match("/\b(deal|agreed|agree|accept|accepted|fine|okay|ok|yes|sure|done|you got it|you'?re on)\b/", $text)) return '';
-        if (preg_match("/\b(no deal|not|don'?t|won'?t|never|nah|no way)\b/", $text)) return '';
+        if (!stobeNegLooksLikeAcceptance($text)) return ''; // bug 96
         $terms = json_decode(strval($open['terms'] ?? '[]'), true);
         $terms = is_array($terms) ? $terms : [];
         $amounts = [];
