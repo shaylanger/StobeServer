@@ -472,6 +472,12 @@ check('item 46: that deal validates', stobeDealValidate(['parties'=>['npc'=>'a',
 $t46d = stobeDealFixTargetField([['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>100], ['kind'=>'SAFE_PASSAGE','by'=>'player','to'=>'npc']]);
 check("item 46: the player's SAFE_PASSAGE becomes SPARE", ($t46d[1]['kind'] ?? '') === 'SPARE' && stobeDealValidate(['parties'=>['npc'=>'a','player'=>'b'],'terms'=>$t46d])['ok'] === true, $t46d);
 
+// ---------------------------------------------------------------- 12l. item 49: paid after being named
+check('item 49: "Weth [Dust Bandit]" matches the deal\'s "Dust Bandit"', stobeNegCharMatches('Weth [Dust Bandit]', 'Dust Bandit') === true);
+check('item 49: and the other way round', stobeNegCharMatches('Dust Bandit', 'Weth [Dust Bandit]') === true);
+check('item 49: a different generic name does not match', stobeNegCharMatches('Weth [Dust Bandit]', 'Dust Bandit Bowman') === false);
+check('item 49: two different named NPCs do not match', stobeNegCharMatches('Weth [Dust Bandit]', 'Yarel [Dust Bandit]') === false);
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

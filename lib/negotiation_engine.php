@@ -416,6 +416,10 @@ function stobeNegCharMatches(string $a, string $b): bool {
     $a1 = strtolower(trim($a));
     $b1 = strtolower(trim($b));
     if ($a1 === '' || $b1 === '') return false;
+    // Item 49: named after the deal: "Weth [Dust Bandit]" is the "Dust Bandit" of the deal.
+    foreach ([[$a1, $b1], [$b1, $a1]] as [$named, $generic]) {
+        if (preg_match('/^.+\[\s*(.+?)\s*\]$/', $named, $bm) && $bm[1] === $generic) return true;
+    }
     if ($a1 === $b1) return true;
     return $norm($a) !== '' && $norm($a) === $norm($b);
 }
