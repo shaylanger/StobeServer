@@ -1666,15 +1666,21 @@ if (!$manualActionForcedEmoteOnly && !$narratorMode) {
         : ($injectionMode
             ? 'Injected event: ' . $message
             : $speaker . ': ' . $message);
-    $relationshipEval = stobeEvaluateRelationshipsForTurn(
-        $targetNpc,
-        $replyTarget,
-        $relationshipInput,
-        $responseText,
-        $npcData,
-        'chat'
-    );
-    $responseText = sanitizeForKenshi(trim(strval($relationshipEval['clean_response'] ?? $responseText)));
+    if (!$alreadyStreamed) {
+        // Not spoken yet: speak before the relationship evaluation (an LLM call), run it after.
+        $deferredRelationshipEval = [$relationshipInput, $responseText];
+        $responseText = sanitizeForKenshi(trim(stobeStripRelationshipCommandTags($responseText)));
+    } else {
+        $relationshipEval = stobeEvaluateRelationshipsForTurn(
+            $targetNpc,
+            $replyTarget,
+            $relationshipInput,
+            $responseText,
+            $npcData,
+            'chat'
+        );
+        $responseText = sanitizeForKenshi(trim(strval($relationshipEval['clean_response'] ?? $responseText)));
+    }
     if (!stobeInlineNarrationApplies($targetNpc, 'chat')) {
         $responseText = stobeStripParentheticalDialogueText($responseText);
     }
@@ -1718,6 +1724,13 @@ if ($alreadyStreamed) {
         $replyTarget,
         intval($gamets)
     );
+}
+if (isset($deferredRelationshipEval)) {
+    try {
+        stobeEvaluateRelationshipsForTurn($targetNpc, $replyTarget, $deferredRelationshipEval[0], $deferredRelationshipEval[1], $npcData, 'chat');
+    } catch (Throwable $relationshipEvalError) {
+        stobeLogWarn('Relationship evaluation after speaking failed', ['npc'=>$targetNpc, 'error'=>$relationshipEvalError->getMessage()]);
+    }
 }
 if (isset($dealResult) && ($dealResult['decision'] ?? '') === 'ACCEPT'
     && ($dealResult['status'] ?? '') === 'ACCEPTED' && function_exists('stobeNegBeginPerformance')) {
