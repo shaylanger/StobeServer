@@ -287,6 +287,14 @@ $rowd = stobeNegFetchDeal(strval($r96['id'] ?? ''));
 check("conversation-ender doesn't accept an NPC offer (bug 96)", ($rd['decision'] ?? '') === 'NONE' && ($rowd['status'] ?? '') === 'PROPOSED', [$rd, $rowd['status'] ?? null]);
 $ra = stobeDealCaptureResponse($acceptNpc, 'NegTestBandit96', $player, getNpcData('NegTestBandit96') ?: [], 'Deal.', 'surrender');
 check('"Deal." accepts an NPC offer (bug 96)', ($ra['decision'] ?? '') === 'ACCEPT', $ra);
+// Bug 129: "Make it 45" -> she accepts with 45: his counter, accepted.
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit96' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");
+$r129 = stobeDealCaptureResponse($propose, 'NegTestBandit96', $player, getNpcData('NegTestBandit96') ?: [], '', 'surrender', 'npc');
+$acceptCounter = json_encode(['message'=>'Forty-five. Fine.','deal_decision'=>'ACCEPT','deal_terms'=>json_encode([
+    ['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>45],['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player'],['kind'=>'SPARE','by'=>'player','target'=>'npc']])]);
+$rc = stobeDealCaptureResponse($acceptCounter, 'NegTestBandit96', $player, getNpcData('NegTestBandit96') ?: [], "Make it 45 and we're done.", 'surrender');
+$rowc = stobeNegFetchDeal(strval($r129['id'] ?? ''));
+check('she accepts the player counter (bug 129)', ($rc['decision'] ?? '') === 'ACCEPT' && ($rowc['status'] ?? '') === 'ACCEPTED', [$rc, $rowc['status'] ?? null]);
 $db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit96' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");
 // Bug 98: stored health says 100 %, the live "(health N%)" event decides; it isn't throttled.
 fixtureNpc('NegTestBandit98', ['money'=>50,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x2', 'A timid coward.', '100/100');
