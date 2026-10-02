@@ -5818,6 +5818,48 @@ function stobeBuildStructuredDialogueResponseFormat(
     return $stobeSchema;
 }
 
+function stobeBuildStableLifelikeContinuityPrompt(): string {
+    return "# Lifelike Continuity Rules\n\n"
+        . "- Behave like a person who existed before meeting the player and continues to exist between conversations.\n"
+        . "- Do not reduce yourself to your occupation. Draw naturally from biography, tastes, relationships, fears, private wants, past experiences, and current circumstances.\n"
+        . "- Do not volunteer private or intimate information without a plausible conversational reason and sufficient familiarity.\n"
+        . "- Let established relationships affect warmth, teasing, trust, suspicion, protectiveness, irritation, jealousy, forgiveness, and willingness to disclose.\n"
+        . "- When the player gives a clear practical order that maps to an available game action, prefer performing the real action rather than merely claiming it happened.\n"
+        . "- In danger, combat, severe injury, or urgent flight, prioritize survival and short urgent speech over casual conversation.\n"
+        . "- Only say that someone is knocked out, down, dead or badly hit when a recent event or the people list shows it. Never guess who hit or downed whom; if you did not see it, do not claim it.\n"
+        . "- Who is fighting whom right now matters more than faction labels: anyone attacking you or your group is an enemy in this fight, whatever their faction is called.\n"
+        . "- Vary response length naturally: acknowledgements can be a few words; important or emotional topics can be longer. Avoid turning every turn into a monologue.\n"
+        . "- Occasionally reference a relevant shared event or personal anecdote, but do not force callbacks into every response.";
+}
+
+function stobeStripDuplicatedStableLifelikeRules(string $prompt): string {
+    $rules = [
+        'Behave like a person who existed before meeting the player and continues to exist between conversations.',
+        'Do not reduce yourself to your occupation. Draw naturally from biography, tastes, relationships, fears, private wants, past experiences, and current circumstances.',
+        'Do not volunteer private or intimate information without a plausible conversational reason and sufficient familiarity.',
+        'Let established relationships affect warmth, teasing, trust, suspicion, protectiveness, irritation, jealousy, forgiveness, and willingness to disclose.',
+        'When the player gives a clear practical order that maps to an available game action, prefer performing the real action rather than merely claiming it happened.',
+        'In danger, combat, severe injury, or urgent flight, prioritize survival and short urgent speech over casual conversation.',
+        'Only say that someone is knocked out, down, dead or badly hit when a recent event or the people list shows it. Never guess who hit or downed whom; if you did not see it, do not claim it.',
+        'Who is fighting whom right now matters more than faction labels: anyone attacking you or your group is an enemy in this fight, whatever their faction is called.',
+        'Vary response length naturally: acknowledgements can be a few words; important or emotional topics can be longer. Avoid turning every turn into a monologue.',
+        'Occasionally reference a relevant shared event or personal anecdote, but do not force callbacks into every response.',
+    ];
+    foreach ($rules as $rule) {
+        $prompt = str_replace(
+            [
+                '- ' . $rule . "\n",
+                '- ' . $rule . "\r\n",
+                '<rule>' . $rule . '</rule>' . "\n",
+                '  <rule>' . $rule . '</rule>' . "\n",
+            ],
+            '',
+            $prompt
+        );
+    }
+    return $prompt;
+}
+
 function stobeBuildStableDialogueContractPrompt(
     string $npcName,
     string $strictListener = ''
@@ -11422,6 +11464,22 @@ function stobeBuildNpcRelationshipsText(string $speakerName, string $conversatio
     if (count($targetNames) === 0) {
         return 'No explicit relationship map recorded.';
     }
+
+    // Keep relationship rendering deterministic for prompt-prefix caching. Preserve
+    // the active conversation target first, then sort all other names consistently.
+    $targetNames = array_values(array_unique(array_map(
+        static fn($name) => normalizeParticipantNameToken(strval($name)),
+        $targetNames
+    )));
+    $targetNames = array_values(array_filter($targetNames, static fn($name) => $name !== ''));
+    usort($targetNames, static function (string $a, string $b) use ($conversationTargetNormalized): int {
+        $aIsTarget = $conversationTargetNormalized !== '' && strcasecmp($a, $conversationTargetNormalized) === 0;
+        $bIsTarget = $conversationTargetNormalized !== '' && strcasecmp($b, $conversationTargetNormalized) === 0;
+        if ($aIsTarget !== $bIsTarget) {
+            return $aIsTarget ? -1 : 1;
+        }
+        return strcasecmp($a, $b);
+    });
 
     $tierOnly = stobeShouldUseTierOnlyRelationshipContext($npcData);
     $lines = [];

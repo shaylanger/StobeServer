@@ -1029,11 +1029,14 @@ $systemPrompt = buildSystemPrompt(
 // so provider prefix caching can reuse them. Special chat modes keep the old path.
 $cacheableDialogueContractEmbedded = false;
 if (!$narratorMode && !$injectionChatMode && $dialogueMode !== 'cheat') {
+    $systemPrompt = stobeStripDuplicatedStableLifelikeRules($systemPrompt);
     $cacheableContractBlock = "# Dialogue Contract\n\n"
         . stobeBuildStableDialogueContractPrompt(
             $targetNpc,
             $speaker
-        );
+        )
+        . "\n\n"
+        . stobeBuildStableLifelikeContinuityPrompt();
 
     foreach (["\n\n# Current Situation", "\n\n<current_situation>"] as $cacheMarker) {
         $cacheMarkerPos = strpos($systemPrompt, $cacheMarker);
