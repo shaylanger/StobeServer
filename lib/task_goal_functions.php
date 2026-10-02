@@ -307,8 +307,16 @@ function stobeGoalReportQueuePending(): int
         $what=$kindWord==='work'
             ?'make '.intval($row['quantity']??0).' '.$itemName
             :trim($kindWord.' '.$itemName);
-        $done=intval($row['completed']??0).'/'.intval($row['quantity']??0);
+        $doneN=intval($row['completed']??0);$qty=intval($row['quantity']??0);
+        $done=$qty>0?$doneN.'/'.$qty:$doneN.' taken';
         $reason=trim(strval($row['reason']??''));
+        if($status==='COMPLETE'&&$doneN===0&&$kindWord!=='work'){ // bug 104: nothing done is not "done"
+            $instruction="You tried the job {$player} gave you ({$what}) but found nothing to do: nothing matching was there. Tell {$player} plainly, in your own voice, that you found nothing. Don't claim you took, moved or finished anything.";
+            stobeNegQueueDirective($actor,'goal_report',$id,['instruction'=>$instruction,'actions'=>[]],false);
+            stobeLogInfo('Goal report queued',['actor'=>$actor,'goal_id'=>$id,'status'=>'COMPLETE_EMPTY']);
+            $queued++;
+            continue;
+        }
         $instruction=match($status){
             'COMPLETE'=>"You just finished the job {$player} gave you ({$what}; {$done} done) and walked back to {$player}. Tell {$player} briefly, in your own voice, that it's done and ask what's next. Don't invent extra results.",
             'BLOCKED'=>"You had to stop the job {$player} gave you ({$what}; {$done} done) and walked back to {$player}. Tell {$player} briefly why: {$reason}. Ask what to do about it. Don't claim it succeeded.",
