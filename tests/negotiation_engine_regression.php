@@ -363,6 +363,11 @@ check('bug 119: note for "put your black rag shirt back on"', str_contains($note
 check('bug 119: no note for taking it off', stobeWornItemRequestNote('Take your black rag shirt off.', $wornNpc) === '');
 check('bug 119: no note for an item she does not wear', stobeWornItemRequestNote('Put on the leather vest.', $wornNpc) === '');
 
+// ---------------------------------------------------------------- 12c. bug 110: loot orders run as goals
+check('bug 110: loot order recognised', stobeLootOrderLine("Malzin, loot everything from the Hungry Bandit's body.") && stobeLootOrderLine('Search the bodies.'));
+check('bug 110: questions and stops are not orders', !stobeLootOrderLine('Did you loot him already?') && !stobeLootOrderLine("Don't loot that one."));
+check('bug 110: loot action detected', stobeLootActionPresent(['LOOT_TARGET@Hungry Bandit']) && stobeLootActionPresent(['TASK_GOAL@LOOT_AREA@all']) && !stobeLootActionPresent(['FOLLOW@Shay']));
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

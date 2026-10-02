@@ -482,6 +482,21 @@ function stobeWornItemRequestNote(string $playerMessage, array|false $npcData): 
         . ': say it is already on; do not use EquipItem for it.';
 }
 
+/** Bug 110: the player orders a loot ("loot the bodies", "strip the bandit"), not a question about one. */
+function stobeLootOrderLine(string $playerMessage): bool {
+    $m = strtolower($playerMessage);
+    if (!preg_match("/\b(loot|strip|rummage|scavenge)\b|\bsearch\s+(?:the\s+)?(?:bod(?:y|ies)|corpses?|dead)\b/", $m)) return false;
+    return !preg_match("/\b(did|have|has|had)\s+(?:you|she|he|they|anyone)\b|\bdon'?t\b|\bdo not\b|\bstop\b|\bnever\b|\bwho\b/", $m);
+}
+
+/** Bug 110: the reply already loots (LootTarget, a loot goal). */
+function stobeLootActionPresent(array $actions): bool {
+    foreach ($actions as $action) {
+        if (preg_match('/^(LOOT_TARGET|LOOT_AREA|LOOT_STORE|BATTLE_CLEANUP)\b|^(TASK_GOAL|WORK_GOAL)@(LOOT|BATTLE)/i', trim(strval($action)))) return true;
+    }
+    return false;
+}
+
 function stobeSpeechClaimsEquipDone(string $message): bool {
     $done = '/\b(back\s+on|already\s+on|(?:it|they)(?:\'|’)(?:s|re)\s+on|(?:it|they)\s+(?:is|are)\s+on|(?:put|got)\s+(?:it|them|that|those)\s+(?:back\s+)?on)\b/i';
     $intent = '/\b(let me|i(?:\'|’)ll|gonna|going to)\b/i';

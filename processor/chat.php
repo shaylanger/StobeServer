@@ -1313,6 +1313,14 @@ if (!$narratorMode && strcasecmp($speaker, $playerName) === 0 && function_exists
         stobeLogInfo('Worn item note added (bug 119)', ['npc'=>$targetNpc, 'note'=>$wornNote]);
     }
 }
+// Bug 110: a loot order to a squad member: the goal checks the bodies, not her memory.
+$lootOrder = !$narratorMode && strcasecmp($speaker, $playerName) === 0 && is_array($npcData)
+    && npcIsInPlayerFaction($npcData) && function_exists('stobeLootOrderLine') && stobeLootOrderLine($message);
+if ($lootOrder) {
+    $messages[] = ['role' => 'user', 'content' => '[Looting runs as a goal that checks the bodies itself. You cannot know from memory '
+        . 'whether these bodies were already looted (earlier bodies were others), so do not refuse for that reason: '
+        . 'use LootTarget on the body (or LootArea) and let the goal report what it finds.]'];
+}
 // Mid-fight replies skip the model's hidden reasoning step (setting COMBAT_FAST_REPLIES).
 $GLOBALS['STOBE_REASONING_OFF'] = is_array($npcData) && stobeNpcIsInCombat($npcData)
     && (function_exists('getSettingBool') ? getSettingBool('COMBAT_FAST_REPLIES', true) : true);
@@ -1598,6 +1606,11 @@ if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
     } catch (Throwable $negAttachError) {
         stobeLogWarn('Negotiation dispatch attach failed', ['npc'=>$targetNpc, 'error'=>$negAttachError->getMessage()]);
     }
+}
+// Bug 110: she still emitted no loot action: the order runs as a loot goal anyway.
+if (!empty($lootOrder) && function_exists('stobeLootActionPresent') && !stobeLootActionPresent($responseActions)) {
+    $responseActions[] = 'LOOT_TARGET@';
+    stobeLogInfo('Loot order without a loot action: loot goal added (bug 110)', ['npc'=>$targetNpc, 'message'=>$message, 'text'=>$responseText]);
 }
 // Bug 32: an NPC doesn't give up the weapon she's using unless she's surrendering or trusts the player.
 if (!$narratorMode && is_array($npcData) && function_exists('stobeDealFilterWeaponActions')) {
