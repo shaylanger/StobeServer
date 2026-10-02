@@ -768,6 +768,7 @@ function stobeBuildLifelikeNpcContextBlock(
     $commitments = [];
     $samePlace = [];
     $location = stobeLifelikeCurrentLocation($safeNpc);
+    $attackLines = 0; // bug 105: "Initiated attack" spam must not crowd out knockouts/deaths
 
     foreach ($rows as $idx => $row) {
         if (!is_array($row)) {
@@ -777,13 +778,15 @@ function stobeBuildLifelikeNpcContextBlock(
         if ($line === '') {
             continue;
         }
+        $isAttackSpam = strtolower(trim(strval($row['type'] ?? ''))) === 'combat'
+            && stripos($line, 'Initiated attack') !== false;
         $score = stobeLifelikeEventScore($row);
         $involved = stobeLifelikeRowInvolves($row, $safeNpc);
         if (!$involved) {
             $line = '(overheard, not said to you) ' . $line;
         }
 
-        if ($score >= 30 && count($recentMeaningful) < 6) {
+        if ($score >= 30 && count($recentMeaningful) < 6 && (!$isAttackSpam || $attackLines++ < 1)) {
             $recentMeaningful[] = $line;
         }
         if ($idx >= 8 && $score >= 65 && count($callbacks) < 2) {
@@ -849,6 +852,26 @@ function stobeBuildLifelikeNpcContextBlock(
     $lines[] = '  <rule>Let established relationships affect warmth, teasing, trust, suspicion, protectiveness, irritation, jealousy, forgiveness, and willingness to disclose.</rule>';
     $lines[] = '  <rule>When the player gives a clear practical order that maps to an available game action, prefer performing the real action rather than merely claiming it happened.</rule>';
     $lines[] = '  <rule>In danger, combat, severe injury, or urgent flight, prioritize survival and short urgent speech over casual conversation.</rule>';
+    // Bug 105: no invented fight outcomes, no mixed-up names, sides from the fight itself.
+    $lines[] = '  <rule>Only say that someone is knocked out, down, dead or badly hit when a recent event or the people list shows it. Never guess who hit or downed whom; if you did not see it, do not claim it.</rule>';
+    $lines[] = '  <rule>Who is fighting whom right now matters more than faction labels: anyone attacking you or your group is an enemy in this fight, whatever their faction is called.</rule>';
+    $lookAlikes = [];
+    $sceneNames = array_values(array_unique(array_filter(array_map(
+        static fn($n) => trim(preg_replace('/\s*\[[^\]]*\]\s*$/', '', strval($n)) ?? strval($n)),
+        function_exists('stobeLifelikeLatestNearbyRosterNames') ? stobeLifelikeLatestNearbyRosterNames($safeNpc) : []
+    ))));
+    for ($i = 0; $i < count($sceneNames); $i++) {
+        for ($j = $i + 1; $j < count($sceneNames); $j++) {
+            $a = $sceneNames[$i]; $b = $sceneNames[$j];
+            if (strlen($a) >= 3 && strlen($b) >= 3 && strcasecmp($a, $b) !== 0
+                && (stripos($a, $b) === 0 || stripos($b, $a) === 0 || similar_text(strtolower($a), strtolower($b)) >= max(strlen($a), strlen($b)) - 2)) {
+                $lookAlikes[] = $a . ' and ' . $b;
+            }
+        }
+    }
+    if (count($lookAlikes) > 0) {
+        $lines[] = '  <rule>' . stobePromptXmlEscape(implode('; ', array_slice($lookAlikes, 0, 4))) . ' are different people with similar names. Use the exact name from the events when you say who did what.</rule>';
+    }
     $lines[] = '  <rule>Vary response length naturally: acknowledgements can be a few words; important or emotional topics can be longer. Avoid turning every turn into a monologue.</rule>';
     $lines[] = '  <rule>Occasionally reference a relevant shared event or personal anecdote, but do not force callbacks into every response.</rule>';
 
