@@ -1513,6 +1513,26 @@ function stobeNegCourageThreshold(string $personality, float $base): float {
     return max(0.1, min(0.8, $base));
 }
 
+/** Bug 98: "X: took a major hit" events against $name since $sinceUnix. */
+function stobeNegMajorHitsOn(string $name, int $sinceUnix): int {
+    try {
+        $row = $GLOBALS['db']->fetchOne(
+            "SELECT COUNT(*) AS n FROM eventlog WHERE type='major_damage' AND localts >= $1 AND data LIKE $2",
+            [$sinceUnix, $name . ': took a major hit%']
+        );
+        return intval($row['n'] ?? 0);
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/** Bug 98: does the stored row carry real health numbers? */
+function stobeNegHasHealthData(array $row): bool {
+    if (preg_match('/^\s*-?\d+(?:\.\d+)?\s*\/\s*[1-9]/', strval($row['blood'] ?? ''))) return true;
+    $limbs = stobeNegDecode($row['limbs'] ?? []);
+    return is_array($limbs) && count($limbs) > 0;
+}
+
 function stobeNegConsiderInitiatives(string $eventType, string $eventData, string $peopleRaw, int $gamets): void {
     if (!stobeNegPhaseEnabled(4) && !stobeNegPhaseEnabled(5)) return;
     try {
@@ -1523,10 +1543,16 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
         stobeNegEnsureSchema();
         $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
         $now = time();
-        $recentGlobal = $GLOBALS['db']->fetchOne(
-            "SELECT MAX(created_unix) AS t FROM stobe_negotiation_directive WHERE kind IN ('surrender','assist')"
+        // Bug 98: one cooldown per kind, so a "help me" offer doesn't block surrenders.
+        $recentSurrender = $GLOBALS['db']->fetchOne(
+            "SELECT MAX(created_unix) AS t FROM stobe_negotiation_directive WHERE kind='surrender'"
         );
-        if (($now - intval($recentGlobal['t'] ?? 0)) < STOBE_NEG_INITIATIVE_GLOBAL_COOLDOWN) return;
+        $recentAssist = $GLOBALS['db']->fetchOne(
+            "SELECT MAX(created_unix) AS t FROM stobe_negotiation_directive WHERE kind='assist'"
+        );
+        $surrenderReady = ($now - intval($recentSurrender['t'] ?? 0)) >= STOBE_NEG_INITIATIVE_GLOBAL_COOLDOWN;
+        $assistReady = ($now - intval($recentAssist['t'] ?? 0)) >= STOBE_NEG_INITIATIVE_GLOBAL_COOLDOWN;
+        if (!$surrenderReady && !$assistReady) return;
 
         $names = [];
         if (preg_match('/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)/', trim($eventData), $m)) {
@@ -1545,6 +1571,9 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
             if (stobeDealOpenForNpc($name) !== null) continue;
             $row = stobeNegNpcRow($name);
             $ratio = stobeNegHealthRatio($row);
+            if (!stobeNegHasHealthData($row)) { // bug 98: no numbers -> judge by major hits
+                $ratio = max(0.1, 1.0 - 0.35 * stobeNegMajorHitsOn($name, $now - 90));
+            }
             $events = stobeNegCombatEvents($now - 90, $name);
             $hostileToPlayer = false;
             $fightingOthers = false;
@@ -1559,7 +1588,7 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
             $offerLine = $offerCap > 0
                 ? 'You carry about ' . $offerCarried . ' Cats; if you offer Cats, offer at most ' . $offerCap . ' (keep it modest). '
                 : 'You have next to no Cats: offer an item, information or just beg - do not offer Cats. ';
-            if ($hostileToPlayer && stobeNegPhaseEnabled(4) && $ratio < stobeNegCourageThreshold($personality, 0.35)) {
+            if ($surrenderReady && $hostileToPlayer && stobeNegPhaseEnabled(4) && $ratio < stobeNegCourageThreshold($personality, 0.35)) {
                 stobeNegQueueDirective($name, 'surrender', '', [
                     'health_ratio'=>round($ratio, 2),
                     'instruction'=>'You are losing this fight against ' . $player . ' (your health is about ' . intval($ratio * 100) . '%). '
@@ -1570,7 +1599,7 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 ], true);
                 return;
             }
-            if (!$hostileToPlayer && $fightingOthers && $playerNearby && stobeNegPhaseEnabled(5)
+            if ($assistReady && !$hostileToPlayer && $fightingOthers && $playerNearby && stobeNegPhaseEnabled(5)
                 && !npcIsInPlayerFaction($data) && $ratio < stobeNegCourageThreshold($personality, 0.6)) {
                 stobeNegQueueDirective($name, 'assist', '', [
                     'health_ratio'=>round($ratio, 2),
