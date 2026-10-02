@@ -367,13 +367,27 @@ function stobeNegCeasefireBlocksAttack(string $npc, string $action): bool {
         $me = $GLOBALS['db']->fetchOne("SELECT faction FROM core_npc_master WHERE LOWER(name)=LOWER($1) LIMIT 1", [$npc]);
         $faction = trim(strval($me['faction'] ?? ''));
         $deal = $faction === '' ? stobeDealRecentCompletedCeasefire($npc) : $GLOBALS['db']->fetchOne(
-            "SELECT c.contract_id FROM stobe_social_contract c JOIN core_npc_master m ON LOWER(m.name)=LOWER(c.npc_name)
+            "SELECT c.contract_id, EXTRACT(EPOCH FROM (NOW() - c.updated_at))::bigint AS done_ago
+               FROM stobe_social_contract c JOIN core_npc_master m ON LOWER(m.name)=LOWER(c.npc_name)
               WHERE c.kind IN ('combat','surrender') AND c.status='COMPLETE'
                 AND c.updated_at > NOW() - interval '600 seconds' AND LOWER(m.faction)=LOWER($1)
               ORDER BY c.updated_at DESC LIMIT 1",
             [$faction]
         );
         if (!is_array($deal)) return false;
+        // Only the gang that fought in that deal's fight (the 15 min before it was
+        // settled); another squad of the same faction isn't covered.
+        // Age from the DB clock (PHP and PostgreSQL time zones differ here).
+        $doneUnix = isset($deal['done_ago']) ? time() - intval($deal['done_ago']) : 0;
+        if ($doneUnix > 0) {
+            $foughtThen = false;
+            foreach (stobeNegCombatEvents($doneUnix - 900, $npc) as $ev) {
+                if ($ev['ts'] > $doneUnix) continue;
+                $other = stobeNegCharMatches($ev['attacker'], $npc) ? $ev['target'] : $ev['attacker'];
+                if (stobeNegIsPlayerSide($other, $player)) { $foughtThen = true; break; }
+            }
+            if (!$foughtThen) return false;
+        }
         if (function_exists('stobeNegCombatEvents')) {
             foreach (stobeNegCombatEvents(time() - 60, $npc) as $ev) {
                 if (stobeNegCharMatches($ev['target'], $npc) && stobeNegIsPlayerSide($ev['attacker'], $player)) return false;
