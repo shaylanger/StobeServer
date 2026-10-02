@@ -502,6 +502,13 @@ foreach (['npc gives 50 cats up front', 'npc returns 50 cats'] as $x52) {
     check('item 52: "' . $x52 . '" is not an item term', count($items52) === 0, $t52);
 }
 
+$open44 = ['terms'=>json_encode([['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>300], ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']])];
+$t44f = stobeDealFixCatsDirectionFromTable([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>350], ['kind'=>'SPARE','by'=>'player','target'=>'npc']], $open44, 'Alright, 350 and you go free.');
+check('item 44: "350 and you go free" with her paying on the table: she pays', ($t44f[0]['by'] ?? '') === 'npc', $t44f);
+$t44g = stobeDealFixCatsDirectionFromTable([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>350]], $open44, "Fine, I'll pay you 350 instead.");
+check('item 44: "I\'ll pay you 350" stays the player paying', ($t44g[0]['by'] ?? '') === 'player');
+check('item 44: no deal on the table, unchanged', (stobeDealFixCatsDirectionFromTable([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>350]], null, '350.')[0]['by'] ?? '') === 'player');
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

@@ -495,6 +495,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     $terms = stobeDealFixTargetField($terms); // item 46
     $terms = stobeDealFixCatsDirection($terms, $response, $player); // item 44
     $terms = stobeDealFixCatsDirectionFromWords($terms, $playerMessage); // item 44
+    $terms = stobeDealFixCatsDirectionFromTable($terms, $open, $playerMessage); // item 44
     $terms = stobeDealDropZeroCatsTerms($terms); // item 45
     // A social deal needs something from the NPC. Counters often restate only the price:
     // keep the NPC's side from the deal on the table, else refuse the one-sided terms.
@@ -1225,6 +1226,25 @@ function stobeDealFixCatsDirectionFromWords(array $terms, string $playerMessage)
     $terms[$i]['by'] = 'npc';
     $terms[$i]['to'] = 'player';
     stobeDealLog('warn', 'Negotiation term fixed: the player said she pays (item 44)', ['amount'=>$amount]);
+    return $terms;
+}
+
+/** Item 44: the open deal has the NPC paying and the player's line doesn't say the player pays. */
+function stobeDealFixCatsDirectionFromTable(array $terms, ?array $open, string $playerMessage): array {
+    if ($open === null) return $terms;
+    $m = strtolower($playerMessage);
+    if (preg_match("/\b(?:i'?ll|i will|i can|i)\s+(?:pay|give|hand)\b|\bpay you\b|\bgive you\b|\bfrom me\b/", $m)) return $terms;
+    $openTerms = json_decode(strval($open['terms'] ?? '[]'), true);
+    $openCats = array_values(array_filter(is_array($openTerms) ? $openTerms : [], static fn($t) => is_array($t) && strtoupper(strval($t['kind'] ?? '')) === 'GIVE_CATS'));
+    if (count($openCats) !== 1 || ($openCats[0]['by'] ?? '') !== 'npc') return $terms;
+    $cats = [];
+    foreach ($terms as $i => $t) {
+        if (is_array($t) && strtoupper(strval($t['kind'] ?? '')) === 'GIVE_CATS') $cats[] = $i;
+    }
+    if (count($cats) !== 1 || ($terms[$cats[0]]['by'] ?? '') !== 'player') return $terms;
+    $terms[$cats[0]]['by'] = 'npc';
+    $terms[$cats[0]]['to'] = 'player';
+    stobeDealLog('warn', 'Negotiation term fixed: the deal on the table has her paying (item 44)', ['amount'=>intval($terms[$cats[0]]['amount'] ?? 0)]);
     return $terms;
 }
 
