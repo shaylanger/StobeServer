@@ -168,6 +168,20 @@ for ($attempt = 0; $attempt < 3; $attempt++) {
     stobeNegAttachPendingForChat('NegTestTrader', []);
 }
 check('bug 126: never executed after 2 reissues -> IMPOSSIBLE', status($id) === 'IMPOSSIBLE', [status($id), termStatus($id, 0)]);
+
+// ---------------------------------------------------------------- 6c. bug 127: the squad gets 10 s to stop swinging after sparing
+$id = makeDeal('NegTestBandit', [['kind'=>'SPARE','by'=>'player','target'=>'npc']], 'surrender');
+stobeNegBeginPerformance($id, [], $player, 1000, '');
+backdate($id, 5);
+storeEvent('combat', time(), 1000, "$player: Initiated attack (talking to: NegTestBandit)");
+stobeNegTick();
+check('bug 127: a swing 5 s after sparing is not a breach', termStatus($id, 0) !== 'UNMET', [status($id), termStatus($id, 0)]);
+backdate($id, 7);
+storeEvent('combat', time(), 1000, "$player: Initiated attack (talking to: NegTestBandit)");
+stobeNegTick();
+check('bug 127: an attack 12 s after sparing is', termStatus($id, 0) === 'UNMET', [status($id), termStatus($id, 0)]);
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE contract_id=$1", [$id]);
+$db->exec("DELETE FROM eventlog WHERE data LIKE '%NegTestBandit%' AND type='combat'");
 $db->exec("DELETE FROM stobe_negotiation_directive");
 
 // ---------------------------------------------------------------- 7. social: unequip for Cats, verified via KenshiFP

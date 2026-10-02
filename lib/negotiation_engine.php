@@ -889,6 +889,8 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
         }
     } elseif ($kind === 'SPARE') {
         foreach (stobeNegCombatEvents($start + 3, $npc) as $ev) {
+            // Bug 127: the same 10 s as the truce for the squad to stop swinging.
+            if (intval($ev['ts'] ?? 0) < $start + 10) continue;
             if (stobeNegCharMatches($ev['target'], $npc) && stobeNegIsPlayerSide($ev['attacker'], $player)) {
                 $term['status'] = 'UNMET';
                 $note($term, 'player_side_attacked_after_sparing', ['attacker'=>$ev['attacker']]);
