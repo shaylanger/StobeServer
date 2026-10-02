@@ -377,6 +377,9 @@ check('bug 117: without a serial the old fallback stays', is_array($g117) && $g1
 $g117 = getNpcData('Gen117 Bandit', 111);
 check('bug 117: same serial maps to the renamed NPC', is_array($g117) && $g117['name'] === 'Garvtest [Gen117 Bandit]', $g117['name'] ?? $g117);
 check('bug 117: another serial does not', getNpcData('Gen117 Bandit', 222) === false);
+check('bug 117: snapshot with another serial is not matched to him', (resolveSnapshotTargetNpcName('Gen117 Bandit', 'hand_222')['name'] ?? '') === 'Gen117 Bandit');
+check('bug 117: snapshot with his serial is', (resolveSnapshotTargetNpcName('Gen117 Bandit', 'hand_111')['name'] ?? '') === 'Garvtest [Gen117 Bandit]');
+check('bug 117: snapshot without a serial keeps the old match', (resolveSnapshotTargetNpcName('Gen117 Bandit', '')['name'] ?? '') === 'Garvtest [Gen117 Bandit]');
 $db->exec("DELETE FROM core_npc_master WHERE name='Garvtest [Gen117 Bandit]'");
 
 // ---------------------------------------------------------------- 13. toggles

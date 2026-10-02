@@ -4883,7 +4883,8 @@ function resolveSnapshotTargetNpcName(string $incomingName, string $incomingStor
                 $exactEquipment === '' &&
                 $exactSkills === '';
 
-            if ($exactLooksPlaceholder) {
+            // Bug 117, snapshot: with a serial that matched no profile, a profile with a serial is another NPC.
+            if ($exactLooksPlaceholder && count($storageIdVariants) === 0) {
                 $preferredByOriginal = $db->fetchOne(
                     "SELECT name
                      FROM core_npc
@@ -4931,9 +4932,10 @@ function resolveSnapshotTargetNpcName(string $incomingName, string $incomingStor
             "SELECT name
              FROM core_npc
              WHERE LOWER(original_name) = LOWER($1)
+               AND ($2 = '' OR COALESCE(metadata->>'storage_id', '') = '')
              ORDER BY updated_at DESC, gamets_last_updated DESC
              LIMIT 1",
-            [$candidateOriginalName]
+            [$candidateOriginalName, count($storageIdVariants) > 0 ? 'serial' : '']
         );
         if ($byOriginalName) {
             $resolvedName = normalizeParticipantNameToken(strval($byOriginalName['name'] ?? ''));
