@@ -155,6 +155,11 @@ check('bug 126: unexecuted payment queued again', termStatus($id, 0) === 'REISSU
 $db->exec("UPDATE stobe_negotiation_directive SET created_unix=created_unix-300 WHERE contract_id=$1", [$id]);
 stobeNegTick();
 check('bug 126: reissue still waits after 5 min', termStatus($id, 0) === 'REISSUE_QUEUED', termStatus($id, 0));
+// Bug 131: the bored path claimed it and is still generating her line: not "never delivered".
+$db->exec("UPDATE stobe_negotiation_directive SET consumed_unix=$2 WHERE contract_id=$1 AND consumed_unix=0", [$id, time()]);
+stobeNegTick();
+check('bug 131: a reissue being delivered stays queued', termStatus($id, 0) === 'REISSUE_QUEUED' && status($id) === 'AWAITING_PERFORMANCE', [status($id), termStatus($id, 0)]);
+$db->exec("UPDATE stobe_negotiation_directive SET consumed_unix=0 WHERE contract_id=$1 AND outcome=''", [$id]);
 $acts = stobeNegAttachPendingForChat('NegTestTrader', []);
 check('bug 126: payment rides on her next line', $acts === ['GIVE_CATS@' . $player . '@30'] && termStatus($id, 0) === 'DISPATCHED', [$acts, termStatus($id, 0)]);
 stobeLine("ACTION_EXEC: GIVE_CATS actor=NegTestTrader recipient=$player amount=30", time());

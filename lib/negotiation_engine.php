@@ -1370,9 +1370,11 @@ function stobeNegQueueDirective(string $npc, string $kind, string $contractId, a
 
 function stobeNegDirectivePending(string $contractId, int $termIndex): bool {
     $rows = $GLOBALS['db']->fetchAll(
-        "SELECT payload FROM stobe_negotiation_directive WHERE contract_id=$1 AND consumed_unix=0
+        "SELECT payload FROM stobe_negotiation_directive WHERE contract_id=$1
+            AND (consumed_unix=0 OR (consumed_unix >= $4::bigint AND outcome=''))
             AND created_unix >= (CASE kind WHEN 'reissue_payment' THEN $3::bigint ELSE $2::bigint END)",
-        [$contractId, time() - STOBE_NEG_DIRECTIVE_TTL_SECONDS, time() - 600]
+        // Claimed by the bored path but not delivered yet: still in flight (bug 131).
+        [$contractId, time() - STOBE_NEG_DIRECTIVE_TTL_SECONDS, time() - 600, time() - 60]
     );
     foreach (is_array($rows) ? $rows : [] as $row) {
         $payload = stobeNegDecode($row['payload'] ?? []);
