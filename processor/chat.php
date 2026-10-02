@@ -1318,6 +1318,11 @@ if ($lootOrder) {
         . 'whether these bodies were already looted (earlier bodies were others), so do not refuse for that reason: '
         . 'use LootTarget on the body (or LootArea) and let the goal report what it finds.]'];
 }
+// A take-off request: her line comes before the game moves the item; a full pack drops it at your feet.
+if (!$narratorMode && strcasecmp($speaker, $playerName) === 0 && function_exists('stobeDealPlayerAsksTakeOffOnly')
+    && stobeDealPlayerAsksTakeOffOnly($message)) {
+    $messages[] = ['role' => 'user', 'content' => '[If you take something off, do not say where it goes: if your pack is full, a full pack drops it at your feet.]'];
+}
 // Mid-fight replies skip the model's hidden reasoning step (setting COMBAT_FAST_REPLIES).
 $GLOBALS['STOBE_REASONING_OFF'] = is_array($npcData) && stobeNpcIsInCombat($npcData)
     && (function_exists('getSettingBool') ? getSettingBool('COMBAT_FAST_REPLIES', true) : true);

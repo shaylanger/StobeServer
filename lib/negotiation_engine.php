@@ -1916,20 +1916,27 @@ function stobeRemovedClothingPromptBlock(string $npc, array $npcData): string {
         $serial = stobeNegSerialFromStorage($npc);
         if ($serial <= 0) return '';
         $removed = [];
+        $dropped = [];
         $pendingSlot = '';
+        $pendingDrop = false;
         foreach (stobeNegBridgeRecords(time() - 6 * 3600) as $r) {
             $body = $r['body'];
             if (preg_match('/^UNEQUIP_ITEM section move result .* source=(\S+) .*equippedAfter=0/', $body, $m)) { $pendingSlot = $m[1]; continue; }
+            if (str_starts_with($body, 'UNEQUIP_ITEM no carried section has room; dropped at feet') && str_contains($body, 'result=dropped')) { $pendingDrop = true; continue; }
             if (preg_match('/^UNEQUIP_ITEM serial=(\d+) .*matched=(.+?) result=ok/', $body, $m)) {
-                if (intval($m[1]) === $serial) $removed[strtolower(trim($m[2]))] = [trim($m[2]), $pendingSlot];
+                if (intval($m[1]) === $serial) {
+                    if ($pendingDrop) $dropped[strtolower(trim($m[2]))] = trim($m[2]);
+                    else $removed[strtolower(trim($m[2]))] = [trim($m[2]), $pendingSlot];
+                }
                 $pendingSlot = '';
+                $pendingDrop = false;
                 continue;
             }
             if (preg_match('/^ACTION_BRIDGE EQUIP_ITEM actor=(\d+) .*matched=(.+?) result=ok/', $body, $m) && intval($m[1]) === $serial) {
                 unset($removed[strtolower(trim($m[2]))]);
             }
         }
-        if (count($removed) === 0) return '';
+        if (count($removed) === 0 && count($dropped) === 0) return '';
         $carried = stobeNegInventoryCounts(strval($npcData['inventory'] ?? ''));
         $worn = stobeNegInventoryCounts(strval($npcData['equipment'] ?? ''));
         $labels = ['armour'=>'body armour / vest layer', 'shirt'=>'shirt', 'legs'=>'pants', 'boots'=>'footwear',
@@ -1939,8 +1946,15 @@ function stobeRemovedClothingPromptBlock(string $npc, array $npcData): string {
             if (!stobeNegItemCount($carried, $name) || stobeNegItemCount($worn, $name)) continue;
             $lines[] = $name . ($slot !== '' ? ' (was your ' . ($labels[$slot] ?? $slot) . ')' : '');
         }
-        if (count($lines) === 0) return '';
-        return "<clothing_you_took_off>\nYou took these off earlier and are carrying them, not wearing them: " . implode('; ', $lines)
+        $droppedLines = [];
+        foreach ($dropped as $name) {
+            if (!stobeNegItemCount($carried, $name) && !stobeNegItemCount($worn, $name)) $droppedLines[] = $name;
+        }
+        $droppedText = count($droppedLines) > 0
+            ? "\nYour pack was full, so these were dropped at your feet (full pack) when you took them off; they are on the ground, not in your pack: " . implode('; ', $droppedLines) . '.'
+            : '';
+        if (count($lines) === 0) return $droppedText === '' ? '' : "<clothing_you_took_off>" . $droppedText . "\n</clothing_you_took_off>";
+        return "<clothing_you_took_off>" . $droppedText . "\nYou took these off earlier and are carrying them, not wearing them: " . implode('; ', $lines)
             . ".\nPeople may call them by slot (vest, top, pants, shoes, hat). If asked to put clothes back on, EquipItem these exact items, one per response.\n</clothing_you_took_off>";
     } catch (Throwable $e) {
         return '';

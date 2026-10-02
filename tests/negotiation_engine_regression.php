@@ -399,6 +399,14 @@ $rejPlain = json_encode(['message'=>'No. The hat stays.','deal_decision'=>'REJEC
 check('a plain REJECT stays REJECT', (stobeDealCaptureResponse($rejPlain, 'NegTestTrader', $player, getNpcData('NegTestTrader') ?: [], 'Then 600?', 'social')['decision'] ?? '') === 'REJECT');
 $db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestTrader' AND status IN ('PROPOSED','COUNTERED','REJECTED','ACCEPTED','AWAITING_PERFORMANCE')");
 
+// ---------------------------------------------------------------- 12g. a take-off dropped at her feet (full pack) is known later
+fixtureNpc('NegTestDrop', ['money'=>10, 'storage_id'=>'hand_555'], 'Bread x1 value 10', '', '100/100');
+kfpLine('UNEQUIP_ITEM no carried section has room; dropped at feet item=0000 qty=1 source=head result=dropped', time());
+kfpLine('UNEQUIP_ITEM serial=555 query=Iron Hat matched=Iron Hat result=ok', time());
+$dropBlock = stobeRemovedClothingPromptBlock('NegTestDrop', getNpcData('NegTestDrop') ?: []);
+check('dropped at your feet (full pack): the next turn knows', str_contains($dropBlock, 'Iron Hat') && str_contains($dropBlock, 'at your feet'), $dropBlock);
+$db->exec("DELETE FROM core_npc_master WHERE name='NegTestDrop'");
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");
