@@ -283,7 +283,7 @@ function stobeNegIsPlayerSide(string $name, string $player): bool {
 }
 
 /** Recent "A: Initiated attack (talking to: B)" events since $sinceUnix. */
-function stobeNegCombatEvents(int $sinceUnix, string $involving = ''): array {
+function stobeNegCombatEvents(int $sinceUnix, string $involving = '', bool $includeDefending = false): array {
     $params = [$sinceUnix];
     $filter = '';
     if ($involving !== '') {
@@ -296,8 +296,12 @@ function stobeNegCombatEvents(int $sinceUnix, string $involving = ''): array {
     );
     $events = [];
     foreach (is_array($rows) ? $rows : [] as $row) {
-        // Bug 98: "Defending against" is as much a fight as "Initiated attack".
-        if (!preg_match('/^(.+?):\s*(?:Initiated attack|Defending against)\s*\(talking to:\s*(.+?)\)\s*$/', trim(strval($row['data'] ?? '')), $m)) continue;
+        // Bug 98: for "is this NPC fighting the player?" a defence counts too; a defence
+        // is never the player breaking a deal (SPARE, truces), so it's opt-in.
+        $pattern = $includeDefending
+            ? '/^(.+?):\s*(?:Initiated attack|Defending against)\s*\(talking to:\s*(.+?)\)\s*$/'
+            : '/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)\s*$/';
+        if (!preg_match($pattern, trim(strval($row['data'] ?? '')), $m)) continue;
         $events[] = ['ts'=>intval($row['localts']), 'attacker'=>normalizeParticipantNameToken($m[1]), 'target'=>normalizeParticipantNameToken($m[2])];
     }
     return $events;
@@ -1604,7 +1608,7 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 if ($live === null || $eventLive < $live) $live = $eventLive;
             }
             if ($live !== null && $live < $ratio) $ratio = $live;
-            $events = stobeNegCombatEvents($now - 90, $name);
+            $events = stobeNegCombatEvents($now - 90, $name, true);
             $hostileToPlayer = false;
             $fightingOthers = false;
             foreach ($events as $ev) {
