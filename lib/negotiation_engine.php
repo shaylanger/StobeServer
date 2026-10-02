@@ -1820,8 +1820,8 @@ function stobeNegApplyConsequences(array $deal, string $player): void {
         if ($repColumn !== '') {
             $GLOBALS['db']->exec(
                 "INSERT INTO stobe_negotiation_reputation (player_name, {$repColumn}) VALUES ($1, 1)
-                 ON CONFLICT (player_name) DO UPDATE SET {$repColumn}=stobe_negotiation_reputation.{$repColumn}+1, updated_at=NOW()",
-                [$player]
+                 ON CONFLICT (player_name) DO UPDATE SET {$repColumn}=stobe_negotiation_reputation.{$repColumn}+1, updated_at=NOW()", // item 50: key is lower-case
+                [strtolower($player)] /* item 50 */
             );
         }
         if ($memory !== '') {
@@ -1877,7 +1877,7 @@ function stobeNegTermsSummary(array $state, string $npc, string $player): string
 function stobeNegReputationLine(string $player): string {
     try {
         stobeNegEnsureSchema();
-        $row = $GLOBALS['db']->fetchOne("SELECT player_kept, player_broken FROM stobe_negotiation_reputation WHERE player_name=$1", [$player]);
+        $row = $GLOBALS['db']->fetchOne("SELECT player_kept, player_broken FROM stobe_negotiation_reputation WHERE LOWER(player_name)=LOWER($1)", [$player]); // item 50
         $kept = intval($row['player_kept'] ?? 0);
         $broken = intval($row['player_broken'] ?? 0);
         if ($kept + $broken === 0) return '';

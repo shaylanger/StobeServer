@@ -37,7 +37,7 @@ $db->exec("INSERT INTO general_settings (id, value) VALUES ('PLAYER_NAME', $1)",
 stobeNegEnsureSchema();
 $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");
-$db->exec("DELETE FROM stobe_negotiation_reputation WHERE player_name=$1", [$player]);
+$db->exec("DELETE FROM stobe_negotiation_reputation WHERE LOWER(player_name)=LOWER($1)", [$player]);
 $db->exec("DELETE FROM eventlog WHERE data LIKE '%NegTest%'");
 
 function fixtureNpc(string $name, array $meta, string $inventory = '', string $personality = '', string $blood = '100/100', string $faction = 'Test Bandits'): void {
@@ -104,7 +104,7 @@ stobeLine("ACTION_EXEC: GIVE_CATS actor=$player recipient=NegTestBandit amount=1
 stobeNegTick();
 check('payment verified from game record', termStatus($id, 0) === 'VERIFIED', termStatus($id, 0));
 check('deal COMPLETE', status($id) === 'COMPLETE', status($id));
-$rep = $db->fetchOne("SELECT player_kept FROM stobe_negotiation_reputation WHERE player_name=$1", [$player]);
+$rep = $db->fetchOne("SELECT player_kept FROM stobe_negotiation_reputation WHERE player_name=$1", [strtolower($player)]); // item 50: lower-case key
 check('reputation kept +1', intval($rep['player_kept'] ?? 0) === 1, $rep);
 $mem = $db->fetchOne("SELECT data FROM eventlog WHERE type='injection' AND data LIKE 'NegTestBandit: [deal outcome]%' ORDER BY rowid DESC LIMIT 1");
 check('memory event stored', is_array($mem), $mem);
@@ -480,6 +480,12 @@ check('item 49: no serial, no rename match', stobeNegRecipientMatches('Weth49 [D
 check('item 49: attacks/actor matching stays exact', stobeNegCharMatches('Yarel [Dust Bandit]', 'Dust Bandit') === false);
 $db->exec("DELETE FROM core_npc_master WHERE name='Weth49 [Dust Bandit]'");
 
+// ---------------------------------------------------------------- 12m. item 50: reputation key ignores case
+$db->exec("DELETE FROM stobe_negotiation_reputation WHERE LOWER(player_name)='negtestcase50'");
+$db->exec("INSERT INTO stobe_negotiation_reputation (player_name, player_kept, player_broken) VALUES ('negtestcase50', 1, 5)");
+check('item 50: reputation read for "NegTestCase50" finds the lower-case row', str_contains(stobeNegReputationLine('NegTestCase50'), 'breaking deals'));
+$db->exec("DELETE FROM stobe_negotiation_reputation WHERE LOWER(player_name)='negtestcase50'");
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");
@@ -490,7 +496,7 @@ check('phase 6 toggle on enables social offers', stobeNegLooksLikeSocialOffer("I
 // ---------------------------------------------------------------- cleanup
 $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");
-$db->exec("DELETE FROM stobe_negotiation_reputation WHERE player_name=$1", [$player]);
+$db->exec("DELETE FROM stobe_negotiation_reputation WHERE LOWER(player_name)=LOWER($1)", [$player]);
 $db->exec("DELETE FROM eventlog WHERE data LIKE '%NegTest%'");
 foreach ([$player, 'NegTestBandit', 'NegTestTrader', 'NegTestBandit130'] as $n) {
     $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n]);
