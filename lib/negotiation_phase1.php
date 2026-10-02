@@ -301,6 +301,7 @@ function stobeDealPromptBlock(string $npc, array $npcData, string $playerMessage
         $rules .= " When you stop fighting the player, your own faction's people who joined the fight stand down with you:"
             . " you can call them off, so never say they are not yours to call off.";
     }
+    $rules .= " If you turn the offer down but name your own price or conditions (\"2000 for the hat\", \"3000 and your helmet\"), that is COUNTER with those terms, not REJECT; REJECT only when you want no deal at all.";
     $rules .= " If active_deals holds a COUNTERED or PROPOSED deal and the player now agrees to it, answer ACCEPT with those terms; if you agree to stop fighting, you must answer ACCEPT (never agree in words while choosing COUNTER, REJECT or NONE)."
         . " Terms do not execute merely because you speak. Never claim payment, transfer, first aid, or lasting peace is complete before the deal progress below shows it verified. If the cause is unknown, do not invent it.";
     $extras = function_exists('stobeNegDealPromptExtras')
@@ -428,12 +429,29 @@ function stobeDealAcceptsPlayerCounter(array $response, array $open, string $pla
     return function_exists('stobeDealTermsDiffer') && stobeDealTermsDiffer(is_array($openTerms) ? $openTerms : [], $terms);
 }
 
+/** A REJECT that names her own price: terms with a kind, and a Cats amount in her line. */
+function stobeDealRejectNamesOwnPrice(array $response): bool {
+    $terms = json_decode(trim(strval($response['deal_terms'] ?? '')), true);
+    if (!is_array($terms)) return false;
+    $hasCats = false;
+    foreach ($terms as $t) {
+        if (is_array($t) && strtoupper(strval($t['kind'] ?? '')) === 'GIVE_CATS' && intval($t['amount'] ?? 0) > 0) $hasCats = true;
+    }
+    if (!$hasCats) return false;
+    return count(stobeDealSpokenCatsAmounts(strval($response['message'] ?? ''))) > 0;
+}
+
 function stobeDealCaptureResponse(string $raw, string $npc, string $player, array $npcData, string $playerMessage, string $kind = 'combat', string $proposer = 'player'): array {
     $response = function_exists('stobeDecodeStructuredDialoguePayload')
         ? stobeDecodeStructuredDialoguePayload($raw) : json_decode($raw, true);
     // Some providers fall back to plain text. Preserve ordinary dialogue.
     if (!is_array($response)) return ['ok'=>true,'decision'=>'NONE'];
     $decision = strtoupper(trim(strval($response['deal_decision'] ?? 'NONE')));
+    if ($decision === 'REJECT' && stobeDealRejectNamesOwnPrice($response)) {
+        // A REJECT that names her own price is her counter-offer.
+        $decision = 'COUNTER';
+        stobeDealLog('info', 'Negotiation: REJECT with her own price recorded as COUNTER', ['npc'=>$npc]);
+    }
     $open = stobeDealOpenForNpc($npc);
     if ($decision === 'REJECT' && $open !== null && in_array(strval($open['status']), ['PROPOSED','COUNTERED'], true)) {
         stobeDealTransition(strval($open['contract_id']), strval($open['status']), 'REJECTED', ['rejected_by'=>'npc']);

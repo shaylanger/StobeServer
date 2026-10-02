@@ -389,6 +389,16 @@ $db->exec("INSERT INTO general_settings (id, value) VALUES ('PLAYER_NAME', $1)",
 check('player name in-game casing from a lowercase setting', getSetting('PLAYER_NAME') === $player, getSetting('PLAYER_NAME'));
 $db->exec("UPDATE general_settings SET value=$1 WHERE id='PLAYER_NAME'", [strval($savedPlayerName['value'] ?? $player)]);
 
+// ---------------------------------------------------------------- 12f. REJECT that names her own price is a COUNTER
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestTrader' AND status IN ('PROPOSED','COUNTERED','ACCEPTED','AWAITING_PERFORMANCE')");
+$rejPrice = json_encode(['message'=>'Not for 500. 2000 cats for the hat.','deal_decision'=>'REJECT','deal_terms'=>json_encode([
+    ['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>2000],['kind'=>'GIVE_ITEM','by'=>'npc','to'=>'player','item'=>'Iron Hat']])]);
+$rr = stobeDealCaptureResponse($rejPrice, 'NegTestTrader', $player, getNpcData('NegTestTrader') ?: [], "I'll give you 500 cats for your hat.", 'social');
+check('REJECT that names her own price is recorded as COUNTER', ($rr['decision'] ?? '') === 'COUNTER' && ($rr['status'] ?? '') === 'COUNTERED', $rr);
+$rejPlain = json_encode(['message'=>'No. The hat stays.','deal_decision'=>'REJECT','deal_terms'=>'']);
+check('a plain REJECT stays REJECT', (stobeDealCaptureResponse($rejPlain, 'NegTestTrader', $player, getNpcData('NegTestTrader') ?: [], 'Then 600?', 'social')['decision'] ?? '') === 'REJECT');
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestTrader' AND status IN ('PROPOSED','COUNTERED','REJECTED','ACCEPTED','AWAITING_PERFORMANCE')");
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");
