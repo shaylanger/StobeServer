@@ -1359,6 +1359,28 @@ function stobeNegDirectivePending(string $contractId, int $termIndex): bool {
  * Bug 34: the player just handed something over in this chat request. Tick the deal until the
  * payment is confirmed and her waiting terms are queued (or nothing waits), up to $maxMs.
  */
+/** Bug 122: cats paid "for" something with no deal behind it come back. */
+function stobeNegRefundUnearnedPrepayment(string $npc, string $player): void {
+    $cats = intval($GLOBALS['STOBE_VOICE_HANDOVER_CATS'] ?? 0);
+    $message = strtolower(strval($GLOBALS['STOBE_VOICE_HANDOVER_MESSAGE'] ?? ''));
+    if ($cats <= 0 || trim($npc) === '' || trim($player) === '') return;
+    // A plain gift stays given; only a payment tied to a request is refundable.
+    if (!preg_match('/\b(now|for|if|so that|in exchange|in return|and you|then you)\b/', $message)) return;
+    $deal = $GLOBALS['db']->fetchOne(
+        "SELECT contract_id FROM stobe_social_contract
+          WHERE LOWER(npc_name)=LOWER($1)
+            AND status IN ('PROPOSED','COUNTERED','ACCEPTED','AWAITING_PERFORMANCE','COMPLETE')
+            AND updated_at > NOW() - interval '120 seconds' LIMIT 1",
+        [$npc]
+    );
+    if (is_array($deal)) return; // a deal covers it, with its own refund rules
+    stobeNegQueueDirective($npc, 'refund', '', [
+        'actions'=>['GIVE_CATS@' . $player . '@' . $cats],
+        'instruction'=>'You did not agree to what ' . $player . ' asked, so you hand back the ' . $cats . ' Cats they just gave you. Say so in one short line.',
+    ], true);
+    stobeLogInfo('Prepayment refunded: no deal behind it (bug 122)', ['npc'=>$npc, 'cats'=>$cats]);
+}
+
 function stobeNegSettleAfterHandover(string $npc, int $maxMs = 4000): void {
     $until = microtime(true) + $maxMs / 1000;
     do {

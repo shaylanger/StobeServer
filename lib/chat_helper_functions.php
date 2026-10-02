@@ -1350,6 +1350,14 @@ function stobeUnpaidGiftWouldBeBlocked(string $command, string $argument, array 
     if ($npcName !== '' && function_exists('stobeNegNpcHasDealContext') && stobeNegNpcHasDealContext($npcName)) {
         return false;
     }
+    // Bug 122: handing back a refund is not a gift.
+    if ($npcName !== '' && $command === 'GIVE_CATS' && isset($GLOBALS['db'])) {
+        $refund = $GLOBALS['db']->fetchOne(
+            "SELECT 1 AS hit FROM stobe_negotiation_directive WHERE kind='refund' AND LOWER(npc_name)=LOWER($1) AND created_unix >= $2 LIMIT 1",
+            [$npcName, time() - 600]
+        );
+        if (is_array($refund)) return false;
+    }
     $playerName = normalizeParticipantNameToken(strval($config['player_name'] ?? ''));
     $target = $command === 'GIVE_ITEM'
         ? stobeGiveItemTargetFromActionArgument($argument)

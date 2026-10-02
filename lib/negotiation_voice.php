@@ -253,6 +253,8 @@ function stobeNegVoiceHandover(string $npc, array|false $npcData, string $player
         @flush();
         stobeLogInfo('Voice hand-over dispatched', ['player'=>$player, 'npc'=>$npc, 'actions'=>$actions, 'message'=>$message]);
         $GLOBALS['STOBE_VOICE_HANDOVER_NPC'] = $npc; // bug 34: settle her side before this request ends
+        $GLOBALS['STOBE_VOICE_HANDOVER_CATS'] = intval($parsed['cats']); // bug 122
+        $GLOBALS['STOBE_VOICE_HANDOVER_MESSAGE'] = $message;
         $parts = [];
         if ($parsed['cats'] > 0) $parts[] = intval($parsed['cats']) . ' Cats';
         foreach ($parsed['items'] as $item) $parts[] = intval($item['qty']) . ' x ' . $item['name'];

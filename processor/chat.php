@@ -1717,6 +1717,11 @@ if (!$narratorMode && !empty($GLOBALS['STOBE_VOICE_HANDOVER_NPC']) && function_e
     try { stobeNegSettleAfterHandover($targetNpc); } catch (Throwable $settleError) {
         stobeLogWarn('Settle after hand-over failed', ['npc'=>$targetNpc, 'error'=>$settleError->getMessage()]);
     }
+    if (function_exists('stobeNegRefundUnearnedPrepayment')) { // bug 122
+        try { stobeNegRefundUnearnedPrepayment($targetNpc, $playerName); } catch (Throwable $refundError) {
+            stobeLogWarn('Prepayment refund failed', ['npc'=>$targetNpc, 'error'=>$refundError->getMessage()]);
+        }
+    }
 }
 // Bug 29: payment verified during this request queued her side (or a refund) after the
 // reply went out. Send those actions now instead of waiting for the next line.
