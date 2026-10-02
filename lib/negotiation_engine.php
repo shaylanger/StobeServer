@@ -1526,6 +1526,21 @@ function stobeNegMajorHitsOn(string $name, int $sinceUnix): int {
     }
 }
 
+/** Bug 98: newest live health from the fight ("took a major hit (health N%)"), or null. */
+function stobeNegLiveHealthRatio(string $name, int $sinceUnix): ?float {
+    try {
+        $row = $GLOBALS['db']->fetchOne(
+            "SELECT data FROM eventlog WHERE type='major_damage' AND localts >= $1 AND data LIKE $2 ORDER BY localts DESC LIMIT 1",
+            [$sinceUnix, $name . ': took a major hit (health %']
+        );
+        if (is_array($row) && preg_match('/\(health (\d+)%\)/', strval($row['data'] ?? ''), $m)) {
+            return max(0.0, min(1.0, intval($m[1]) / 100.0));
+        }
+    } catch (Throwable $e) {
+    }
+    return null;
+}
+
 /** Bug 98: does the stored row carry real health numbers? */
 function stobeNegHasHealthData(array $row): bool {
     if (preg_match('/^\s*-?\d+(?:\.\d+)?\s*\/\s*[1-9]/', strval($row['blood'] ?? ''))) return true;
@@ -1574,6 +1589,8 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
             if (!stobeNegHasHealthData($row)) { // bug 98: no numbers -> judge by major hits
                 $ratio = max(0.1, 1.0 - 0.35 * stobeNegMajorHitsOn($name, $now - 90));
             }
+            $live = stobeNegLiveHealthRatio($name, $now - 90); // bug 98: stored health is stale mid-fight
+            if ($live !== null && $live < $ratio) $ratio = $live;
             $events = stobeNegCombatEvents($now - 90, $name);
             $hostileToPlayer = false;
             $fightingOthers = false;
