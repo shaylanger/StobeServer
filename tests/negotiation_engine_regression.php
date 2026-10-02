@@ -368,6 +368,17 @@ check('bug 110: loot order recognised', stobeLootOrderLine("Malzin, loot everyth
 check('bug 110: questions and stops are not orders', !stobeLootOrderLine('Did you loot him already?') && !stobeLootOrderLine("Don't loot that one."));
 check('bug 110: loot action detected', stobeLootActionPresent(['LOOT_TARGET@Hungry Bandit']) && stobeLootActionPresent(['TASK_GOAL@LOOT_AREA@all']) && !stobeLootActionPresent(['FOLLOW@Shay']));
 
+// ---------------------------------------------------------------- 12d. bug 117: a generic name doesn't map to another load's NPC
+fixtureNpc('Garvtest [Gen117 Bandit]', ['money'=>10, 'storage_id'=>'hand_111'], '', '', '100/100');
+$db->exec("DELETE FROM core_npc_master WHERE LOWER(name)=LOWER('Gen117 Bandit')");
+$db->exec("UPDATE core_npc_master SET original_name='Gen117 Bandit' WHERE name='Garvtest [Gen117 Bandit]'");
+$g117 = getNpcData('Gen117 Bandit');
+check('bug 117: without a serial the old fallback stays', is_array($g117) && $g117['name'] === 'Garvtest [Gen117 Bandit]', $g117['name'] ?? $g117);
+$g117 = getNpcData('Gen117 Bandit', 111);
+check('bug 117: same serial maps to the renamed NPC', is_array($g117) && $g117['name'] === 'Garvtest [Gen117 Bandit]', $g117['name'] ?? $g117);
+check('bug 117: another serial does not', getNpcData('Gen117 Bandit', 222) === false);
+$db->exec("DELETE FROM core_npc_master WHERE name='Garvtest [Gen117 Bandit]'");
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");

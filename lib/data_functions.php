@@ -7604,12 +7604,24 @@ function storeFactionRelationEntries(array $payload): array|false {
     ];
 }
 
-function getNpcData(string $name): array|false {
+function getNpcData(string $name, int $liveSerial = 0): array|false {
     $db = $GLOBALS["db"];
     $normalizedName = normalizeParticipantNameToken($name);
     if ($normalizedName === '') {
         return false;
     }
+    // Bug 117: with a live serial, a generic name ("Dust Bandit") only falls back to a
+    // renamed NPC that has that serial, never to another NPC from an earlier load.
+    $serialFits = static function ($row) use ($liveSerial): bool {
+        if (!is_array($row)) return false;
+        if ($liveSerial <= 0) return true;
+        $meta = normalizeCoreNpcMetadata($row['metadata'] ?? '{}');
+        $sid = strval($meta['storage_id'] ?? '');
+        if (!preg_match('/(?:^|_)(-?\d+)$/', $sid, $m)) return false;
+        $serial = intval($m[1]);
+        if ($serial < 0) $serial += 4294967296;
+        return $serial === $liveSerial;
+    };
 
     $exact = $db->fetchOne(
         "SELECT *
@@ -7645,14 +7657,19 @@ function getNpcData(string $name): array|false {
                  LIMIT 1",
                 [$normalizedName]
             );
-            if ($preferred) {
+            if ($preferred && $serialFits($preferred)) {
                 return $preferred;
+            }
+            if ($preferred && $liveSerial > 0) {
+                stobeLogInfo('Generic name not mapped to an NPC with another serial (bug 117)', [
+                    'name' => $normalizedName, 'live_serial' => $liveSerial, 'stored_npc' => strval($preferred['name'] ?? ''),
+                ]);
             }
         }
         return $exact;
     }
 
-    return $db->fetchOne(
+    $fallback = $db->fetchOne(
         "SELECT *
          FROM core_npc
          WHERE LOWER(COALESCE(original_name, '')) = LOWER($1)
@@ -7663,6 +7680,13 @@ function getNpcData(string $name): array|false {
          LIMIT 1",
         [$normalizedName]
     );
+    if ($fallback && !$serialFits($fallback)) {
+        stobeLogInfo('Generic name not mapped to an NPC with another serial (bug 117)', [
+            'name' => $normalizedName, 'live_serial' => $liveSerial, 'stored_npc' => strval($fallback['name'] ?? ''),
+        ]);
+        return false;
+    }
+    return $fallback;
 }
 
 function getApiBadgeById(int $id): array|false {

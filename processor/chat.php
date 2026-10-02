@@ -685,10 +685,12 @@ if ($narratorMode) {
     $npcData = stobeBuildNarratorNpcData();
     $targetNpc = $narratorName;
 } else {
-    $npcData = getNpcData($targetNpc);
+    // Bug 117: the live serial keeps a generic name from mapping to another load's NPC.
+    $targetLiveSerial = function_exists('stobeResolveLiveParticipantSerial') ? stobeResolveLiveParticipantSerial($targetNpc) : 0;
+    $npcData = getNpcData($targetNpc, $targetLiveSerial);
     if (!$npcData) {
         storeNpcProfile($targetNpc, []);
-        $npcData = getNpcData($targetNpc);
+        $npcData = getNpcData($targetNpc, $targetLiveSerial);
         stobeLogInfo('NPC profile JIT-created', ['target_npc' => $targetNpc]);
     } elseif (npcNeedsBootstrap($npcData)) {
         // Backfill older sparse rows created before profile defaults were added.
