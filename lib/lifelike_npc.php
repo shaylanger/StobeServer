@@ -417,7 +417,9 @@ function stobeLifelikeNearbySquadLines(array $npcData, string $npcName): array
             continue;
         }
 
-        $bits = [$name];
+        // Bug 97: say the gender so nobody calls Malzin "him".
+        $gender = strtolower(trim(strval($other['gender'] ?? '')));
+        $bits = [in_array($gender, ['female', 'male'], true) ? $name . ' (' . $gender . ')' : $name];
         if (function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($other)) {
             // Bug 38: "squadmate" only when the viewer is in the player's squad too.
             $bits[] = npcIsInPlayerFaction($npcData) ? 'squadmate' : "player's squad";
@@ -728,6 +730,7 @@ function stobeLifelikeSquadForTurn(array $lines, string $playerMessage): array
         $text = strval($line);
         $lower = strtolower($text);
         $name = trim(strval(explode('|', $text, 2)[0] ?? ''));
+        $name = trim(preg_replace('/\s*\((?:female|male)\)$/', '', $name) ?? $name); // bug 97 tag
         $mentioned = $name !== '' && str_contains($message, strtolower($name));
         $noteworthy = str_contains($lower, 'doing:')
             || str_contains($lower, 'in combat')
