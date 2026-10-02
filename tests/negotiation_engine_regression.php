@@ -278,7 +278,7 @@ $r = stobeDealCaptureResponse($propose, 'NegTestBandit', $player, getNpcData('Ne
 $row = stobeNegFetchDeal(strval($r['id'] ?? ''));
 check('NPC offer recorded as PROPOSED by npc', ($row['status'] ?? '') === 'PROPOSED' && ($row['proposer'] ?? '') === 'npc', $row ? [$row['status'], $row['proposer']] : $r);
 // Bug 96: "We're done here." doesn't accept an NPC's own offer even if the model says ACCEPT; "Deal." does.
-fixtureNpc('NegTestBandit96', ['money'=>50,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x2', 'A timid coward.', '20/100');
+fixtureNpc('NegTestBandit96', ['money'=>1000,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x2', 'A timid coward.', '20/100');
 $db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit96' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");
 $r96 = stobeDealCaptureResponse($propose, 'NegTestBandit96', $player, getNpcData('NegTestBandit96') ?: [], '', 'surrender', 'npc');
 $acceptNpc = json_encode(['message'=>'Done, then.','deal_decision'=>'ACCEPT','deal_terms'=>'']);
@@ -295,6 +295,23 @@ $acceptCounter = json_encode(['message'=>'Forty-five. Fine.','deal_decision'=>'A
 $rc = stobeDealCaptureResponse($acceptCounter, 'NegTestBandit96', $player, getNpcData('NegTestBandit96') ?: [], "Make it 45 and we're done.", 'surrender');
 $rowc = stobeNegFetchDeal(strval($r129['id'] ?? ''));
 check('she accepts the player counter (bug 129)', ($rc['decision'] ?? '') === 'ACCEPT' && ($rowc['status'] ?? '') === 'ACCEPTED', [$rc, $rowc['status'] ?? null]);
+// Bug 130: rich common bandit (cap 300) accepts "make it 400": recorded as his counter at 300, words follow.
+fixtureNpc('NegTestBandit130', ['money'=>10000,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x2', 'A timid coward.', '20/100');
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit130' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");
+$offer300 = json_encode(['message'=>'300 cats, let me go.','deal_decision'=>'PROPOSE','deal_terms'=>json_encode([
+    ['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>300],['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player'],['kind'=>'SPARE','by'=>'player','target'=>'npc']])]);
+$r130 = stobeDealCaptureResponse($offer300, 'NegTestBandit130', $player, getNpcData('NegTestBandit130') ?: [], '', 'surrender', 'npc');
+$say400 = 'Four hundred, then. Cats are yours, and I walk.';
+$accept400 = json_encode(['message'=>$say400,'deal_decision'=>'ACCEPT','deal_terms'=>json_encode([
+    ['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>400],['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player'],['kind'=>'SPARE','by'=>'player','target'=>'npc']])]);
+$rk = stobeDealCaptureResponse($accept400, 'NegTestBandit130', $player, getNpcData('NegTestBandit130') ?: [], "Make it 400 and we're done.", 'surrender');
+$rowk = stobeNegFetchDeal(strval($r130['id'] ?? ''));
+check('accept above the cap is a counter at the cap (bug 130)', ($rk['decision'] ?? '') === 'COUNTER' && ($rowk['status'] ?? '') === 'COUNTERED'
+    && str_contains(strval($rowk['terms'] ?? ''), '300') && !str_contains(strval($rowk['terms'] ?? ''), '400'), [$rk, $rowk['status'] ?? null, $rowk['terms'] ?? null]);
+$ak = stobeDealSpeechAmountCheck($say400, 'NegTestBandit130', $rk);
+check('her "Four hundred" is rewritten to the capped terms (bug 130)', is_array($ak) && str_contains($ak['line'], '300') && !str_contains($ak['line'], '400'), $ak);
+check('"Four hundred, then." is a spoken amount (bug 130)', in_array(400, stobeDealSpokenCatsAmounts($say400), true), stobeDealSpokenCatsAmounts($say400));
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit130' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");
 $db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit96' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");
 // Bug 98: stored health says 100 %, the live "(health N%)" event decides; it isn't throttled.
 fixtureNpc('NegTestBandit98', ['money'=>50,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x2', 'A timid coward.', '100/100');
@@ -342,7 +359,7 @@ $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");
 $db->exec("DELETE FROM stobe_negotiation_reputation WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM eventlog WHERE data LIKE '%NegTest%'");
-foreach ([$player, 'NegTestBandit', 'NegTestTrader'] as $n) {
+foreach ([$player, 'NegTestBandit', 'NegTestTrader', 'NegTestBandit130'] as $n) {
     $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n]);
     $db->exec("DELETE FROM core_npc WHERE name=$1", [$n]);
 }

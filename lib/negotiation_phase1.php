@@ -502,6 +502,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
         if (!$ceasefire && count($terms) === 0) return ['ok'=>false,'error'=>'missing_npc_ceasefire'];
         if (!$ceasefire) $terms[] = ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player'];
     }
+    $capped = null;
     if (in_array($kind, ['surrender','assist'], true)) {
         [$offerCap, $offerCarried, $offerTier] = stobeNegOfferCap($npc, $npcData);
         foreach ($terms as $ti => $term) {
@@ -509,6 +510,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
             $amount = intval($term['amount'] ?? 0);
             if ($amount <= $offerCap) continue;
             stobeDealLog('info', 'NPC offer capped (bug 91)', ['npc'=>$npc, 'offered'=>$amount, 'cap'=>$offerCap, 'carried'=>$offerCarried, 'tier'=>$offerTier]);
+            $capped = ['from'=>$amount, 'to'=>max(0, $offerCap)];
             if ($offerCap > 0) {
                 $terms[$ti]['amount'] = $offerCap;
             } else {
@@ -516,6 +518,11 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
             }
         }
         $terms = array_values($terms);
+        if ($capped !== null && $decision === 'ACCEPT') {
+            // Bug 130: she can't accept more than the cap; what's recorded is her counter at the cap.
+            $decision = 'COUNTER';
+            stobeDealLog('info', 'Negotiation: accept above the cap recorded as a counter at the cap (bug 130)', ['npc'=>$npc, 'capped'=>$capped]);
+        }
     }
     // Bug 32: her own weapon only goes when she's surrendering or trusts the player.
     $weaponGiven = stobeDealTermsGiveUpWeapon($terms, $npcData);
@@ -581,7 +588,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
             return ['ok'=>false,'error'=>'revision_failed','id'=>$openId];
         }
         stobeDealLog('info', 'Negotiation contract revised', ['contract_id'=>$openId,'npc'=>$npc,'decision'=>$decision,'from'=>$openStatus,'status'=>$state]);
-        return ['ok'=>true,'decision'=>$decision,'id'=>$openId,'terms'=>$terms,'status'=>$state,'kind'=>$kind];
+        return ['ok'=>true,'decision'=>$decision,'id'=>$openId,'terms'=>$terms,'status'=>$state,'kind'=>$kind] + ($capped !== null ? ['capped'=>$capped] : []);
     }
     if ($decision === 'ACCEPT') try {
         $recent = $GLOBALS['db']->fetchAll(
@@ -607,7 +614,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     $state = match ($decision) { 'ACCEPT' => 'ACCEPTED', 'COUNTER' => 'COUNTERED', default => 'PROPOSED' };
     if ($state !== 'PROPOSED' && !stobeDealTransition($id,'PROPOSED',$state)) return ['ok'=>false,'error'=>'transition_failed','id'=>$id];
     stobeDealLog('info', 'Negotiation contract recorded', ['contract_id'=>$id,'npc'=>$npc,'decision'=>$decision,'status'=>$state,'kind'=>$kind]);
-    return ['ok'=>true,'decision'=>$decision,'id'=>$id,'terms'=>$terms,'status'=>$state,'kind'=>$kind];
+    return ['ok'=>true,'decision'=>$decision,'id'=>$id,'terms'=>$terms,'status'=>$state,'kind'=>$kind] + ($capped !== null ? ['capped'=>$capped] : []);
 }
 
 /**
@@ -895,6 +902,8 @@ function stobeDealSpokenCatsAmounts(string $text): array {
         '/\b(\d+)\s+(?:more\s+|extra\s+)?cats?\b/i',
         '/\b(\d+)\s+(?:now|up\s*front|after(?:wards)?|later|in\s+total|total)\b/i',
         '/\b(?:total(?:\s+of)?|now|after(?:wards)?|up\s*front|later|pay(?:s|ing)?|paid|owes?|owed|another|rest(?:\s+of)?)\s+(?:(?:is|of|me|you|the|just|only|another|still)\s+){0,2}(\d+)\b/i',
+        // Bug 130: "Four hundred, then." / "400. Fine." (a bare amount as its own sentence)
+        '/(?:^|[.!?]\s+)(\d+)(?=\s*(?:[,.!?]|then\b))/i',
     ];
     foreach ($patterns as $pattern) {
         if (preg_match_all($pattern, $text, $m)) {
@@ -1065,7 +1074,7 @@ function stobeDealSpeechAmountCheck(string $text, string $npc, array $dealResult
     $terms = is_array($dealResult['terms'] ?? null) ? $dealResult['terms'] : [];
     if (count($terms) === 0) return null;
     $spoken = stobeDealSpokenCatsAmounts($text);
-    if (count($spoken) === 0) return null;
+    if (count($spoken) === 0 && empty($dealResult['capped'])) return null;
     $state = [];
     try {
         $open = stobeDealOpenForNpc($npc);
@@ -1075,6 +1084,14 @@ function stobeDealSpeechAmountCheck(string $text, string $npc, array $dealResult
     }
     $allowed = stobeDealAllowedCatsAmounts($terms, is_array($state) ? $state : [], stobeDealNpcPurse($npc));
     $wrong = array_values(array_filter($spoken, static fn($n) => !isset($allowed[$n])));
+    $capped = is_array($dealResult['capped'] ?? null) ? $dealResult['capped'] : null;
+    if ($capped !== null && (count($spoken) === 0 || count($wrong) > 0)) {
+        // Bug 130: the cap lowered what she agreed to; say the capped terms, not hers.
+        $line = stobeDealPlainTermsLine($terms, $decision);
+        if ($line === '') return null;
+        $line = "I can't go above " . intval($capped['to']) . ' Cats. ' . $line;
+        return ['line'=>$line, 'spoken'=>$spoken, 'wrong'=>count($wrong) > 0 ? $wrong : [intval($capped['from'])], 'allowed'=>array_keys($allowed)];
+    }
     if (count($wrong) === 0) return null;
     $line = stobeDealPlainTermsLine($terms, $decision);
     if ($line === '') return null;
