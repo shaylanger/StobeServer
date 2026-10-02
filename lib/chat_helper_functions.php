@@ -10529,10 +10529,18 @@ function stobeResolveNpcPromptOverrides(array $npcData, array $metadata = []): a
     if ($resolvedPromptHead === '' && function_exists('getSetting')) {
         $resolvedPromptHead = trim(strval(getSetting('PROMPT_HEAD', '')));
     }
+    $resolvedProfilePrompt = $npcProfilePrompt !== '' ? $npcProfilePrompt : $profilePrompt;
+    // Bug 107: fill the name placeholders (only the diary code did this).
+    $placeholderName = trim(strval($npcData['name'] ?? ($metadata['name'] ?? '')));
+    if ($placeholderName !== '') {
+        $placeholders = ['#HERIKA_NAME#', '{HERIKA_NAME}', '#NPC_NAME#'];
+        $resolvedPromptHead = str_replace($placeholders, $placeholderName, $resolvedPromptHead);
+        $resolvedProfilePrompt = str_replace($placeholders, $placeholderName, $resolvedProfilePrompt);
+    }
 
     return [
         'prompt_head' => $resolvedPromptHead,
-        'profile_prompt' => $npcProfilePrompt !== '' ? $npcProfilePrompt : $profilePrompt,
+        'profile_prompt' => $resolvedProfilePrompt,
     ];
 }
 
