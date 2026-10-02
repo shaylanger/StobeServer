@@ -5800,6 +5800,9 @@ function stobeBuildOutputContractUserPrompt(
     }
     if (in_array('HoldPosition', $parts['actions'] ?? [], true)) {
         $actionLine .= " Requests such as 'wait here', 'stay here', or 'hold this position' should use HoldPosition when the NPC agrees to remain at the current spot; use Idle only when merely stopping the current activity without a hold-position intent.";
+        if (in_array('WaitForGoal', $parts['actions'] ?? [], true)) { // bug 124
+            $actionLine .= " Exception: waiting FOR a named person ('wait here for Lorn', 'wait until Wendy gets back') must use WaitForGoal with that person in target, not HoldPosition.";
+        }
     }
     if (in_array('PickupNpc', $parts['actions'] ?? [], true)) {
         $actionLine .= " Requests to pick up or carry a helpless named person should use PickupNpc with that person as target when valid.";
