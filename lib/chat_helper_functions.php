@@ -14702,6 +14702,10 @@ function stobeQueueUnequipItemRequest(string $actor, string $itemQuery): bool {
             break;
         }
     }
+    if ($serial <= 0 && function_exists('stobeResolveLiveParticipantSerial')) {
+        // A take-off for someone out of range (a squadmate at the base): the stored serial.
+        $serial = stobeResolveLiveParticipantSerial($safeActor, true);
+    }
     if ($serial <= 0) {
         stobeLogWarn('Unequip request skipped because actor serial was unavailable', [
             'actor' => $safeActor,
