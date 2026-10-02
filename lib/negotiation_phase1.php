@@ -1260,10 +1260,10 @@ function stobeDealFixTargetField(array $terms): array {
     foreach ($terms as $i => $t) {
         if (!is_array($t)) continue;
         $kind = strtoupper(strval($t['kind'] ?? ''));
-        if ($kind === 'STOP_ATTACK' && ($t['by'] ?? '') === 'player'
+        if (in_array($kind, ['STOP_ATTACK','SAFE_PASSAGE'], true) && ($t['by'] ?? '') === 'player' // item 46
             && in_array(strval($t['target'] ?? ($t['to'] ?? 'npc')), ['npc',''], true)) {
             $terms[$i] = ['kind'=>'SPARE', 'by'=>'player', 'target'=>'npc'];
-            stobeDealLog('info', "Negotiation term fixed: the player's STOP_ATTACK is SPARE (item 46)", []);
+            stobeDealLog('info', "Negotiation term fixed: the player's STOP_ATTACK/SAFE_PASSAGE is SPARE (item 46)", ['kind'=>$kind]);
             continue;
         }
         if (!in_array($kind, ['STOP_ATTACK','FIRST_AID','SAFE_PASSAGE','SPARE','PROTECT'], true)) continue;

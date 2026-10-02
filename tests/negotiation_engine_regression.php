@@ -469,6 +469,9 @@ $t46c = stobeDealFixTargetField([
 check("item 46: the player's STOP_ATTACK becomes SPARE", ($t46c[1]['kind'] ?? '') === 'SPARE' && ($t46c[1]['target'] ?? '') === 'npc', $t46c);
 check('item 46: that deal validates', stobeDealValidate(['parties'=>['npc'=>'a','player'=>'b'],'terms'=>$t46c])['ok'] === true);
 
+$t46d = stobeDealFixTargetField([['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>100], ['kind'=>'SAFE_PASSAGE','by'=>'player','to'=>'npc']]);
+check("item 46: the player's SAFE_PASSAGE becomes SPARE", ($t46d[1]['kind'] ?? '') === 'SPARE' && stobeDealValidate(['parties'=>['npc'=>'a','player'=>'b'],'terms'=>$t46d])['ok'] === true, $t46d);
+
 // ---------------------------------------------------------------- 13. toggles
 $db->exec("DELETE FROM general_settings WHERE id='NEGOTIATION_PHASE_6'");
 $db->exec("INSERT INTO general_settings (id, value) VALUES ('NEGOTIATION_PHASE_6', 'false')");
