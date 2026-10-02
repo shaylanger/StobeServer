@@ -703,6 +703,28 @@ function stobeNegBeginPerformance(string $id, array $finalActions, string $playe
 
 // ------------------------------------------------------------------ verification tick
 
+/**
+ * Bug 126: a payment that left no execution record (she was knocked out, out of
+ * reach) is sent again when she next speaks, up to twice, before IMPOSSIBLE.
+ */
+function stobeNegReissuePayment(array $term, array $deal, string $player, int $now): array {
+    $token = stobeNegTermActionToken($term, $player);
+    if ($token === '' || intval($term['payment_reissues'] ?? 0) >= 2 || !stobeNegPhaseEnabled(2)) {
+        $term['status'] = 'IMPOSSIBLE';
+        $term['evidence'][] = ['at'=>$now, 'note'=>'no_execution_record'];
+        return $term;
+    }
+    $term['payment_reissues'] = intval($term['payment_reissues'] ?? 0) + 1;
+    $term['status'] = 'REISSUE_QUEUED';
+    $term['evidence'][] = ['at'=>$now, 'note'=>'payment_reissue_queued', 'attempt'=>$term['payment_reissues']];
+    stobeNegQueueDirective(strval($deal['npc_name']), 'reissue_payment', strval($deal['contract_id']), [
+        'actions'=>[$token],
+        'term_indexes'=>[intval($term['i'])],
+        'instruction'=>'You agreed to hand this over to ' . $player . ' and have not yet. Do it now, in one short line.',
+    ], true);
+    return $term;
+}
+
 function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now): array {
     $status = strval($term['status'] ?? '');
     if (in_array($status, ['VERIFIED','IMPOSSIBLE','UNMET','RECORDED','WAITING_FOR_PLAYER','BETRAYED'], true)) return $term;
@@ -785,8 +807,7 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
                 $term['status'] = 'IMPOSSIBLE';
                 $note($term, 'game_refused_transfer', ['reason'=>$exec['skipped']]);
             } elseif ($age >= STOBE_NEG_EXECUTION_TIMEOUT_SECONDS) {
-                $term['status'] = 'IMPOSSIBLE';
-                $note($term, 'no_execution_record');
+                $term = stobeNegReissuePayment($term, $deal, $player, $now); // bug 126
             }
             return $term;
         }
@@ -796,9 +817,11 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
             if ($exec['transferred'] >= $qty) {
                 $term['status'] = 'VERIFIED';
                 $note($term, 'game_executed_item_transfer', ['transferred'=>$exec['transferred']]);
-            } elseif ($exec['blocked'] !== '' || $age >= STOBE_NEG_EXECUTION_TIMEOUT_SECONDS) {
+            } elseif ($exec['blocked'] !== '') {
                 $term['status'] = 'IMPOSSIBLE';
-                $note($term, $exec['blocked'] !== '' ? 'game_blocked_item_transfer' : 'no_execution_record', ['reason'=>$exec['blocked']]);
+                $note($term, 'game_blocked_item_transfer', ['reason'=>$exec['blocked']]);
+            } elseif ($age >= STOBE_NEG_EXECUTION_TIMEOUT_SECONDS) {
+                $term = stobeNegReissuePayment($term, $deal, $player, $now); // bug 126
             }
             return $term;
         }
@@ -1023,7 +1046,7 @@ function stobeNegTickDeal(array $deal, string $player, int $now): void {
         if (in_array($term['status'] ?? '', ['SETTLE_QUEUED','REISSUE_QUEUED'], true) && !stobeNegDirectivePending($id, intval($term['i'] ?? $idx))) {
             if (($term['status'] ?? '') === 'REISSUE_QUEUED') {
                 $state[$idx]['status'] = 'IMPOSSIBLE';
-                $state[$idx]['evidence'][] = ['at'=>$now, 'note'=>'truce_reissue_never_delivered'];
+                $state[$idx]['evidence'][] = ['at'=>$now, 'note'=>isset($term['payment_reissues']) ? 'payment_reissue_never_delivered' : 'truce_reissue_never_delivered'];
             } else {
                 $state[$idx]['status'] = 'WAITING_FOR_PLAYER';
             }
@@ -1345,8 +1368,9 @@ function stobeNegQueueDirective(string $npc, string $kind, string $contractId, a
 
 function stobeNegDirectivePending(string $contractId, int $termIndex): bool {
     $rows = $GLOBALS['db']->fetchAll(
-        "SELECT payload FROM stobe_negotiation_directive WHERE contract_id=$1 AND consumed_unix=0 AND created_unix >= $2",
-        [$contractId, time() - STOBE_NEG_DIRECTIVE_TTL_SECONDS]
+        "SELECT payload FROM stobe_negotiation_directive WHERE contract_id=$1 AND consumed_unix=0
+            AND created_unix >= (CASE kind WHEN 'reissue_payment' THEN $3::bigint ELSE $2::bigint END)",
+        [$contractId, time() - STOBE_NEG_DIRECTIVE_TTL_SECONDS, time() - 600]
     );
     foreach (is_array($rows) ? $rows : [] as $row) {
         $payload = stobeNegDecode($row['payload'] ?? []);
@@ -1403,8 +1427,8 @@ function stobeNegSettleAfterHandover(string $npc, int $maxMs = 4000): void {
 /** Bug 42: instructions of directives about to ride on this NPC's chat reply (same windows as the attach). */
 function stobeNegPendingDirectiveNotes(string $npc): array {
     $rows = $GLOBALS['db']->fetchAll(
-        "SELECT kind, payload FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE kind WHEN 'refund' THEN 600 ELSE 45 END) AND LOWER(npc_name)=LOWER($2) AND kind = ANY($3::text[]) ORDER BY id",
-        [time(), $npc, '{settle,reissue_truce,betray,breach_react,refund}']
+        "SELECT kind, payload FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE WHEN kind IN ('refund','reissue_payment') THEN 600 ELSE 45 END) AND LOWER(npc_name)=LOWER($2) AND kind = ANY($3::text[]) ORDER BY id",
+        [time(), $npc, '{settle,reissue_truce,reissue_payment,betray,breach_react,refund}']
     );
     $notes = [];
     foreach (is_array($rows) ? $rows : [] as $row) {
@@ -1420,7 +1444,7 @@ function stobeNegClaimDirective(array $candidateNames, string $onlyNpc = ''): ?a
         stobeNegEnsureSchema();
         $rows = $GLOBALS['db']->fetchAll(
             // Refunds wait for the player to come back (10 min); everything else is time-critical.
-            "SELECT * FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE kind WHEN 'refund' THEN 600 ELSE 45 END) ORDER BY id LIMIT 20",
+            "SELECT * FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE WHEN kind IN ('refund','reissue_payment') THEN 600 ELSE 45 END) ORDER BY id LIMIT 20",
             [time()]
         );
         foreach (is_array($rows) ? $rows : [] as $row) {
@@ -1472,9 +1496,9 @@ function stobeNegMarkDirectiveDispatched(array $directive, array $finalActions):
  * (settle / truce reissue), attach those actions to this reply.
  */
 function stobeNegAttachPendingForChat(string $npc, array $responseActions): array {
-    $dispatchKinds = ['settle','reissue_truce','betray','breach_react','refund'];
+    $dispatchKinds = ['settle','reissue_truce','reissue_payment','betray','breach_react','refund'];
     $rows = $GLOBALS['db']->fetchAll(
-        "SELECT id FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE kind WHEN 'refund' THEN 600 ELSE 45 END) AND LOWER(npc_name)=LOWER($2) AND kind = ANY($3::text[]) ORDER BY id",
+        "SELECT id FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE WHEN kind IN ('refund','reissue_payment') THEN 600 ELSE 45 END) AND LOWER(npc_name)=LOWER($2) AND kind = ANY($3::text[]) ORDER BY id",
         [time(), $npc, '{' . implode(',', $dispatchKinds) . '}']
     );
     foreach (is_array($rows) ? $rows : [] as $row) {
@@ -1489,7 +1513,7 @@ function stobeNegAttachPendingForChat(string $npc, array $responseActions): arra
         foreach ($directive['payload']['actions'] ?? [] as $action) {
             if (!in_array($action, $responseActions, true)) $responseActions[] = strval($action);
         }
-        if (in_array(strval($directive['kind']), ['settle','reissue_truce'], true)) {
+        if (in_array(strval($directive['kind']), ['settle','reissue_truce','reissue_payment'], true)) {
             stobeNegMarkDirectiveDispatched($directive, $responseActions);
         }
         stobeLogInfo('Negotiation directive attached to chat reply', ['npc'=>$npc, 'kind'=>$directive['kind'], 'actions'=>$responseActions]);
@@ -1501,11 +1525,11 @@ function stobeNegAttachPendingForChat(string $npc, array $responseActions): arra
 function stobeNegCompleteDirective(array $directive, string $raw, string $npc, string $player, array $npcData, string $text, array $actions): array {
     $kind = strval($directive['kind'] ?? '');
     try {
-        if (in_array($kind, ['settle','reissue_truce','betray','breach_react','refund'], true)) {
+        if (in_array($kind, ['settle','reissue_truce','reissue_payment','betray','breach_react','refund'], true)) {
             foreach ($directive['payload']['actions'] ?? [] as $action) {
                 if (!in_array($action, $actions, true)) $actions[] = strval($action);
             }
-            if (in_array($kind, ['settle','reissue_truce'], true)) stobeNegMarkDirectiveDispatched($directive, $actions);
+            if (in_array($kind, ['settle','reissue_truce','reissue_payment'], true)) stobeNegMarkDirectiveDispatched($directive, $actions);
         } elseif (in_array($kind, ['surrender','assist'], true)) {
             $result = stobeDealCaptureResponse($raw, $npc, $player, $npcData, '', $kind === 'surrender' ? 'surrender' : 'assist', 'npc');
             stobeLogInfo('NPC-initiated negotiation', ['npc'=>$npc, 'kind'=>$kind, 'result'=>$result]);

@@ -145,6 +145,31 @@ stobeLine("ACTION_EXEC: GIVE_CATS actor=NegTestTrader skipped reason=no_money re
 stobeNegTick();
 check('game refused NPC payment -> IMPOSSIBLE', status($id) === 'IMPOSSIBLE', [status($id), termStatus($id, 0)]);
 
+// ---------------------------------------------------------------- 6b. bug 126: payment with no record (she was down) -> re-sent on her next line, x2, then IMPOSSIBLE
+file_put_contents($stobeLog, ''); stobeNegResetLogCache(); // section 6's refusal is for the same NPC
+$id = makeDeal('NegTestTrader', [['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>30]], 'social');
+stobeNegBeginPerformance($id, ['GIVE_CATS@' . $player . '@30'], $player, 1000, '');
+backdate($id, STOBE_NEG_EXECUTION_TIMEOUT_SECONDS + 1);
+stobeNegTick();
+check('bug 126: unexecuted payment queued again', termStatus($id, 0) === 'REISSUE_QUEUED' && status($id) === 'AWAITING_PERFORMANCE', [status($id), termStatus($id, 0)]);
+$db->exec("UPDATE stobe_negotiation_directive SET created_unix=created_unix-300 WHERE contract_id=$1", [$id]);
+stobeNegTick();
+check('bug 126: reissue still waits after 5 min', termStatus($id, 0) === 'REISSUE_QUEUED', termStatus($id, 0));
+$acts = stobeNegAttachPendingForChat('NegTestTrader', []);
+check('bug 126: payment rides on her next line', $acts === ['GIVE_CATS@' . $player . '@30'] && termStatus($id, 0) === 'DISPATCHED', [$acts, termStatus($id, 0)]);
+stobeLine("ACTION_EXEC: GIVE_CATS actor=NegTestTrader recipient=$player amount=30", time());
+stobeNegTick();
+check('bug 126: re-sent payment verified', status($id) === 'COMPLETE', [status($id), termStatus($id, 0)]);
+$id = makeDeal('NegTestTrader', [['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>31]], 'social');
+stobeNegBeginPerformance($id, ['GIVE_CATS@' . $player . '@31'], $player, 1000, '');
+for ($attempt = 0; $attempt < 3; $attempt++) {
+    backdate($id, STOBE_NEG_EXECUTION_TIMEOUT_SECONDS + 1);
+    stobeNegTick();
+    stobeNegAttachPendingForChat('NegTestTrader', []);
+}
+check('bug 126: never executed after 2 reissues -> IMPOSSIBLE', status($id) === 'IMPOSSIBLE', [status($id), termStatus($id, 0)]);
+$db->exec("DELETE FROM stobe_negotiation_directive");
+
 // ---------------------------------------------------------------- 7. social: unequip for Cats, verified via KenshiFP
 $db->exec("UPDATE stobe_social_contract SET npc_serial=4242 WHERE npc_name='NegTestTrader'");
 $id = makeDeal('NegTestTrader', [['kind'=>'UNEQUIP_ITEM','by'=>'npc','item'=>'Iron Hat'], ['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>200]], 'social');
