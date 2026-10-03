@@ -16,7 +16,16 @@ money Shay 5000
 @set TRADER traders 300 ~ traders within [0-9.]+: (.+?) #\d+
 shopstock "${TRADER}" ~ .
 @set ITEM shopstock "${TRADER}" ~ \[([^\]\[]+?) x\d+ \$\d+\]
-trade Shay "${TRADER}" "${ITEM}"
+# run m16: Shay's inventory on the Trader fixture is full (room=0 for every item): hand three unworn items to the
+# trader first (sections = diagnostics only), then buy. Harness 74B99AC7+ refuses a full buyer with "no room".
+sections Shay ~ .
+@set JUNK1 inv Shay ~ "name":"([^"]+)","count":\d+,"equipped":false
+transfer Shay "${TRADER}" "${JUNK1}"
+@set JUNK2 inv Shay ~ "name":"([^"]+)","count":\d+,"equipped":false
+transfer Shay "${TRADER}" "${JUNK2}"
+@set JUNK3 inv Shay ~ "name":"([^"]+)","count":\d+,"equipped":false
+transfer Shay "${TRADER}" "${JUNK3}"
+trade Shay "${TRADER}" "${ITEM}" ~ ^(?!trade failed)
 speed 1
 @sleep 5
 speed 0
