@@ -1622,6 +1622,15 @@ if (!$narratorMode && function_exists('stobeInferFollowFromOrder')
         stobeLogInfo('Follow inferred from a direct request (bug 87)', ['npc'=>$targetNpc, 'action'=>$inferredFollow]);
     }
 }
+if (!$narratorMode && function_exists('stobeInferMissingHandovers')
+    && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+    $missingHandovers = stobeInferMissingHandovers(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
+        strval($responseText ?? ''), strval($playerName ?? ''));
+    if (count($missingHandovers) > 0) {
+        $responseActions = array_merge($responseActions, $missingHandovers);
+        stobeLogInfo('Two-part hand-over: missing GIVE_ITEM added (item 43)', ['npc'=>$targetNpc, 'added'=>$missingHandovers]);
+    }
+}
 if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
     try {
         $responseActions = stobeNegAttachPendingForChat($targetNpc, $responseActions);
