@@ -15516,9 +15516,11 @@ function streamResponse(
             }
 
             $allOk = count($taskResults) > 0;
+            $taskDestUnknown = false;
             foreach ($taskResults as $taskResult) {
                 if (!boolval($taskResult['ok'] ?? false)) {
                     $allOk = false;
+                    if (strval($taskResult['error'] ?? '') === 'destination_not_known') $taskDestUnknown = true;
                     stobeLogWarn('Persistent task goal could not be queued', [
                         'actor'=>$actor,'kind'=>$taskKind,'item'=>$taskItem,
                         'target'=>$taskTarget,'destination'=>$taskDestination,
@@ -15528,7 +15530,10 @@ function streamResponse(
                     $queuedActions++;
                 }
             }
-            if (!$allOk) {
+            if (!$allOk && $taskDestUnknown && trim($taskDestination) !== '') {
+                // Item 68: say why, like work goals do.
+                $message = trim($message . ' I cannot do that because I do not know how to reach ' . trim($taskDestination) . '.');
+            } elseif (!$allOk) {
                 $message = trim($message . ' I could not start all of that task right now.');
             }
             continue;
