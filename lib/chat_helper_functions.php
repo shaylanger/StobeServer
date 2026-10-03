@@ -10351,31 +10351,36 @@ function stobeBuildCombatPriorityPromptBlock(array $npcData, string $speakerName
 }
 
 /**
- * Item 91: the current (or just-ended) fight's notable events, oldest first, from rows newest first
- * (each ['type','data','gamets']). Pure (no DB) so the regression test can feed rows.
- * A fight = the run of fight rows the NPC witnessed with no gap above $gap game seconds; it counts when its
- * last row is within $recent of now. Participants grow from the NPC through every "A: Initiated attack
- * (talking to: B)" row that touches one of them, so a town brawl next door stays out.
+ * Item 91 + 91b: the current (or just-ended) fight's notable events, oldest first, from rows newest first
+ * (each ['type','data','gamets', optional 'people']). Pure (no DB) so the regression test can feed rows.
+ * Participants grow from the NPC through every "A: Initiated attack (talking to: B)" row that touches one of
+ * them, so a brawl next door stays out. A fight = the participants' rows with no gap above $gap game s, and
+ * it counts when its last row is within $recent of now. Item 91b: continuity uses every participant's rows
+ * (the fight goes on while the NPC is knocked out); a line is kept only if the NPC saw it ('people' lists
+ * her, not unconscious/sleeping; rows without 'people' count as seen).
  */
+function stobeFightRowSeenBy(array $row, string $npcLower): bool {
+    if (!array_key_exists('people', $row)) return true; // Item 91b
+    $people = json_decode(strval($row['people'] ?? ''), true);
+    if (!is_array($people)) return false;
+    foreach ($people as $token) {
+        $name = strtolower(trim(explode('|', strval($token))[0]));
+        if ($name === $npcLower) return true;
+        if (str_starts_with($name, $npcLower . ' (')) {
+            return preg_match('/\((unconscious|sleeping|knocked[ _]out|dead)\)/', $name) !== 1;
+        }
+    }
+    return false;
+}
+
 function stobeSelectFightSoFarEvents(array $rowsDesc, string $npcName, int $now, int $gap = 3000, int $recent = 6000, int $max = 12): array {
     $npc = strtolower(trim($npcName));
     if ($npc === '' || $now <= 0 || count($rowsDesc) === 0) return [];
-    $latest = intval($rowsDesc[0]['gamets'] ?? 0);
-    if ($latest <= 0 || $latest > $now || $now - $latest > $recent) return [];
-    $episode = [];
-    $prev = $latest;
-    foreach ($rowsDesc as $row) {
-        $g = intval($row['gamets'] ?? 0);
-        if ($g <= 0 || $g > $now) continue;
-        if ($prev - $g > $gap) break;
-        $episode[] = $row;
-        $prev = $g;
-    }
-    $episode = array_reverse($episode);
+    $pairRe = '/^(.+?):\s*(?:Initiated attack|Defending against)\b.*?\(talking to:\s*(.+?)\)\s*$/i';
     $pairs = [];
-    foreach ($episode as $row) {
+    foreach ($rowsDesc as $row) {
         if (strtolower(strval($row['type'] ?? '')) !== 'combat') continue;
-        if (preg_match('/^(.+?):\s*(?:Initiated attack|Defending against)\b.*?\(talking to:\s*(.+?)\)\s*$/i', trim(strval($row['data'] ?? '')), $m)) {
+        if (preg_match($pairRe, trim(strval($row['data'] ?? '')), $m)) {
             $pairs[] = [strtolower(trim($m[1])), strtolower(trim($m[2]))];
         }
     }
@@ -10394,14 +10399,34 @@ function stobeSelectFightSoFarEvents(array $rowsDesc, string $npcName, int $now,
         $w = stripos($d, ' was ');
         return $w !== false ? strtolower(trim(substr($d, 0, $w))) : '';
     };
+    $involves = static function (array $row) use ($part, $subject, $pairRe, $npc): bool {
+        $data = trim(strval($row['data'] ?? ''));
+        if (preg_match($pairRe, $data, $m)) return isset($part[strtolower(trim($m[1]))]) || isset($part[strtolower(trim($m[2]))]);
+        $s = $subject($data);
+        return ($s !== '' && isset($part[$s])) || str_contains(strtolower($data), $npc);
+    };
+    $episode = [];
+    $prev = null;
+    foreach ($rowsDesc as $row) {
+        $g = intval($row['gamets'] ?? 0);
+        if ($g <= 0 || $g > $now || !$involves($row)) continue;
+        if ($prev === null) {
+            if ($now - $g > $recent) return [];
+        } elseif ($prev - $g > $gap) {
+            break;
+        }
+        $episode[] = $row;
+        $prev = $g;
+    }
+    $episode = array_reverse($episode);
     $out = []; $seen = []; $opening = false;
     foreach ($episode as $row) {
         $type = strtolower(trim(strval($row['type'] ?? '')));
         $data = trim(strval($row['data'] ?? ''));
-        if ($data === '') continue;
+        if ($data === '' || !stobeFightRowSeenBy($row, $npc)) continue;
         $keep = false;
         if ($type === 'combat') {
-            if (!$opening && preg_match('/^(.+?):\s*(?:Initiated attack|Defending against)\b.*?\(talking to:\s*(.+?)\)/i', $data, $m)
+            if (!$opening && preg_match($pairRe, $data, $m)
                 && isset($part[strtolower(trim($m[1]))]) && isset($part[strtolower(trim($m[2]))])) {
                 $keep = true; $opening = true;
             }
@@ -10423,24 +10448,20 @@ function stobeSelectFightSoFarEvents(array $rowsDesc, string $npcName, int $now,
     }
     return $out;
 }
-
 /** Item 91: load the NPC's fight rows from the DB and attach the selection as metadata 'fight_so_far'. */
 function stobeAttachFightSoFarEvents(array $npcData, string $npcName, int $currentGamets, array $aliases = []): array {
     if ($currentGamets <= 0 || normalizeParticipantNameToken($npcName) === '') return $npcData;
     try {
         $db = $GLOBALS['db'] ?? null;
         if (!$db) return $npcData;
-        // the audience SQL numbers its own placeholders from $1, so it goes first
-        $params = [];
-        $audienceSql = stobeEventAudienceSql($npcName, $params, $aliases);
-        $params[] = $currentGamets - 40000; $lo = '$' . count($params);
-        $params[] = $currentGamets; $hi = '$' . count($params);
-        $query = "SELECT type, data, gamets FROM eventlog
-                  WHERE type IN ('combat','combat_start','combat_end','knockout','death','limb_loss')
-                    AND gamets BETWEEN {$lo} AND {$hi}
+        // Item 91b: no audience filter (it drops every row while she is knocked out and breaks the fight
+        // apart); who saw what is decided per row from 'people' in stobeSelectFightSoFarEvents.
+        $params = [$currentGamets - 40000, $currentGamets];
+        $query = "SELECT type, data, gamets, people FROM eventlog
+                  WHERE type IN ('combat','knockout','death','limb_loss')
+                    AND gamets BETWEEN $1 AND $2
                     AND " . stobeBuildEventlogDeliveryVisibilitySql('eventlog') . "
-                    AND {$audienceSql}
-                  ORDER BY gamets DESC, rowid DESC LIMIT 4000";
+                  ORDER BY gamets DESC, rowid DESC LIMIT 6000";
         $rows = $db->fetchAll($query, $params);
         $events = stobeSelectFightSoFarEvents(is_array($rows) ? $rows : [], $npcName, $currentGamets);
     } catch (Throwable $e) {
