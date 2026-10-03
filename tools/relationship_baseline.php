@@ -26,19 +26,28 @@ $rows = $db->fetchAll(
         AND NOT EXISTS (SELECT 1 FROM core_npc_master_history h
                          WHERE h.npc_id = core_npc.id AND h.snapshot_reason = 'relationship_baseline')"
 );
+// columns both tables share (minus the ones set here)
+$colRows = $db->fetchAll(
+    "SELECT c.column_name FROM information_schema.columns c
+      JOIN information_schema.columns h ON h.table_name = 'core_npc_master_history' AND h.column_name = c.column_name AND h.table_schema = c.table_schema
+     WHERE c.table_name = 'core_npc' AND c.table_schema = 'public'
+       AND c.column_name NOT IN ('id', 'npc_id', 'history_id', 'snapshot_reason', 'gamets_last_updated', 'created', 'created_at', 'updated_at')
+     GROUP BY c.column_name ORDER BY c.column_name"
+);
+$cols = implode(', ', array_map(static fn($r) => '"' . $r['column_name'] . '"', is_array($colRows) ? $colRows : []));
+if ($cols === '') { echo "no shared columns found
+"; exit(1); }
 $n = 0; $failed = 0;
 foreach (is_array($rows) ? $rows : [] as $r) {
     $id = intval($r['id']);
     if (!$apply) { $n++; continue; }
-    $row = stobeFetchNpcRowForHistoryById($id);
-    if (!$row) { $failed++; continue; }
-    $row['gamets_last_updated'] = 0;
-    if (stobeInsertNpcHistorySnapshotFromRow($row, 'relationship_baseline')) {
-        $db->exec("UPDATE core_npc_master_history SET gamets_last_updated = 0
-                    WHERE history_id = (SELECT MAX(history_id) FROM core_npc_master_history WHERE npc_id = $1 AND snapshot_reason = 'relationship_baseline')", [$id]);
-        $n++;
-    } else {
-        $failed++;
-    }
+    // Copy the live row straight into history (the normal snapshot path skips
+    // identical or recent snapshots, which is exactly what a baseline needs to bypass).
+    $ok = $db->exec(
+        "INSERT INTO core_npc_master_history (npc_id, {$cols}, snapshot_reason, gamets_last_updated, created)
+         SELECT id, {$cols}, 'relationship_baseline', 0, NOW() FROM core_npc WHERE id = $1",
+        [$id]
+    );
+    if ($ok !== false) $n++; else $failed++;
 }
 echo ($apply ? "baseline stored for $n NPCs" : "$n NPCs would get a baseline") . ($failed ? ", $failed failed" : '') . "\n";
