@@ -1,0 +1,46 @@
+# id: REL-p3-05b-defensive-limb-loss-sever
+# fallback for REL-p3-05 when harness `damage ... 400` does not sever: uses harness `sever <npc> <limb>` (KAH 20)
+# covers: SR07 (a defender who maims her attacker: a separate defensive_maiming grievance, not aggression; the limb
+#   hook and the poll report it once)
+# fixture: auto-home
+# reset: fresh
+# needs: harness 08AB6BF0+ (protect); Capture=1; mode shadow
+# verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --interpret-log 40 --check-shadow -> exit 0;
+#   pair_effects: "<LNAME>" -> "Shay" has defensive_maiming (and NO aggression row: he struck first); "Shay" -> "<LNAME>" aggression
+#   (his first strike). Exactly one "kind":"harm" interpret line with level maiming for <LNAME>.
+#   If step "limb_loss" fails here too, Stobe does not see a harness-severed limb: report the hp line and stobe.log.
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
+spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
+@set L chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
+@set L_S where ${L} ~ (#\d+)/\d+
+setname ${L} "Rel Lark" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
+@set LNAME where ${L} ~ ^(.+?) #\d+
+# Shay must survive whatever he does; Malzin stays out (she would join and blur the attribution)
+protect Shay on
+teleport Malzin Shay dist 60
+ko Malzin 120
+teleport ${L} Shay dist 2
+attack ${L} Shay
+speed 1
+@sleep 5
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ \[EVENT\] combat: ${LNAME} .*-> Shay
+attack Shay ${L}
+speed 1
+@sleep 4
+speed 0
+# the arm is cut off while he is in Shay's attacker list (attribution attacker_list / recent_attacker); KAH 20 sever
+sever ${L} left_arm
+hp ${L} ~ .
+speed 1
+@sleep 5
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ \[EVENT\] limb_loss: 
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY_S} target=${L_S} witnesses=\d+ facts="level":"maiming"
+ko ${L} 60
+teleport ${L} Shay dist 300
+protect Shay off
