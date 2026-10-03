@@ -1059,7 +1059,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "unchanged by REL (surrender trigger has no affinity term; REL does not touch negotiation); needs-game for the -85 case",
+   "rel_state": "game-pass: m16 fights2 rel-surrender.sh kept hate: Rel Krag -> Shay set to -85 (Hateful) before low health, surrender offered and accepted, deal COMPLETE, kept_coercive_deal 0 (shadow); needed STOBE 96",
    "offline_tests": [],
    "ingame_scenarios": [],
    "open_blockers": [
@@ -1094,7 +1094,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (kept promise, honored coercive deal minimal, betrayal after accepted surrender, legacy delta replaced only when enabled); needs-game",
+   "rel_state": "game-pass: m16 fights2 rel-surrender.sh breach: Shay attacked after acceptance, BREACHED_PLAYER, broken_promise -13 + betrayal -25 (shadow); kept coercive deal 0 (SR28 run); needed STOBE 97. Dishonest NPC betrayal stays the engine rule",
    "offline_tests": [
     "social_property_regression",
     "negotiation_engine_regression"
