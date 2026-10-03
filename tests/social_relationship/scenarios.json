@@ -872,7 +872,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game: character seller resolved (m8); shop storage / purse not seen in game",
+   "rel_state": "partial: game-pass for a resolved character seller (m16 p5-01: Shay bought a Splint Kit from Iflem carried stock, 186 cats, fair_trade, no reward) and an atomic buy failure (m16 rel6: full buyer, nothing moved, no capture, no effect); shop storage / faction purse not reachable in game (the harness cannot buy from shop storage), offline only",
    "offline_tests": [
     "social_property_regression"
    ],
