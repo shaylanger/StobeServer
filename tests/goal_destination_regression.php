@@ -80,6 +80,11 @@ check('item 74: a refusal -> nothing', stobeInferBuyFromAgreedRequest($line74, $
 check('item 74: a question from the player -> nothing', stobeInferBuyFromAgreedRequest('Could you buy a kit from Apothecary Abia?', $npc73, [], "Sure.", true, $known74) === '');
 check('item 74: an action already there -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, ['TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@@0'], $reply74, true, $known74) === '');
 check('item 74: a non-faction NPC -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, [], $reply74, false, $known74) === '');
+// 75: the model's MOVE_TO toward the goal's trader is dropped (run m2: "Could not identify that destination")
+check('item 75: MOVE_TO@Apothecary Abia is dropped next to the inferred BUY goal',
+    stobeDropMovesCoveredByGoal(['MOVE_TO@Apothecary Abia', 'EQUIP_ITEM@Hat'], 'TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@@0') === ['EQUIP_ITEM@Hat']);
+check('item 75: a move elsewhere stays',
+    stobeDropMovesCoveredByGoal(['MOVE_TO@Squin'], 'TASK_GOAL@BUY@Apothecary Abia@Kit@1@@0') === ['MOVE_TO@Squin']);
 check('item 73: a non-faction NPC -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, [], $reply73, false) === '');
 
 echo "\n$pass passed, $fail failed\n";

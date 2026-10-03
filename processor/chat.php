@@ -1628,6 +1628,7 @@ if (!$narratorMode && function_exists('stobeInferFetchFromAgreedRequest')
     $inferredFetch = stobeInferFetchFromAgreedRequest(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
         strval($responseText ?? ''));
     if ($inferredFetch !== '') {
+        $responseActions = stobeDropMovesCoveredByGoal($responseActions, $inferredFetch); // item 75
         $responseActions[] = $inferredFetch;
         stobeLogInfo('Agreed fetch without action: TASK_GOAL added (item 73)', ['npc'=>$targetNpc, 'action'=>$inferredFetch]);
     }
@@ -1637,6 +1638,7 @@ if (!$narratorMode && function_exists('stobeInferBuyFromAgreedRequest')
     $inferredBuy = stobeInferBuyFromAgreedRequest(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
         strval($responseText ?? ''));
     if ($inferredBuy !== '') {
+        $responseActions = stobeDropMovesCoveredByGoal($responseActions, $inferredBuy); // item 75
         $responseActions[] = $inferredBuy;
         stobeLogInfo('Agreed purchase without action: TASK_GOAL added (item 74)', ['npc'=>$targetNpc, 'action'=>$inferredBuy]);
     }

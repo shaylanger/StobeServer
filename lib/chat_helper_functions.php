@@ -15164,6 +15164,22 @@ function stobeInferFetchFromAgreedRequest(string $playerLine, array|false $npcDa
 }
 
 /**
+ * Item 75: an inferred goal (TASK_GOAL@KIND@<place>@...) walks to its trader/container itself:
+ * a MOVE_TO / MOVE_TO_TARGET / TRAVEL_LOCATION toward that place is dropped. Returns the actions.
+ */
+function stobeDropMovesCoveredByGoal(array $actions, string $goalAction): array {
+    $parts = explode('@', $goalAction);
+    $place = strtolower(trim(strval($parts[2] ?? '')));
+    if ($place === '') return $actions;
+    $bare = static fn(string $s): string => strtolower(trim(preg_replace('/\s*\[[^\]]*\]\s*/', ' ', $s) ?? $s));
+    return array_values(array_filter($actions, static function ($a) use ($place, $bare): bool {
+        if (!preg_match('/^\s*(MOVE_TO|MOVE_TO_TARGET|TRAVEL_LOCATION)@(.*)$/i', strval($a), $m)) return true;
+        $target = $bare(strval($m[2]));
+        return !($target !== '' && ($target === $bare($place) || str_contains($target, $bare($place)) || str_contains($bare($place), $target)));
+    }));
+}
+
+/**
  * Item 74: "(go) buy (me) [N] X from <trader>" to a squad member who agreed in words but sent no
  * action -> TASK_GOAL@BUY@<trader>@<item>@<N>@@0. The trader must be a known NPC ($traderKnown
  * overrides the lookup for tests).
