@@ -95,7 +95,7 @@ function stobeTaskGoalQueue(
     }
     $destName = trim(strval($resolved['name'] ?? ''));
     $x = $resolved['x'] ?? null; $y = $resolved['y'] ?? null; $z = $resolved['z'] ?? null;
-    if ($kind === 'FETCH' && strval($resolved['fallback'] ?? '') === 'person' && function_exists('stobeGoalPersonName')) {
+    if (in_array($kind, ['FETCH','BUY'], true) && strval($resolved['fallback'] ?? '') === 'person' && function_exists('stobeGoalPersonName')) { // items 76/82
         // Item 76: bring it to that person: a label only (no coordinates); KenshiFP hands it over on the walk-back.
         $destName = stobeGoalPersonName($destination);
     }

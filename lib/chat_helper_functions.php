@@ -15284,7 +15284,9 @@ function stobeInferBuyFromAgreedRequest(string $playerLine, array|false $npcData
     if (!$known) return '';
     if (!function_exists('stobeReplyAgreesToErrand') || !stobeReplyAgreesToErrand($reply)) return '';
     $qty = ($m[1] ?? '') !== '' ? max(1, min(1000, intval($m[1]))) : 1;
-    return 'TASK_GOAL@BUY@' . $trader . '@' . $item . '@' . $qty . '@@0';
+    // Item 82: "bring/give it to me", "buy me ..." = hand it to the player on return.
+    $toMe = preg_match("/\b(?:bring|give|hand|pass|take)\s+(?:it|them|that|those|the\s+[a-z' -]{1,40}?)?\s*(?:back\s+)?to\s+me\b|\bbuy\s+me\b/i", $line) === 1;
+    return 'TASK_GOAL@BUY@' . $trader . '@' . $item . '@' . $qty . '@' . ($toMe ? 'me' : '') . '@0';
 }
 
 /**

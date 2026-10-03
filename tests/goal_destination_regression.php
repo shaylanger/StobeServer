@@ -76,6 +76,9 @@ $reply74 = "Apothecary Abia, Standard First Aid Kit. I'll see what she's asking 
 check('item 74: the run m2 pair -> TASK_GOAL@BUY from the trader',
     stobeInferBuyFromAgreedRequest($line74, $npc73, [], $reply74, true, $known74) === 'TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@@0',
     stobeInferBuyFromAgreedRequest($line74, $npc73, [], $reply74, true, $known74));
+check('item 82: "... and bring it to me" -> the bought kit goes to the player',
+    stobeInferBuyFromAgreedRequest('Malzin, go buy a Standard First Aid Kit from Apothecary Abia and bring it to me.', $npc73, [], "I'll go and get it.", true, $known74)
+    === 'TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@me@0');
 check('item 74: a number is kept', stobeInferBuyFromAgreedRequest('Buy 2 bread from Apothecary Abia.', $npc73, [], 'Will do.', true, $known74) === 'TASK_GOAL@BUY@Apothecary Abia@bread@2@@0');
 check('item 74: an unknown trader -> nothing', stobeInferBuyFromAgreedRequest('Go buy a kit from Nobody Here.', $npc73, [], "I'll go.", true, $known74) === '');
 check('item 74: a refusal -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, [], "No, I'm not wasting cats on that.", true, $known74) === '');
