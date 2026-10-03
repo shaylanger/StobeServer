@@ -1207,6 +1207,15 @@ if (!$narratorMode && $dialogueMode !== 'cheat' && function_exists('stobeNamedPe
         stobeLogInfo('Named people not in sight added to the prompt (item 78)', ['npc'=>$targetNpc, 'block'=>$namedNotInSight]);
     }
 }
+// Item 85: a deal/job/payment line from a player known to break deals (non-squad NPCs).
+if (!$narratorMode && $dialogueMode !== 'cheat' && function_exists('stobeNegReputationReplyDirective')
+    && (!function_exists('stobeNegPhaseEnabled') || stobeNegPhaseEnabled(7))) {
+    $reputationDirective = stobeNegReputationReplyDirective($targetNpc, is_array($npcData) ? $npcData : false, strval($speaker), strval($message ?? ''));
+    if ($reputationDirective !== '') {
+        $systemPrompt .= "\n\n" . $reputationDirective;
+        stobeLogInfo('Reputation directive added (item 85)', ['npc'=>$targetNpc]);
+    }
+}
 // Item 77: the relationship sets the tone; its directive closes the system message (after history and memory).
 if (!$narratorMode && $dialogueMode !== 'cheat' && function_exists('stobeRelationshipReplyToneDirective')) {
     $replyToneDirective = stobeRelationshipReplyToneDirective($targetNpc, is_array($npcData) ? $npcData : false, strval($speaker));

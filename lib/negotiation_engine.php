@@ -2051,6 +2051,36 @@ function stobeNegReputationLine(string $player): string {
     }
 }
 
+/**
+ * Item 85: the closing reputation directive for a non-squad NPC when the player's line is about a
+ * deal, job or payment and the player breaks more deals than they keep ('' otherwise).
+ * $counts = [kept, broken] for tests; else stobe_negotiation_reputation.
+ */
+function stobeNegReputationReplyDirective(string $npcName, array|false $npcData, string $player, string $message, ?bool $squadMember = null, ?array $counts = null): string {
+    if (trim($player) === '' || trim($message) === '') return '';
+    if (!preg_match('/\b(deal|job|work\s+for|pay|paid|payment|cats?|reward|offer|trade|afterwards|later|owe|promise|hire|contract|split|share|bounty)\b/i', $message)) return '';
+    if ($squadMember === null) $squadMember = is_array($npcData) && function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData);
+    if ($squadMember) return '';
+    if ($counts === null) {
+        try {
+            stobeNegEnsureSchema();
+            $row = $GLOBALS['db']->fetchOne("SELECT player_kept, player_broken FROM stobe_negotiation_reputation WHERE LOWER(player_name)=LOWER($1)", [$player]);
+            $counts = [intval($row['player_kept'] ?? 0), intval($row['player_broken'] ?? 0)];
+        } catch (Throwable $e) {
+            return '';
+        }
+    }
+    [$kept, $broken] = [intval($counts[0] ?? 0), intval($counts[1] ?? 0)];
+    if (!($broken >= 2 && $broken > $kept)) return '';
+    $who = function_exists('stobePromptXmlEscape') ? stobePromptXmlEscape($player) : $player;
+    return "<reply_reputation>\n"
+        . '  <heard>Word gets around: ' . $who . ' has broken ' . $broken . ' deals and kept only ' . $kept . '. You have heard this and you believe it.</heard>' . "\n"
+        . '  <how>Be openly distrustful about any deal, job or payment ' . $who . ' brings up: let them know you have heard they do not pay or keep their word. '
+        . 'Payment later, "afterwards" or promises are worthless from them: demand the Cats up front (all of it, or a large part before you lift a finger), or refuse.</how>' . "\n"
+        . '  <rule>Show this in your first words. Do not accept a pay-later offer from ' . $who . ' (no deal_decision ACCEPT unless the payment comes first).</rule>' . "\n"
+        . '</reply_reputation>';
+}
+
 // ------------------------------------------------------------------ Phase 8: betrayal
 
 function stobeNegDecideBetrayal(array $deal, string $player, array $state): array {

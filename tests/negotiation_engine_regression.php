@@ -664,6 +664,19 @@ check('item 72: "you\'ll pay me, I\'ll count the cats" does not flip',
 $db->exec("DELETE FROM stobe_social_contract WHERE npc_name=$1", [$n72]);
 $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n72]);
 
+// ---------------------------------------------------------------- 12h4d. item 85: reputation shapes a stranger's reply
+$line85 = "Hey you. I've got a job for you, I'll pay 200 cats afterwards. Interested?";
+$d85 = stobeNegReputationReplyDirective('Maeza [Hungry Bandit]', [], 'Shay', $line85, false, [2, 10]);
+check('item 85: broken 10 / kept 2, a pay-later job offer -> distrust directive (up front or no deal)',
+    str_contains($d85, '<reply_reputation>') && str_contains($d85, 'broken 10 deals') && str_contains($d85, 'up front'), $d85);
+check('item 85: a good reputation -> nothing', stobeNegReputationReplyDirective('X', [], 'Shay', $line85, false, [46, 12]) === '');
+check('item 85: a squad member -> nothing', stobeNegReputationReplyDirective('Malzin', [], 'Shay', $line85, true, [2, 10]) === '');
+check('item 85: small talk -> nothing', stobeNegReputationReplyDirective('X', [], 'Shay', 'Nice weather today.', false, [2, 10]) === '');
+$chat85 = file_get_contents(__DIR__ . '/../processor/chat.php');
+check('item 85: the directive is added at the end of the system message, before item 77\'s',
+    ($p85 = strpos($chat85, 'stobeNegReputationReplyDirective(')) !== false && $p85 < strpos($chat85, 'stobeRelationshipReplyToneDirective(')
+    && $p85 > strpos($chat85, 'stobeApplyCompactChatHistory('));
+
 // ---------------------------------------------------------------- 12h5. deal-offer cap tiers
 $tierOf = static fn(string $n, array $d = []) => stobeNegWealthTier($n, $d)['tier'];
 check('cap tiers: Hungry Bandit is tier 0', $tierOf('Karric [Hungry Bandit]') === 0);
