@@ -10464,6 +10464,7 @@ function stobeAttachFightSoFarEvents(array $npcData, string $npcName, int $curre
                   ORDER BY gamets DESC, rowid DESC LIMIT 6000";
         $rows = $db->fetchAll($query, $params);
         $events = stobeSelectFightSoFarEvents(is_array($rows) ? $rows : [], $npcName, $currentGamets);
+        if (function_exists('stobeLogInfo')) stobeLogInfo('Fight so far (item 91c)', ['npc' => $npcName, 'gamets' => $currentGamets, 'rows' => is_array($rows) ? count($rows) : 0, 'lines' => count($events), 'first' => $events[0]['line'] ?? '']);
     } catch (Throwable $e) {
         if (function_exists('stobeLogWarn')) stobeLogWarn('Fight so far (item 91) skipped', ['error' => $e->getMessage()]);
         return $npcData;
