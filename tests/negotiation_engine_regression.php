@@ -300,6 +300,8 @@ $db->exec("UPDATE stobe_social_contract SET performance_started_unix = performan
 stobeLine("ACTION_EXEC: GIVE_CATS actor=$player recipient=NegTestTrader amount=40", time());
 stobeNegTick();
 check('STOBE 18: forced betrayal -> BREACHED_NPC', status($id) === 'BREACHED_NPC', status($id));
+check('STOBE 18: pay-now deal: the dispatched STOP_ATTACK is marked intentional_betrayal', termStatus($id, 1) === 'BETRAYED'
+    && str_contains(json_encode(stobeNegFetchDeal($id)['term_state']), 'intentional_betrayal'), termStatus($id, 1));
 $db->exec("UPDATE general_settings SET value='false' WHERE id='NEG_TEST_FORCE_BETRAYAL'");
 $id = makeDeal('NegTestTrader', [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>41], ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']]);
 stobeNegBeginPerformance($id, ['STOP_ATTACK@' . $player], $player, 1000, '');
