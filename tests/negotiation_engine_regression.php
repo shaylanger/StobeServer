@@ -197,7 +197,26 @@ check('bug 127: a swing 5 s after sparing is not a breach', termStatus($id, 0) !
 backdate($id, 7);
 storeEvent('combat', time(), 1000, "$player: Initiated attack (talking to: NegTestBandit)");
 stobeNegTick();
-check('bug 127: an attack 12 s after sparing is', termStatus($id, 0) === 'UNMET', [status($id), termStatus($id, 0)]);
+// Item 86 (run m8): the game re-reports "Initiated attack" while a personal truce holds; no hit, no breach.
+check('item 86: an "Initiated attack" 12 s after sparing with no hit is not a breach', termStatus($id, 0) !== 'UNMET', [status($id), termStatus($id, 0)]);
+storeEvent('major_damage', time(), 1000, "NegTestBandit: took a major hit from $player using Machete");
+stobeNegTick();
+check('bug 127: an attack 12 s after sparing is (with a real hit, item 86)', termStatus($id, 0) === 'UNMET', [status($id), termStatus($id, 0)]);
+// Item 86 (b): a load of an older save cancels in-flight deals created after it, no consequences.
+$id86 = makeDeal('NegTestBandit', [['kind'=>'SPARE','by'=>'player','target'=>'npc']], 'surrender');
+$db->exec("UPDATE stobe_social_contract SET baseline = jsonb_set(COALESCE(baseline,'{}'::jsonb), '{gamets}', '900000') WHERE contract_id=$1", [$id86]);
+$rep86 = $db->fetchOne("SELECT player_kept, player_broken FROM stobe_negotiation_reputation WHERE player_name=$1", [strtolower($player)]);
+$n86 = stobeNegCancelDealsAfterRollback(800000);
+$row86 = stobeNegFetchDeal($id86);
+check('item 86: a deal from after the loaded save is cancelled (rolled_back_by_load)',
+    $n86 >= 1 && $row86['status'] === 'CANCELLED' && str_contains(strval($row86['evidence']), 'rolled_back_by_load'), [$n86, $row86['status'] ?? null]);
+check('item 86: reputation unchanged by the rollback',
+    $db->fetchOne("SELECT player_kept, player_broken FROM stobe_negotiation_reputation WHERE player_name=$1", [strtolower($player)]) == $rep86);
+$id86b = makeDeal('NegTestBandit', [['kind'=>'SPARE','by'=>'player','target'=>'npc']], 'surrender');
+$db->exec("UPDATE stobe_social_contract SET baseline = jsonb_set(COALESCE(baseline,'{}'::jsonb), '{gamets}', '700000') WHERE contract_id=$1", [$id86b]);
+stobeNegCancelDealsAfterRollback(800000);
+check('item 86: a deal from before the loaded save stays', stobeNegFetchDeal($id86b)['status'] !== 'CANCELLED');
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE contract_id=$1", [$id86b]);
 
 // ---------------------------------------------------------------- 6d. bug 128: a directive follows an NPC named mid-fight
 $db->exec("DELETE FROM stobe_negotiation_directive");

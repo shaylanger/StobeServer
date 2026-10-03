@@ -360,6 +360,53 @@ function stobeNegFightEventsForNpc(string $name, array|false $npcData, int $sinc
     return $events;
 }
 
+/**
+ * Item 86: did the player side really hurt $npc between $fromUnix and $toUnix? A major hit from the
+ * player side, a knockout by the player side, or his death. "Initiated attack" alone is not harm:
+ * the game re-reports it while a personal truce holds.
+ */
+function stobeNegPlayerHarmedNpc(string $npc, string $player, int $fromUnix, int $toUnix): bool {
+    try {
+        $rows = $GLOBALS['db']->fetchAll(
+            "SELECT type, data FROM eventlog WHERE type IN ('major_damage','knockout','death')
+               AND localts >= $1 AND localts <= $2 AND data LIKE $3 ORDER BY localts LIMIT 40",
+            [$fromUnix, $toUnix, '%' . $npc . '%']);
+    } catch (Throwable $e) {
+        return true; // can't tell: keep the old behaviour
+    }
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        $data = trim(strval($row['data'] ?? ''));
+        if (!str_starts_with(strtolower($data), strtolower($npc) . ':')) continue;
+        if ($row['type'] === 'death') return true;
+        if (preg_match('/took a major hit from\s+(.+?)(?:\s+using\s+.+)?$/', $data, $m) && stobeNegIsPlayerSide(trim($m[1]), $player)) return true;
+        if (preg_match('/Knocked out by .+? from\s+(.+?)\s*$/i', $data, $m) && stobeNegIsPlayerSide(trim($m[1]), $player)) return true;
+    }
+    return false;
+}
+
+/** Item 86: a load of an older save cancels in-flight deals created after the loaded game time. */
+function stobeNegCancelDealsAfterRollback(int $cutoffGamets): int {
+    if ($cutoffGamets <= 0) return 0;
+    try {
+        stobeNegEnsureSchema();
+        $rows = $GLOBALS['db']->fetchAll(
+            "UPDATE stobe_social_contract SET status='CANCELLED', consequences_applied=TRUE, resolved_at=NOW(), updated_at=NOW(),
+                    evidence=(CASE WHEN jsonb_typeof(evidence)='object' THEN evidence ELSE '{}'::jsonb END) || jsonb_build_object('note','rolled_back_by_load','cutoff_gamets',$1::bigint)
+              WHERE status IN ('PROPOSED','COUNTERED','ACCEPTED','AWAITING_PERFORMANCE')
+                AND COALESCE(NULLIF(baseline->>'gamets','')::bigint, 0) > $1
+            RETURNING contract_id", [$cutoffGamets]);
+        $ids = array_map(static fn($r) => strval($r['contract_id']), is_array($rows) ? $rows : []);
+        if (count($ids) > 0) {
+            $GLOBALS['db']->exec("DELETE FROM stobe_negotiation_directive WHERE contract_id = ANY($1::text[])", ['{' . implode(',', $ids) . '}']);
+            stobeLogInfo('Deals from after the loaded save cancelled (item 86)', ['cutoff_gamets'=>$cutoffGamets, 'deals'=>$ids]);
+        }
+        return count($ids);
+    } catch (Throwable $e) {
+        stobeLogWarn('Deal rollback failed (item 86)', ['error'=>$e->getMessage()]);
+        return 0;
+    }
+}
+
 function stobeNegNpcDied(string $npc, int $sinceUnix): bool {
     $row = $GLOBALS['db']->fetchOne(
         "SELECT 1 AS hit FROM eventlog WHERE type='death' AND localts >= $1 AND data LIKE $2 LIMIT 1",
@@ -843,7 +890,8 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
                 if ($ev['ts'] < intval($term['dispatched_unix']) + 10) {
                     if (stobeNegIsPlayerSide($ev['attacker'], $player)) continue;
                 }
-                if (stobeNegCharMatches($ev['target'], $npc) && stobeNegIsPlayerSide($ev['attacker'], $player)) {
+                if (stobeNegCharMatches($ev['target'], $npc) && stobeNegIsPlayerSide($ev['attacker'], $player)
+                    && stobeNegPlayerHarmedNpc($npc, $player, intval($ev['ts']) - 2, intval($ev['ts']) + 8)) { // item 86
                     $term['status'] = 'VOID';
                     $term['player_broke_truce'] = true;
                     $note($term, 'player_resumed_fight', ['attacker'=>$ev['attacker'], 'ts'=>$ev['ts']]);
@@ -960,7 +1008,8 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
         foreach (stobeNegCombatEvents($start + 3, $npc) as $ev) {
             // Bug 127: the same 10 s as the truce for the squad to stop swinging.
             if (intval($ev['ts'] ?? 0) < $start + 10) continue;
-            if (stobeNegCharMatches($ev['target'], $npc) && stobeNegIsPlayerSide($ev['attacker'], $player)) {
+            if (stobeNegCharMatches($ev['target'], $npc) && stobeNegIsPlayerSide($ev['attacker'], $player)
+                && stobeNegPlayerHarmedNpc($npc, $player, intval($ev['ts'] ?? 0) - 2, intval($ev['ts'] ?? 0) + 8)) { // item 86
                 $term['status'] = 'UNMET';
                 $note($term, 'player_side_attacked_after_sparing', ['attacker'=>$ev['attacker']]);
                 return $term;

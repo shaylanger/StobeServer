@@ -1770,6 +1770,9 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
         $restoreCounts['relationship_errors'] = intval($relationshipRestoreCounts['errors'] ?? 0);
         $restoreCounts['errors'] += $restoreCounts['relationship_errors'];
         $queueCounts = stobePlaythroughClearRelationshipQueues();
+        if (function_exists('stobeNegCancelDealsAfterRollback')) {
+            $restoreCounts['deals_cancelled'] = stobeNegCancelDealsAfterRollback($incoming); // item 86
+        }
         $volatileStateCounts = stobePlaythroughClearFutureVolatileNpcStates($incoming);
 
         if (!$pruneEnabled) {
