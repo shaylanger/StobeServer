@@ -758,6 +758,7 @@ $eventHistory = DataEventLog($contextHistory, $respondingNpc, $campaign, $histor
 $eventHistory = stobeFilterNarratorRowsForContext($eventHistory, $respondingNpc, 'rechat');
 if (is_array($npcData)) {
     $npcData = stobeAttachRecentCombatPromptEvents($npcData, $eventHistory, intval($gamets));
+    $npcData = stobeAttachFightSoFarEvents($npcData, $respondingNpc, intval($gamets), $historyAliases); // Item 91
 }
 $historyLines = [];
 foreach (array_reverse($eventHistory) as $row) {

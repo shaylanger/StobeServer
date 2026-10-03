@@ -811,6 +811,7 @@ $stobeHistoryFormatStageStartedAt = microtime(true);
 $eventHistory = stobeFilterNarratorRowsForContext($eventHistory, $targetNpc, $dialogueMode, $speaker);
 if (!$narratorMode && is_array($npcData)) {
     $npcData = stobeAttachRecentCombatPromptEvents($npcData, $eventHistory, intval($gamets));
+    $npcData = stobeAttachFightSoFarEvents($npcData, $targetNpc, intval($gamets), $historyAliases); // Item 91
 }
 $historyLines = [];
 foreach (array_reverse($eventHistory) as $row) {
