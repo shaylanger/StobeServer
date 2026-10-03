@@ -183,7 +183,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (m4, m8); m9 ally KO without own attack fact now charged (joined assault)",
+   "rel_state": "game-pass (m4, m8, m11: Malzin's KO of Rel Vorn charged as a joined assault, -40)",
    "offline_tests": [
     "social_combat_regression"
    ],
@@ -413,16 +413,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial game: m9 p3-03 captured the enslaved fact (Rel Vash) after bringing him close; waking result not captured in the snapshot; rerun",
+   "rel_state": "partial game: m11 enslaved fact with the owner captured (probe 7 yes: owner = shackle owner); waking charge failed because the KO itself was not seen: server now keeps the enslavement for waking anyway",
    "offline_tests": [
     "social_unconscious_regression"
    ],
    "ingame_scenarios": [
     "REL-p3-03-enslaved-while-ko"
    ],
-   "open_blockers": [
-    "probe 21 answered for p7-02: Rel Xan was first seen already chained (never swept before the shackle)"
-   ]
+   "open_blockers": []
   },
   {
    "id": "SR12",
@@ -678,7 +676,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game blocked",
+   "rel_state": "game-pass (m11 p4-02: Rel Cobb -> Malzin safe_rescue +9 after LIFT_PERSON + PUT_SOMEONE_IN_BED on the built bed)",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -686,8 +684,7 @@
     "REL-p4-02-carry-to-bed"
    ],
    "open_blockers": [
-    "m5: Hub guards carry KO'd outsiders away (300-1600 m) and Malzin's FIND_BED_AND_PUT_IN did nothing; needs a fixture with a bed and no guards",
-    "carry by the player actor is not captured"
+    "carry by the player actor (Shay) is not captured"
    ]
   },
   {
@@ -718,7 +715,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game blocked",
+   "rel_state": "game-pass (m11 p4-03: Rel Kade -> Malzin imprisonment -31 after LIFT_PERSON + PUT_IN_CAGE)",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -726,7 +723,7 @@
     "REL-p4-03-carry-to-cage"
    ],
    "open_blockers": [
-    "as SR18 (cage)"
+    "ground drop / unknown placer: offline only"
    ]
   },
   {
@@ -837,7 +834,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass for a normal purchase (m8: Shay buys from Keys = fair_trade, nothing scored); gift rerun",
+   "rel_state": "game-pass (m8 fair trade, m11 gift Rel Gav -> Rel Dona +3)",
    "offline_tests": [
     "social_property_regression"
    ],
@@ -949,7 +946,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "real bug still open in game (m9: the floor-sleeping witness still counted -7 with the sleep fix): witness entries now carry task + prone state for diagnosis",
+   "rel_state": "open: m11 the floor-sleeping witness still counted (-5); witness task/prone now logged (w=...) to decide (possibly woken by the fight)",
    "offline_tests": [
     "social_witness_regression"
    ],
@@ -957,7 +954,7 @@
     "REL-p6-01b-witness-attack"
    ],
    "open_blockers": [
-    "probe 22: which task/prone state a SLEEP_ON_FLOOR character reports"
+    "probe 22"
    ]
   },
   {
@@ -1217,7 +1214,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game blocked like SR11 (no enslaved/freed facts in m8)",
+   "rel_state": "offline-pass; game blocked: m11 Rel Xan first seen already chained (raid facts flooded the focus); native focus now limited to player-side facts",
    "offline_tests": [
     "social_recruitment_regression"
    ],
@@ -1225,7 +1222,6 @@
     "REL-p7-02-slave-escape"
    ],
    "open_blockers": [
-    "probe 21",
     "probe 20 liberator"
    ]
   },
@@ -1660,7 +1656,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass (perf bench 6000 facts p95 12 ms, retention keeps the raw tables to 3 game days); game soak REL-p8-01 pending",
+   "rel_state": "offline-pass (bench p95 12 ms); m11 soak healthy but quiet (68 facts): soak now spawns raids; Capture=0 vs 1 frame-time gate pending",
    "offline_tests": [
     "social_concurrency_regression",
     "social_combat_regression",
@@ -1669,7 +1665,9 @@
    "ingame_scenarios": [
     "REL-p8-01-soak"
    ],
-   "open_blockers": []
+   "open_blockers": [
+    "fps source: harness fps command (requested)"
+   ]
   },
   {
    "id": "SR44",

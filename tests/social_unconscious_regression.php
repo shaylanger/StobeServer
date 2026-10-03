@@ -17,7 +17,7 @@ const PEOPLE = ['Uncon Attacker'=>[201,'Red',false], 'Uncon Looter'=>[202,'Grey'
     'Uncon Victim One'=>[211,'Blue',false], 'Uncon Victim Two'=>[212,'Blue',false], 'Uncon Victim Three'=>[213,'Blue',false],
     'Uncon Victim Four'=>[214,'Blue',false], 'Uncon Victim Five'=>[215,'Blue',false], 'Uncon Victim Six'=>[216,'Blue',false],
     'Uncon Victim Seven'=>[217,'Blue',false], 'Uncon Victim Eight'=>[218,'Blue',false], 'Uncon Squad Victim'=>[219,'Nameless',true],
-    'Uncon Squad Mate'=>[220,'Nameless',true], 'Uncon Victim Nine'=>[221,'Blue',false]];
+    'Uncon Squad Mate'=>[220,'Nameless',true], 'Uncon Victim Nine'=>[221,'Blue',false], 'Uncon Victim Ten'=>[222,'Blue',false]];
 foreach (['social_event_inbox','social_incident','social_belief','social_effect','social_evidence','social_checkpoint'] as $t) sql("DELETE FROM $t");
 foreach (PEOPLE as $name => [$serial]) {
     sql('DELETE FROM core_npc_master_history WHERE name=$1', [$name]); sql('DELETE FROM core_npc WHERE name=$1', [$name]);
@@ -174,5 +174,10 @@ koBy('Uncon Attacker', 'Uncon Victim Seven', 13000, ['rag shirt'=>1]);
 koBy('Uncon Attacker', 'Uncon Victim Eight', 13100, ['rag shirt'=>1]);
 $r = send(ev('item_gain', ent('Uncon Looter'), null, ['items'=>['rag shirt'=>1]], 13200));
 ok(($r['effects'][0]['status'] ?? '') === 'ambiguous_owner', 'm8 two possible owners: not attributed');
+// Run m11: enslaved while unconscious but the knockout itself was never seen: still learned on waking.
+send(ev('enslaved', ent('Uncon Slaver'), ent('Uncon Victim Ten', false), ['owner_role'=>'owner'], 14000));
+ok(entryOf('Uncon Victim Ten', 'Uncon Slaver') === null, 'm11 not charged while unconscious');
+wake('Uncon Victim Ten', [], 14100);
+ok(affOf('Uncon Victim Ten', 'Uncon Slaver') <= -56, 'm11 enslavement without a seen KO learned on waking');
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 echo "$n unconscious-perception regression checks passed\n";

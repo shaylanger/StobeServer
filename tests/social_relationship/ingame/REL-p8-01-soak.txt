@@ -1,32 +1,44 @@
 # id: REL-p8-01-soak
-# covers: phase 8 soak + performance gate (SR43): an hour of Hub play with capture on, shadow mode
-# fixture: Crafting base   (the Hub: raids, medics, guards = the busiest place seen in m4-m9)
+# covers: phase 8 soak + performance gate (SR43): about an hour in the Hub with raids, capture on, shadow mode
+# fixture: Crafting base   (the Hub)
 # reset: fresh
-# needs: Capture=1, mode shadow. A/B: run once with Capture=0 (baseline) and once with Capture=1, same fixture/speed.
-# verify: every 10 min (between @wait-game blocks, the game paused) record: inspect counts (no --events), `health` from kenshi-ctl,
-#   stobe.log size and the count of "SERIAL_HTTP: queue overflow" lines, harness `status` (fps if shown).
-#   Pass: no crash/hang; no queue overflow lines; inspect counts stop growing linearly once retention starts (raw inbox bounded);
-#   --check-shadow exit 0; frame time / fps with Capture=1 within 5% of the Capture=0 run (performance gate).
+# needs: run twice on the same build and fixture: A) Capture=0 (baseline), B) Capture=1 + mode shadow. Harness `fps` command
+#   (helper: Ogre::Root::getSingleton().getAutoCreatedWindow() -> getAverageFPS(), getWorstFPS(), getWorstFrameTime() since
+#   the last call, then resetStatistics()); until it exists, the screenshot steps capture RE_Kenshi's on-screen FPS counter.
+# record at each of the 4 checkpoints (after each "speed 0"), for A and B:
+#   1. `fps` output (avg / worst fps, worst frame ms) or the screenshot's FPS number
+#   2. memory: PowerShell (Get-Process kenshi_x64).WorkingSet64 / 1MB
+#   3. B only: php tools/social_relationship_inspect.php | counts (inbox, incident, checkpoint, effect); grep -c "SERIAL_HTTP: queue overflow" stobe.log;
+#      the last "SOCIAL_FOCUS" line; stobe.log size in MB
+#   Pass: no crash/hang (kenshi-ctl health ok); no queue overflow; B avg fps >= 95% of A at the same checkpoint and worst frame ms
+#   <= 110% of A; memory growth B-A < 100 MB; inspect counts flatten once retention runs; --check-shadow exit 0 at the end.
 @wait-world
 @sleep 8
 speed 0
 hunger Shay 280
 hunger Malzin 280
 time ~ game_hours=
+screenshot rel-p8-soak-0 ~ png
+spawn "Hungry Bandit" "Dust Bandits" near Shay dist 120 count 6 ~ spawned
 speed 5
 @wait-game 120 1200
 speed 0
 status ~ phase=world
+screenshot rel-p8-soak-1 ~ png
 hunger Shay 280
 hunger Malzin 280
+spawn "Hungry Bandit" "Dust Bandits" near Shay dist 120 count 6 ~ spawned
 speed 5
 @wait-game 120 1200
 speed 0
 status ~ phase=world
+screenshot rel-p8-soak-2 ~ png
 hunger Shay 280
 hunger Malzin 280
+spawn "Hungry Bandit" "Dust Bandits" near Shay dist 120 count 6 ~ spawned
 speed 5
 @wait-game 120 1200
 speed 0
 time ~ game_hours=
 status ~ phase=world
+screenshot rel-p8-soak-3 ~ png

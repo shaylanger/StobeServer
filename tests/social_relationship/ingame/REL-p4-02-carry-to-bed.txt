@@ -42,4 +42,4 @@ where Malzin
 where ${C}
 screenshot rel-p4-02 ~ png
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=carry_start seq=\d+ load=\d+ actor=${MALZIN} target=${C}
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${C} witnesses=d+ facts="place":"bed"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${C} witnesses=\d+ facts="place":"bed"

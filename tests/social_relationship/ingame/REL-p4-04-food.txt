@@ -13,6 +13,8 @@ speed 0
 give Shay "Dried Meat" 4 ~ 4/4
 spawn "Hungry Bandit" Drifters near Shay dist 10 count 2 ~ spawned 2/2
 @set H chars 40 ~ Hungry Bandit (#\d+)
+# run m11: Malzin attacked the test Drifters; make their faction friendly to the squad
+relation ${H} 60
 setname ${H} "Rel Hask"
 @set F chars 40 ~ Hungry Bandit (#\d+)
 setname ${F} "Rel Fenn"
@@ -40,7 +42,7 @@ speed 1
 @sleep 4
 speed 0
 inv ${H} ~ Dried Meat
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} witnesses=d+ facts=.*"food_items":\{"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} witnesses=\d+ facts=.*"food_items":\{"
 # hungry now: he eats it himself within a few seconds (m4/m5 behaviour); that meal is the one scored
 hunger ${H} 150
 speed 1

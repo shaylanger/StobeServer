@@ -38,7 +38,7 @@ ko ${BANDIT} 60
 # run m9: he died because the fight went on over the KO'd body: everyone steps back at once
 teleport Shay ${BANDIT} dist 40
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT} witnesses=d+ facts="level":"knockout".*"inventory"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT} witnesses=\d+ facts="level":"knockout".*"inventory"
 teleport Malzin ${BANDIT} dist 2
 order Malzin LOOT_TARGET target ${BANDIT}
 speed 1

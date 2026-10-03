@@ -30,16 +30,14 @@
   []
  ],
  "SR11": [
-  "partial game: m9 p3-03 captured the enslaved fact (Rel Vash) after bringing him close; waking result not captured in the snapshot; rerun",
+  "partial game: m11 enslaved fact with the owner captured (probe 7 yes: owner = shackle owner); waking charge failed because the KO itself was not seen: server now keeps the enslavement for waking anyway",
   [
    "social_unconscious_regression"
   ],
   [
    "REL-p3-03-enslaved-while-ko"
   ],
-  [
-   "probe 21 answered for p7-02: Rel Xan was first seen already chained (never swept before the shackle)"
-  ]
+  []
  ],
  "SR12": [
   "offline-pass; game as SR11",
@@ -154,7 +152,7 @@
   ]
  ],
  "SR18": [
-  "offline-pass; game blocked",
+  "game-pass (m11 p4-02: Rel Cobb -> Malzin safe_rescue +9 after LIFT_PERSON + PUT_SOMEONE_IN_BED on the built bed)",
   [
    "social_care_regression"
   ],
@@ -162,12 +160,11 @@
    "REL-p4-02-carry-to-bed"
   ],
   [
-   "m5: Hub guards carry KO'd outsiders away (300-1600 m) and Malzin's FIND_BED_AND_PUT_IN did nothing; needs a fixture with a bed and no guards",
-   "carry by the player actor is not captured"
+   "carry by the player actor (Shay) is not captured"
   ]
  ],
  "SR19": [
-  "offline-pass; game blocked",
+  "game-pass (m11 p4-03: Rel Kade -> Malzin imprisonment -31 after LIFT_PERSON + PUT_IN_CAGE)",
   [
    "social_care_regression"
   ],
@@ -175,7 +172,7 @@
    "REL-p4-03-carry-to-cage"
   ],
   [
-   "as SR18 (cage)"
+   "ground drop / unknown placer: offline only"
   ]
  ],
  "SR21": [
@@ -210,7 +207,7 @@
   ]
  ],
  "SR22": [
-  "game-pass for a normal purchase (m8: Shay buys from Keys = fair_trade, nothing scored); gift rerun",
+  "game-pass (m8 fair trade, m11 gift Rel Gav -> Rel Dona +3)",
   [
    "social_property_regression"
   ],
@@ -280,7 +277,7 @@
   ]
  ],
  "SR05": [
-  "game-pass (m4, m8); m9 ally KO without own attack fact now charged (joined assault)",
+  "game-pass (m4, m8, m11: Malzin's KO of Rel Vorn charged as a joined assault, -40)",
   [
    "social_combat_regression"
   ],
@@ -344,7 +341,7 @@
   ]
  ],
  "SR43": [
-  "offline-pass (perf bench 6000 facts p95 12 ms, retention keeps the raw tables to 3 game days); game soak REL-p8-01 pending",
+  "offline-pass (bench p95 12 ms); m11 soak healthy but quiet (68 facts): soak now spawns raids; Capture=0 vs 1 frame-time gate pending",
   [
    "social_concurrency_regression",
    "social_combat_regression",
@@ -353,7 +350,9 @@
   [
    "REL-p8-01-soak"
   ],
-  []
+  [
+   "fps source: harness fps command (requested)"
+  ]
  ],
  "SR24": [
   "game-pass (m8, m9: Rel Wren -6/-7 of the victim's -10)",
@@ -366,7 +365,7 @@
   []
  ],
  "SR25": [
-  "real bug still open in game (m9: the floor-sleeping witness still counted -7 with the sleep fix): witness entries now carry task + prone state for diagnosis",
+  "open: m11 the floor-sleeping witness still counted (-5); witness task/prone now logged (w=...) to decide (possibly woken by the fight)",
   [
    "social_witness_regression"
   ],
@@ -374,7 +373,7 @@
    "REL-p6-01b-witness-attack"
   ],
   [
-   "probe 22: which task/prone state a SLEEP_ON_FLOOR character reports"
+   "probe 22"
   ]
  ],
  "SR26": [
@@ -422,7 +421,7 @@
   ]
  ],
  "SR32": [
-  "offline-pass; game blocked like SR11 (no enslaved/freed facts in m8)",
+  "offline-pass; game blocked: m11 Rel Xan first seen already chained (raid facts flooded the focus); native focus now limited to player-side facts",
   [
    "social_recruitment_regression"
   ],
@@ -430,7 +429,6 @@
    "REL-p7-02-slave-escape"
   ],
   [
-   "probe 21",
    "probe 20 liberator"
   ]
  ],

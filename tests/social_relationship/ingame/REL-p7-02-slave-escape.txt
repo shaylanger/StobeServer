@@ -12,6 +12,8 @@ speed 0
 @set MALZIN where Malzin ~ Malzin (#\d+)
 spawn "Hungry Bandit" Drifters near Shay dist 6 count 1 ~ spawned 1/1
 @set X chars 40 ~ Hungry Bandit (#\d+)
+# run m11: Malzin attacked the test Drifters; make their faction friendly to the squad
+relation ${X} 60
 setname ${X} "Rel Xan"
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
 @set O chars 40 ~ Hungry Bandit (#\d+)
