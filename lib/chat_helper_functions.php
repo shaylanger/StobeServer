@@ -11806,6 +11806,36 @@ function stobeParseRelationshipEvalUpdates(string $rawResponse): array {
     return $updates;
 }
 
+/** R1: the official relationship types (plus the two the affinity inference uses). */
+function stobeRelationshipTypeList(): array {
+    return ['romantic','platonic','familial','professional','rival','enemy','neutral','nemesis','estranged',
+        'transactional','protective','indebted','fanatical','mentor','student','servant','client','patron','crush',
+        'ex','betrayed','suspicious','admirer','jealous','fearful','obsessed','awed','contempt','pitying','grateful',
+        'curious','dismissive','wary'];
+}
+
+/** R1: an evaluator type mapped onto the list, or '' when it doesn't fit (keep the old type). */
+function stobeCanonicalRelationshipType(string $raw): string {
+    $t = strtolower(trim($raw));
+    if ($t === '') return '';
+    if (in_array($t, stobeRelationshipTypeList(), true)) return $t;
+    $syn = [
+        'ally'=>'platonic', 'allies'=>'platonic', 'friend'=>'platonic', 'friendly'=>'platonic', 'friendship'=>'platonic',
+        'companion'=>'platonic', 'comrade'=>'platonic', 'squadmate'=>'platonic', 'teammate'=>'platonic', 'trusted'=>'platonic',
+        'acquaintance'=>'neutral', 'stranger'=>'neutral', 'indifferent'=>'neutral',
+        'annoyed'=>'wary', 'irritated'=>'wary', 'wary_of'=>'wary', 'cautious'=>'wary', 'uneasy'=>'wary', 'guarded'=>'wary',
+        'distrust'=>'suspicious', 'distrustful'=>'suspicious', 'mistrust'=>'suspicious',
+        'lover'=>'romantic', 'partner'=>'romantic', 'spouse'=>'romantic', 'wife'=>'romantic', 'husband'=>'romantic', 'love'=>'romantic',
+        'family'=>'familial', 'sibling'=>'familial', 'sister'=>'familial', 'brother'=>'familial', 'parent'=>'familial', 'child'=>'familial',
+        'hate'=>'enemy', 'hatred'=>'enemy', 'hostile'=>'enemy', 'foe'=>'enemy',
+        'boss'=>'patron', 'employer'=>'patron', 'employee'=>'servant', 'subordinate'=>'servant',
+        'business'=>'transactional', 'trade'=>'transactional', 'customer'=>'client',
+        'respect'=>'admirer', 'respected'=>'admirer', 'impressed'=>'admirer', 'afraid'=>'fearful', 'scared'=>'fearful',
+        'grudge'=>'betrayed', 'disdain'=>'contempt', 'scorn'=>'contempt', 'thankful'=>'grateful',
+    ];
+    return $syn[$t] ?? '';
+}
+
 function stobeApplyRelationshipUpdatesMap(array $relationshipMap, array $updates, array $allowedTargets = []): array {
     $allowedLookup = [];
     foreach ($allowedTargets as $name) {
@@ -11882,7 +11912,8 @@ function stobeApplyRelationshipUpdatesMap(array $relationshipMap, array $updates
         $oldType = stobeNormalizeRelationshipTypeToken(strval($existing['type'] ?? 'neutral'));
         $newType = $oldType;
         if ($typeCandidate !== '') {
-            $newType = stobeNormalizeRelationshipTypeToken($typeCandidate);
+            $canonical = stobeCanonicalRelationshipType($typeCandidate); // R1
+            if ($canonical !== '') $newType = $canonical;
         }
 
         $oldNote = trim(strval($existing['note'] ?? ''));
@@ -12154,6 +12185,7 @@ function stobeEvaluateRelationshipsForTurn(
             . "  <rule>Use at most 3 updates.</rule>\n"
             . "  <rule>Use conservative deltas for normal chat (typically -8..+8). Reserve larger deltas for major events.</rule>\n"
             . "  <rule>Use lowercase one-word types. If type should not change, omit type or leave it empty.</rule>\n"
+            . "  <rule>type must be one of: " . implode(', ', stobeRelationshipTypeList()) . ".</rule>\n"
             . "  <rule>If nothing changed, return {\"updates\":[]}.</rule>\n"
             . "</relationship_evaluator>";
 

@@ -26,5 +26,11 @@ check('no entry: no block', stobeBuildRelationshipStanceBlock('Malzin', ['extend
 check('tier edges', stobeRelationshipStanceTier(-91)[0] === 'Hostile' && stobeRelationshipStanceTier(-90)[0] === 'Hateful'
     && stobeRelationshipStanceTier(5)[0] === 'Neutral' && stobeRelationshipStanceTier(6)[0] === 'Acquaintance'
     && stobeRelationshipStanceTier(91)[0] === 'Bonded' && stobeRelationshipStanceTier(90)[0] === 'Devoted');
+// R1: types onto the list
+check('R1: ally -> platonic, annoyed -> wary, distrust -> suspicious', stobeCanonicalRelationshipType('ally') === 'platonic'
+    && stobeCanonicalRelationshipType('Annoyed') === 'wary' && stobeCanonicalRelationshipType('distrust') === 'suspicious');
+check('R1: unknown type is empty (keeps the old one)', stobeCanonicalRelationshipType('whatever') === '');
+$r1 = stobeApplyRelationshipUpdatesMap(['Shay' => ['aff' => 60, 'type' => 'romantic']], [['target' => 'Shay', 'aff_delta' => 1, 'type' => 'zzz']]);
+check('R1: an unknown type does not wipe "romantic"', ($r1['map']['Shay']['type'] ?? '') === 'romantic', $r1['map']);
 echo "\n$pass passed, $fail failed\n";
 exit($fail > 0 ? 1 : 0);
