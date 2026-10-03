@@ -165,7 +165,43 @@ function stobeWorkGoalResolveDestination(string $requested): array|false
             ];
         }
     }
+    $fallback = stobeGoalDestinationFallback($requested);
+    if ($fallback !== '') {
+        if (function_exists('stobeLogInfo')) {
+            stobeLogInfo('Goal destination not a known place: using the current location (items 66/68)', ['requested' => $requested, 'why' => $fallback]);
+        }
+        return ['name' => '', 'x' => null, 'y' => null, 'z' => null, 'fallback' => $fallback];
+    }
     return false;
+}
+
+/**
+ * Items 66/68: why an unresolved destination still means "here" ('' when it doesn't):
+ * 'person' (the player, "me", a live participant: she brings it back to the walk-back target),
+ * 'home_word' ("home", "base", "camp", "outpost": the player's base when none is stored),
+ * 'current_area' (the area the game last reported).
+ */
+function stobeGoalDestinationFallback(string $requested): string
+{
+    $req = strtolower(trim(preg_replace('/\s+/', ' ', $requested) ?? ''));
+    $req = trim(preg_replace('/^(?:to|at|in|back\s+to)\s+/', '', $req) ?? $req);
+    if ($req === '') return '';
+    if (preg_match('/^(?:me|myself|us|player|the\s+player|you|yourself|here|there)$/', $req)) return 'person';
+    $player = function_exists('getSetting') ? strtolower(trim(strval(getSetting('PLAYER_NAME', '')))) : '';
+    if ($player !== '' && $req === $player) return 'person';
+    if (function_exists('stobeResolveLiveParticipantSerial') && function_exists('normalizeParticipantNameToken')
+        && stobeResolveLiveParticipantSerial(normalizeParticipantNameToken($requested), false) > 0) return 'person';
+    if (preg_match("/^(?:(?:my|our|your|the|shay'?s|player'?s)\s+)?(?:home|base|home\s+base|camp|outpost|town|hq|headquarters|settlement|compound)$/", $req)) return 'home_word';
+    try {
+        $row = $GLOBALS['db']->fetchOne(
+            "SELECT location FROM eventlog WHERE location <> '' AND localts >= $1 ORDER BY rowid DESC LIMIT 1",
+            [time() - 900]
+        );
+        $loc = strtolower(trim(strval(is_array($row) ? ($row['location'] ?? '') : '')));
+        if ($loc !== '' && strlen($req) >= 3 && (str_contains($loc, $req) || str_contains($req, $loc))) return 'current_area';
+    } catch (Throwable $e) {
+    }
+    return '';
 }
 function stobeWorkGoalId(): string
 {
