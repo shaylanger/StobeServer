@@ -8128,8 +8128,8 @@ function stobeBuildNpcHistorySnapshotPayloadFromRow(array $row, string $reason =
         $safeReason = 'snapshot';
     }
 
-    $metadata = normalizeJsonString(normalizeCoreNpcMetadata($row['metadata'] ?? '{}'));
-    $extendedData = normalizeJsonString(normalizeCoreNpcExtendedData($row['extended_data'] ?? '{}'));
+    $metadata = stobeJsonObjectString(normalizeCoreNpcMetadata($row['metadata'] ?? '{}')); // Item 101
+    $extendedData = stobeJsonObjectString(normalizeCoreNpcExtendedData($row['extended_data'] ?? '{}'));
     $limbs = normalizeJsonString(stobeNormalizeJsonArrayValue($row['limbs'] ?? '{}'));
     $bounty = stobeNormalizeBountyJsonString($row['bounty'] ?? '{}');
 
@@ -9090,7 +9090,7 @@ function storeNpcProfile(string $name, array $profile, array $options = []): voi
         ], 'DEBUG');
     }
 
-    $extendedDataJson = normalizeJsonString(normalizeCoreNpcExtendedData($profile['extended_data'] ?? '{}'));
+    $extendedDataJson = stobeJsonObjectString(normalizeCoreNpcExtendedData($profile['extended_data'] ?? '{}')); // Item 101
     $hasExplicitProfileId = array_key_exists('profile_id', $profile);
     $explicitProfileId = $hasExplicitProfileId ? intval($profile['profile_id'] ?? 0) : 0;
     $ruleProfileId = $hasExplicitProfileId ? 0 : stobeResolveProfileIdFromImportRules($safeName, $race, $gender, $faction);
@@ -9103,7 +9103,7 @@ function storeNpcProfile(string $name, array $profile, array $options = []): voi
     } elseif ($ruleProfileId > 0) {
         $metadataArray['profile_assignment_source'] = 'rule';
     }
-    $metadataJson = normalizeJsonString($metadataArray);
+    $metadataJson = stobeJsonObjectString($metadataArray); // Item 101
 
     $profilePersisted = $db->exec(
         "INSERT INTO core_npc_master (
@@ -11420,8 +11420,8 @@ function storeNpcSnapshot(array $snapshot, int $gamets = 0): bool {
         'defer_voice_assignment' => true,
     ]);
 
-    $metadataJson = normalizeJsonString($metadataForStorage);
-    $extendedDataJson = normalizeJsonString($snapshotExtendedPayload);
+    $metadataJson = stobeJsonObjectString($metadataForStorage); // Item 101
+    $extendedDataJson = stobeJsonObjectString($snapshotExtendedPayload);
     $bountyJson = stobeNormalizeBountyJsonString($bountyPayload);
     $safeGamets = max(0, $gamets);
     $ruleProfileId = stobeResolveProfileIdFromImportRules($name, $race, $gender, $faction);
@@ -11826,7 +11826,8 @@ function updateNpcById(int $id, array $fields): bool {
             } else {
                 $setClauses[] = "{$column} = " . $incomingExpression;
             }
-            $params[] = normalizeJsonString($fields[$column]);
+            $params[] = in_array($column, ['extended_data', 'metadata'], true) // Item 101: always objects
+                ? stobeJsonObjectString($fields[$column]) : normalizeJsonString($fields[$column]);
             $paramIndex++;
             continue;
         }
@@ -14007,6 +14008,28 @@ function getLlmConfigForNpc(array|false $npcData): array {
     }
 
     return stobeBuildLlmConfigFromConnector($connector);
+}
+
+/** Item 101: a JSON object for columns that must be objects (extended_data, metadata, relationships). */
+function stobeJsonObjectString(mixed $value): string {
+    if (is_string($value)) {
+        $text = trim($value);
+        if ($text === '') return '{}';
+        $decoded = json_decode($text, true);
+        if (!is_array($decoded)) return '{}';
+        $value = $decoded;
+    }
+    if (!is_array($value) || count($value) === 0) return '{}';
+    if (array_is_list($value)) {
+        $merged = [];
+        foreach ($value as $v) {
+            if (is_array($v) && !array_is_list($v)) $merged = array_merge($merged, $v);
+        }
+        if (count($merged) === 0) return '{}';
+        $value = $merged;
+    }
+    $encoded = json_encode((object)$value, JSON_UNESCAPED_UNICODE);
+    return is_string($encoded) ? $encoded : '{}';
 }
 
 function normalizeJsonString(mixed $value): string {

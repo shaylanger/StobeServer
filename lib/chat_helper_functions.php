@@ -12034,7 +12034,7 @@ function stobeRelationshipCleanStoredMaps(): array {
         if (!$changed) continue;
         $json = count($map) > 0 ? json_encode($map) : '{}';
         $db->exec(
-            "UPDATE core_npc SET extended_data = jsonb_set(COALESCE(extended_data, '{}'::jsonb), '{relationships}', $2::jsonb, true),
+            "UPDATE core_npc SET extended_data = jsonb_set(CASE WHEN jsonb_typeof(extended_data) = 'object' THEN extended_data ELSE '{}'::jsonb END, '{relationships}', $2::jsonb, true), /* Item 101 */
                     relationships = CASE WHEN COALESCE(relationships, '') <> '' THEN $3 ELSE relationships END
               WHERE id = $1",
             [intval($row['id']), $json, count($map) > 0 ? $json : '']
@@ -12284,8 +12284,8 @@ function stobePersistNpcRelationshipMapUnlocked(string $speakerName, array $rela
             $result = $db->exec(
                 "UPDATE core_npc
                  SET relationships = $1,
-                     extended_data = jsonb_set(
-                         COALESCE(extended_data, '{}'::jsonb),
+                     extended_data = jsonb_set( -- Item 101: an array (bad old row) becomes an object
+                         CASE WHEN jsonb_typeof(extended_data) = 'object' THEN extended_data ELSE '{}'::jsonb END,
                          '{relationships}',
                          $2::jsonb,
                          true
