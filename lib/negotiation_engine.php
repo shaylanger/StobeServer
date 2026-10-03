@@ -1135,7 +1135,8 @@ function stobeNegTickDeal(array $deal, string $player, int $now): void {
             }
             // STOBE 18: a "pay now" deal has the NPC's STOP_ATTACK already dispatched; it is betrayed too.
             foreach ($state as $idx => $term) {
-                if (($term['by'] ?? '') === 'npc' && in_array($term['status'] ?? '', ['PENDING','DISPATCHED','REISSUE_QUEUED'], true)) {
+                $keptTruce = ($term['status'] ?? '') === 'VERIFIED' && in_array($term['kind'] ?? '', ['STOP_ATTACK','SPARE'], true);
+                if (($term['by'] ?? '') === 'npc' && ($keptTruce || in_array($term['status'] ?? '', ['PENDING','DISPATCHED','REISSUE_QUEUED'], true))) {
                     $state[$idx]['status'] = 'BETRAYED';
                     $state[$idx]['evidence'][] = ['at'=>$now, 'note'=>'intentional_betrayal'];
                 }

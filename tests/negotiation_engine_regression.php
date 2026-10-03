@@ -915,6 +915,20 @@ check('item 106: STOP_ATTACK by player becomes SPARE by player', ($fixed2[1]['ki
 $fixed3 = stobeDealFixWrongPerformer([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>50], ['kind'=>'LOAN_ITEM','by'=>'player','to'=>'npc','item'=>'Katana']], 'NegTestBandit');
 check('item 106: an unclear wrong-side term is dropped, the rest stands', count($fixed3) === 1 && ($fixed3[0]['kind'] ?? '') === 'GIVE_CATS', $fixed3);
 
+// STOBE 18 m18: a verified truce (player SPARE watched 120 s first) is marked betrayed too.
+$db->exec("DELETE FROM general_settings WHERE id='NEG_TEST_FORCE_BETRAYAL'");
+$db->exec("INSERT INTO general_settings (id, value) VALUES ('NEG_TEST_FORCE_BETRAYAL', 'true')");
+$id = makeDeal('NegTestTrader', [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>42], ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']]);
+stobeNegBeginPerformance($id, ['STOP_ATTACK@' . $player], $player, 1000, '');
+$st18 = stobeNegDecode(stobeNegFetchDeal($id)['term_state']);
+$st18[1]['status'] = 'VERIFIED';
+$db->exec("UPDATE stobe_social_contract SET term_state=$2::jsonb, performance_started_unix = performance_started_unix - 25 WHERE contract_id=$1", [$id, json_encode($st18)]);
+stobeLine("ACTION_EXEC: GIVE_CATS actor=$player recipient=NegTestTrader amount=42", time());
+stobeNegTick();
+check('STOBE 18 m18: a verified STOP_ATTACK is marked intentional_betrayal', status($id) === 'BREACHED_NPC' && termStatus($id, 1) === 'BETRAYED', [status($id), termStatus($id, 1)]);
+$db->exec("DELETE FROM general_settings WHERE id='NEG_TEST_FORCE_BETRAYAL'");
+$db->exec("DELETE FROM stobe_negotiation_directive");
+
 // ---------------------------------------------------------------- Item 107: a fight with any squad member makes a combat deal
 fixtureNpc('NegTestBeaks107', ['money'=>800, 'money_observed_at'=>time()], '', '', '100/100', 'Nameless');
 fixtureNpc('NegTestRaider107', ['money'=>50, 'money_observed_at'=>time()], '', 'A raider.');
