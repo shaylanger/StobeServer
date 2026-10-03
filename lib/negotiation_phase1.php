@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/relationship_trading.php'; // Item 102-104: relationship-shaped trading
+
 /**
  * Deal ledger. Records what was agreed; negotiation_engine.php performs and
  * verifies it. World actions remain pending until verified from evidence.
@@ -654,6 +656,16 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
         ]);
         return ['ok'=>false, 'error'=>'weapon_not_negotiable', 'weapon'=>$weaponGiven,
             'refusal_line'=>'Not my ' . $weaponGiven . '. That stays with me, whatever you pay.'];
+    }
+    // Items 103/104: relationship willingness lines and prices (squad exempt; hostile deals keep their own rules).
+    if (function_exists('stobeRelTradeGate') && in_array($decision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+        $gate = stobeRelTradeGate($npc, $npcData, $player, $kind, $terms);
+        if (empty($gate['ok'])) return $gate;
+        $terms = $gate['terms'];
+        if (!empty($gate['priced']) && $decision === 'ACCEPT') {
+            $decision = 'COUNTER'; // she asks her price instead of accepting a cheaper one
+            stobeDealLog('info', 'Negotiation: accept at the wrong price recorded as a counter at her price (item 104)', ['npc'=>$npc, 'r'=>$gate['r'] ?? 0]);
+        }
     }
     $deal = [
         'parties'=>['npc'=>$npc,'player'=>$player],
@@ -1609,6 +1621,7 @@ function stobeDealEquippedWeapons(array|false $npcData): array {
 
 /** The NPC's affinity toward the player, or 0 if they have no relationship. */
 function stobeDealNpcTrust(array|false $npcData, string $player): int {
+    if (function_exists('stobeRelValue')) return stobeRelValue($npcData, $player); // Item 102: character, else persona
     if (!is_array($npcData) || !function_exists('stobeGetNpcRelationshipMap')) return 0;
     foreach (stobeGetNpcRelationshipMap($npcData) as $target => $entry) {
         if (strcasecmp(normalizeParticipantNameToken(strval($target)), normalizeParticipantNameToken($player)) === 0) {
@@ -1623,7 +1636,7 @@ function stobeDealWeaponReleaseAllowed(array|false $npcData, string $player, str
     if (!is_array($npcData)) return true;
     if (function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData)) return true;
     if ($kind === 'surrender') return true;
-    $minTrust = function_exists('getSettingInt') ? getSettingInt('NEG_WEAPON_TRUST_MIN', 56) : 56;
+    $minTrust = function_exists('getSettingInt') ? getSettingInt('NEG_WEAPON_TRUST_MIN', 70) : 70; // Item 102: Shay's +70
     return stobeDealNpcTrust($npcData, $player) >= $minTrust;
 }
 
@@ -1663,6 +1676,10 @@ function stobeDealFilterWeaponActions(array $actions, array|false $npcData, stri
         $item = '';
         if (preg_match('/^UNEQUIP_ITEM@(.+)$/i', $a, $m)) $item = $m[1];
         elseif (preg_match('/^GIVE_ITEM@[^@]*@([^@]+)/i', $a, $m)) $item = $m[1];
+        // Item 102: dropping it, or stowing it into the pack/inventory, leaves her defenceless just the same.
+        elseif (preg_match('/^DROP_WEAPON\b/i', $a)) { $removed[] = $a; continue; }
+        elseif (preg_match('/^(?:SHEATHE_?WEAPON|HOLSTER_?WEAPON)@.*\b(pack|backpack|bag|inventory|stow)\b/i', $a)) { $removed[] = $a; continue; }
+        elseif (preg_match('/^DROP_ITEM@(.+)$/i', $a, $m)) $item = $m[1];
         if ($item !== '' && stobeDealMatchEquippedWeapon($item, $weapons) !== '') { $removed[] = $a; continue; }
         $kept[] = $action;
     }

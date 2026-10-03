@@ -1549,8 +1549,9 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             }
             if (empty($dealResult['ok'])) {
                 // Malformed terms: record nothing, but keep the NPC's own words unless they claim a deal.
-                if (strval($dealResult['error'] ?? '') === 'weapon_not_negotiable') {
-                    // Bug 32: whatever she said, her weapon isn't part of the deal.
+                if (in_array(strval($dealResult['error'] ?? ''), ['weapon_not_negotiable', 'relationship_no_trade', 'relationship_no_pay_later',
+                    'relationship_no_free_gift', 'relationship_no_free_favour'], true)) { // Item 102/103
+                    // Bug 32: whatever she said, her weapon isn't part of the deal. Items 103: a refused deal line in character.
                     $responseText = strval($dealResult['refusal_line'] ?? 'My weapon stays with me.');
                 } elseif ((stobeDealSpeechClaimsCeasefire($responseText)
                     || preg_match("/\\b(deal|agreed|you'?ve got it|you got it)\\b/i", $responseText))
@@ -1715,6 +1716,8 @@ if (!$narratorMode && is_array($npcData) && function_exists('stobeDealFilterWeap
         $responseActions, $npcData, $playerName, strval($dealResult['kind'] ?? ($negotiationKind ?? ''))
     );
     if (count($weaponActionsRemoved) > 0) {
+        // Item 102: refuse in character (her words may have agreed); nothing streamed yet = replace the line.
+        if (empty($alreadyStreamed)) $responseText = 'No. My weapon stays with me.';
         stobeLogWarn('Weapon hand-over blocked (not surrendering, not trusted)', [
             'npc'=>$targetNpc, 'removed'=>$weaponActionsRemoved, 'text'=>$responseText,
         ]);
