@@ -10,9 +10,9 @@
 @wait-world
 @sleep 8
 speed 0
-@set SHAY where Shay ~ Shay (#\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
 setname ${BANDIT} "Rel Wex"
 give "Rel Wex" "Iron Plates" 2 ~ got 2/2
 stobe_say "Rel Wex" "Wex, a word."
@@ -43,9 +43,10 @@ load kah-rel-ko
 @wait-world
 @sleep 8
 speed 0
-@set BANDIT2 where "${TNAME}" ~ (#\d+)
+@set BANDIT2 where "${TNAME}" ~ (#\d+/\d+)
+@set BANDIT2_S where ${BANDIT2} ~ (#\d+)/\d+
 speed 5
 @until 300 where ${BANDIT2} ~ dist=[0-9.]+$
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT2}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT2_S}
 teleport ${BANDIT2} Shay dist 300

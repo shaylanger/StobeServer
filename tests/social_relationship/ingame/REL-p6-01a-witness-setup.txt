@@ -8,15 +8,15 @@
 @sleep 8
 speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 12 count 1 ~ spawned 1/1
-@set V chars 40 ~ Hungry Bandit (#\d+)
+@set V chars 40 ~ Hungry Bandit (#\d+/\d+)
 # run m15: must rename the spawned bandit (a #serial once matched a far NPC)
 setname ${V} "Rel Vik" ~ ^Hungry Bandit -> 
 spawn "Hungry Bandit" Drifters near Shay dist 16 count 1 ~ spawned 1/1
-@set W chars 40 ~ Hungry Bandit (#\d+)
+@set W chars 40 ~ Hungry Bandit (#\d+/\d+)
 # run m15: must rename the spawned bandit (a #serial once matched a far NPC)
 setname ${W} "Rel Wren" ~ ^Hungry Bandit -> 
 spawn "Hungry Bandit" Drifters near Shay dist 16 count 1 ~ spawned 1/1
-@set S chars 40 ~ Hungry Bandit (#\d+)
+@set S chars 40 ~ Hungry Bandit (#\d+/\d+)
 # run m15: must rename the spawned bandit (a #serial once matched a far NPC)
 setname ${S} "Rel Sorn" ~ ^Hungry Bandit -> 
 stobe_say "Rel Vik" "Vik, hello."

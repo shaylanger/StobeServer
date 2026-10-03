@@ -12,9 +12,11 @@
 @wait-world
 @sleep 8
 speed 0
-@set MALZIN where Malzin ~ Malzin (#\d+)
+@set MALZIN where Malzin ~ Malzin (#\d+/\d+)
+@set MALZIN_S where ${MALZIN} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
-@set K chars 60 ~ Hungry Bandit (#\d+)
+@set K chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set K_S where ${K} ~ (#\d+)/\d+
 setname ${K} "Rel Kade"
 stobe_say "Rel Kade" "Kade, stop there."
 speed 1
@@ -36,13 +38,13 @@ speed 0
 where Malzin
 where ${K}
 screenshot rel-p4-03 ~ png
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${K} witnesses=\d+ facts="place":"prison"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN_S} target=${K_S} witnesses=\d+ facts="place":"prison"
 speed 5
 @until 300 where ${K} ~ dist=[0-9.]+$
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${K}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${K_S}
 spawn "Hungry Bandit" Drifters near Shay dist 15 count 1 ~ spawned 1/1
-@set U chars 60 ~ Hungry Bandit (#\d+)
+@set U chars 60 ~ Hungry Bandit (#\d+/\d+)
 setname ${U} "Rel Ulf"
 @set UNAME where ${U} ~ ^(.+?) #\d+
 cage ${U}

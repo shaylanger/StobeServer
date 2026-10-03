@@ -7,10 +7,12 @@
 #   pair_effects: <WNAME> -> Shay has witness_aggression (55-70% of the victim's share, bonded); <SNAME> (asleep) nothing.
 #   Game probes 18/19: the attack line has witnesses>=1 and the interpret-log shows <WNAME> status shadow; if <SNAME> appears as a
 #   witness, report whether isUnconcious() is true while sleeping (probe 5).
-@set V where "Rel Vik" ~ (#\d+)
-@set W where "Rel Wren" ~ (#\d+)
-@set S where "Rel Sorn" ~ (#\d+)
-@set SHAY where Shay ~ Shay (#\d+)
+@set V where "Rel Vik" ~ (#\d+/\d+)
+@set V_S where ${V} ~ (#\d+)/\d+
+@set W where "Rel Wren" ~ (#\d+/\d+)
+@set S where "Rel Sorn" ~ (#\d+/\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 teleport ${W} ${V} dist 8
 teleport ${S} ${V} dist 8
 sleep ${S}
@@ -18,12 +20,12 @@ sleep ${S}
 speed 1
 @sleep 15
 speed 0
-@set SN where "Rel Sorn" ~ #(\d+)
+@set SN where "Rel Sorn" ~ #(\d+)/\d+
 attack Shay ${V}
 speed 1
 @sleep 6
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY} target=${V} witnesses=[1-9]
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY_S} target=${V_S} witnesses=[1-9]
 # run m13: the witness entry for Sorn must say she is asleep (StateBroadcastData isSleeping=1, conscious false)
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ "serial":${SN},"name":"Rel Sorn"[^]]*?"conscious":false[^]]*?"sleeping":1
 teleport ${V} Shay dist 300

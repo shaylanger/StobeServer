@@ -9,14 +9,16 @@
 @wait-world
 @sleep 8
 speed 0
-@set SHAY where Shay ~ Shay (#\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 give Shay "Dried Meat" 4 ~ 4/4
 spawn "Hungry Bandit" Drifters near Shay dist 10 count 2 ~ spawned 2/2
-@set H chars 40 ~ Hungry Bandit (#\d+)
+@set H chars 40 ~ Hungry Bandit (#\d+/\d+)
+@set H_S where ${H} ~ (#\d+)/\d+
 # run m11: Malzin attacked the test Drifters; make their faction friendly to the squad
 relation ${H} 60
 setname ${H} "Rel Hask"
-@set F chars 40 ~ Hungry Bandit (#\d+)
+@set F chars 40 ~ Hungry Bandit (#\d+/\d+)
 setname ${F} "Rel Fenn"
 stobe_say "Rel Hask" "Hask, you look starved."
 speed 1
@@ -42,7 +44,7 @@ speed 1
 @sleep 4
 speed 0
 inv ${H} ~ Dried Meat
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} witnesses=\d+ facts=.*"food_items":\{"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H_S} target=${SHAY_S} witnesses=\d+ facts=.*"food_items":\{"
 # hungry now: he eats it himself within a few seconds (m4/m5 behaviour); that meal is the one scored
 # run m13: at 150 he did not eat within 8 s; hungrier, then the harness makes him eat the gift
 hunger ${H} 120
@@ -54,7 +56,7 @@ eat ${H} "Dried Meat"
 speed 1
 @sleep 6
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=eat seq=\d+ load=\d+ actor=${H}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=eat seq=\d+ load=\d+ actor=${H_S}
 transfer Shay ${F} "Dried Meat"
 speed 1
 @sleep 4

@@ -8,7 +8,8 @@
 #   (correct: Shay's blows are retaliation, no new aggression row). Check --interpret-log for the second encounter's basis.
 # verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --check-shadow -> "<TNAME>" -> "Shay" lists TWO aggression rows (two combat:<seq> incidents), the second within [-18,-9];
 #   report the two time lines (game probe 4: game minutes per real second at speed 10, to calibrate encounter_idle_seconds=600).
-@set BANDIT where "Rel Vorn" ~ (#\d+)
+@set BANDIT where "Rel Vorn" ~ (#\d+/\d+)
+@set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
 time ~ game_hours=
 teleport ${BANDIT} Shay dist 15
 health ${BANDIT} 100
@@ -23,6 +24,6 @@ attack Shay ${BANDIT}
 speed 1
 @sleep 8
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=#\d+ target=${BANDIT}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=#\d+ target=${BANDIT_S}
 ko ${BANDIT} 30
 teleport ${BANDIT} Shay dist 300

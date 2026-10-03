@@ -12,10 +12,13 @@
 @wait-world
 @sleep 8
 speed 0
-@set SHAY where Shay ~ Shay (#\d+)
-@set MALZIN where Malzin ~ Malzin (#\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
+@set MALZIN where Malzin ~ Malzin (#\d+/\d+)
+@set MALZIN_S where ${MALZIN} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
 setname ${BANDIT} "Rel Tam"
 give "Rel Tam" "Iron Plates" 2 ~ got 2/2
 stobe_say "Rel Tam" "Tam, isn't it? Stay a moment."
@@ -40,7 +43,7 @@ teleport Shay ${BANDIT} dist 40
 # run m13: the KO fact comes from the world sweep (every few s, not while paused): let it run before checking
 @sleep 4
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT} witnesses=\d+ facts="level":"knockout".*"inventory"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY_S} target=${BANDIT_S} witnesses=\d+ facts="level":"knockout".*"inventory"
 teleport Malzin ${BANDIT} dist 2
 # run m13 (probe 6): LOOT_TARGET on a KO'd NPC moved nothing in 20 s (Malzin's inventory unchanged), so the
 # loot itself is done by the harness (the capture path is the same inventory sweep)
@@ -48,10 +51,10 @@ transfer ${BANDIT} Malzin "Iron Plates"
 speed 1
 @sleep 20
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${MALZIN} target=${BANDIT}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${MALZIN_S} target=${BANDIT_S}
 inv ${BANDIT}
 speed 5
 @until 240 where ${BANDIT} ~ dist=[0-9.]+$
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT_S}
 teleport ${BANDIT} Shay dist 300

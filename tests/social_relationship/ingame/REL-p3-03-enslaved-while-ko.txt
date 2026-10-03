@@ -10,12 +10,14 @@
 @wait-world
 @sleep 8
 speed 0
-@set SHAY where Shay ~ Shay (#\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
 setname ${BANDIT} "Rel Vash"
 spawn "Hungry Bandit" Drifters near Shay dist 40 count 1 ~ spawned 1/1
-@set SLAVER chars 60 ~ Hungry Bandit (#\d+)
+@set SLAVER chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set SLAVER_S where ${SLAVER} ~ (#\d+)/\d+
 setname ${SLAVER} "Rel Grell"
 stobe_say "Rel Vash" "Vash, a word."
 speed 1
@@ -47,11 +49,11 @@ shackle ${BANDIT} owner ${SLAVER}
 speed 1
 @sleep 6
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=enslaved seq=\d+ load=\d+ actor=${SLAVER} target=${BANDIT}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=enslaved seq=\d+ load=\d+ actor=${SLAVER_S} target=${BANDIT_S}
 speed 5
 @until 240 where ${BANDIT} ~ dist=[0-9.]+$
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT_S}
 unshackle ${BANDIT}
 teleport ${BANDIT} Shay dist 300
 teleport ${SLAVER} Shay dist 300

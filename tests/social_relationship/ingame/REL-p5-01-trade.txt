@@ -10,7 +10,8 @@
 @wait-world
 @sleep 8
 speed 0
-@set SHAY where Shay ~ Shay (#\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 money Shay 5000
 @set TRADER traders 300 ~ traders within [0-9.]+: (.+?) #\d+
 shopstock "${TRADER}" ~ .
@@ -19,4 +20,4 @@ trade Shay "${TRADER}" "${ITEM}"
 speed 1
 @sleep 5
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=trade seq=\d+ load=\d+ actor=${SHAY}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=trade seq=\d+ load=\d+ actor=${SHAY_S}

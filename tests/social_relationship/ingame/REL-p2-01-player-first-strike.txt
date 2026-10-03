@@ -11,9 +11,11 @@
 @sleep 8
 speed 0
 stobe_ping ~ speaker=Shay
-@set SHAY where Shay ~ Shay (#\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
 setname ${BANDIT} "Rel Vorn"
 stobe_say "Rel Vorn" "Hello there. Who are you?"
 speed 1
@@ -32,6 +34,6 @@ teleport ${BANDIT} Shay dist 4
 ko ${BANDIT} 60
 @until 20 where ${BANDIT} ~ KO
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT}
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=#\d+ target=${BANDIT} witnesses=\d+ facts="level":"knockout","attribution":"(defeated_by|attacker_list|recent_attacker)"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY_S} target=${BANDIT_S}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=#\d+ target=${BANDIT_S} witnesses=\d+ facts="level":"knockout","attribution":"(defeated_by|attacker_list|recent_attacker)"
 teleport ${BANDIT} Shay dist 300

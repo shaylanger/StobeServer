@@ -9,7 +9,7 @@
 @sleep 8
 speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
-@set R chars 40 ~ Hungry Bandit (#\d+)
+@set R chars 40 ~ Hungry Bandit (#\d+/\d+)
 setname ${R} "Rel Rook"
 stobe_say "Rel Rook" "Rook, join my squad right now. You're one of us from today."
 speed 1

@@ -13,9 +13,11 @@
 @wait-world
 @sleep 8
 speed 0
-@set MALZIN where Malzin ~ Malzin (#\d+)
+@set MALZIN where Malzin ~ Malzin (#\d+/\d+)
+@set MALZIN_S where ${MALZIN} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
-@set C chars 60 ~ Hungry Bandit (#\d+)
+@set C chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set C_S where ${C} ~ (#\d+)/\d+
 setname ${C} "Rel Cobb"
 stobe_say "Rel Cobb" "Cobb, you look unwell."
 speed 1
@@ -41,5 +43,5 @@ speed 0
 where Malzin
 where ${C}
 screenshot rel-p4-02 ~ png
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=carry_start seq=\d+ load=\d+ actor=${MALZIN} target=${C}
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${C} witnesses=\d+ facts="place":"bed"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=carry_start seq=\d+ load=\d+ actor=${MALZIN_S} target=${C_S}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN_S} target=${C_S} witnesses=\d+ facts="place":"bed"

@@ -9,10 +9,11 @@
 @wait-world
 @sleep 8
 speed 0
-@set SHAY where Shay ~ Shay (#\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
 # run m4/m5: Shay's inventory is full, the plate goes where the inventory scan does not look; a fresh NPC gives instead
 spawn "Hungry Bandit" Drifters near Shay dist 8 count 1 ~ spawned 1/1
-@set DONOR chars 40 ~ Hungry Bandit (#\d+)
+@set DONOR chars 40 ~ Hungry Bandit (#\d+/\d+)
+@set DONOR_S where ${DONOR} ~ (#\d+)/\d+
 # run m11: Malzin attacked the test Drifters; make their faction friendly to the squad
 relation ${DONOR} 60
 setname ${DONOR} "Rel Dona"
@@ -23,7 +24,8 @@ speed 1
 @sleep 10
 speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
-@set G chars 40 ~ Hungry Bandit (#\d+)
+@set G chars 40 ~ Hungry Bandit (#\d+/\d+)
+@set G_S where ${G} ~ (#\d+)/\d+
 setname ${G} "Rel Gav"
 stobe_say "Rel Gav" "Gav, I have something for you."
 speed 1
@@ -39,4 +41,4 @@ transfer ${DONOR} ${G} "Iron Plates"
 speed 1
 @sleep 4
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${G} target=${DONOR}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${G_S} target=${DONOR_S}

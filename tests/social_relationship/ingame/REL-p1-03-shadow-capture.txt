@@ -11,14 +11,16 @@
 @sleep 8
 speed 0
 stobe_ping ~ speaker=Shay
-@set SHAY where Shay ~ Shay (#\d+)
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
 attack Shay ${BANDIT}
 speed 1
 @sleep 10
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: queued kind=combat seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: queued kind=combat seq=\d+ load=\d+ actor=${SHAY_S} target=${BANDIT_S}
 ko ${BANDIT} 20
 speed 1
 @sleep 6

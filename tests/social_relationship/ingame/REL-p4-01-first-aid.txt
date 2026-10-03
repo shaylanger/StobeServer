@@ -11,9 +11,11 @@
 @wait-world
 @sleep 8
 speed 0
-@set MALZIN where Malzin ~ Malzin (#\d+)
+@set MALZIN where Malzin ~ Malzin (#\d+/\d+)
+@set MALZIN_S where ${MALZIN} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
-@set P chars 60 ~ Hungry Bandit (#\d+)
+@set P chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set P_S where ${P} ~ (#\d+)/\d+
 setname ${P} "Rel Ona"
 stobe_say "Rel Ona" "Ona, are you hurt?"
 speed 1
@@ -35,7 +37,7 @@ speed 1
 @sleep 8
 speed 0
 hp ${P} ~ worst=
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=aid seq=\d+ load=\d+ actor=${MALZIN} target=${P}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=aid seq=\d+ load=\d+ actor=${MALZIN_S} target=${P_S}
 teleport Malzin ${P} dist 2
 order Malzin FIRST_AID_ORDER target ${P} ~ FIRST_AID_ORDER
 speed 2
