@@ -1357,11 +1357,19 @@ function stobeFalseGearClaim(string $sentence, array|false $npcData, string $pla
  * A denial naming no requested item ("nothing left in my pack but dry bread") counts for them all.
  * Hits are remembered for this request (item 67 treats them as agreeing to hand it over).
  */
-function stobeFalseEmptyClaim(string $sentence, array|false $npcData, string $playerMessage = ''): string {
+/** Item 69 (semantic): a sentence denying she has / carries / can give something, or saying it's all given already. */
+function stobeSentenceDeniesHaving(string $s): bool {
+    return preg_match("/\b(?:(?:can'?t|cannot|can\s+not|couldn'?t|won'?t\s+be\s+able\s+to)\s+(?:give|hand|spare|share|offer)|(?:don'?t|do\s+not|doesn'?t|didn'?t)\s+(?:have|carry|got|own)|what\s+i\s+(?:don'?t|do\s+not)\s+(?:have|carry)|(?:haven'?t|have\s+not|hasn'?t)\s+(?:got|any)|not\s+(?:carrying|holding)|nothing\s+(?:left|more|to\s+give|on\s+me)|none\s+(?:left|on\s+me)|no\s+more|to\s+spare|(?:all|clean)\s+out|ran\s+out|all\s+gone|empty[- ]handed|already\s+(?:gave|given|handed|took|taken|passed|had)|(?:took|taken|had|got|ate|eaten)\s+(?:(?:it|them)\s+)?(?:all|everything|the\s+lot)|last\s+of\s+(?:it|them|my))\b/", $s) === 1;
+}
+
+function stobeFalseEmptyClaim(string $sentence, array|false $npcData, string $playerMessage = '', ?bool $squadMember = null): string {
     if (!is_array($npcData) || trim($playerMessage) === '' || !function_exists('stobeParseHandoverRequest')
         || !function_exists('stobeNegInventoryCounts') || !function_exists('stobeNegItemMatchesTerm')) return '';
     $s = strtolower(str_replace(["\u{2019}", "\u{2018}"], "'", $sentence));
-    if (!preg_match("/\b(?:(?:took|taken|had|got|ate|eaten|have|'ve\s+had)\s+(?:the\s+)?last\s+of\s+(?:it|them|my\s+[a-z ]+)|(?:none|nothing|no\s+more)\s+to\s+spare|nothing\s+(?:left|more)|none\s+left|no\s+more|(?:all|clean)\s+out\s+of|(?:i'?m|i\s+am)\s+out\s+of|all\s+gone|(?:don'?t|do\s+not)\s+have\s+any|(?:haven'?t|have\s+not)\s+got\s+any|not\s+carrying\s+any|ran\s+out|already\s+(?:handed|gave|given|passed)\s+(?:(?:you|it|them|over|it\s+all|them\s+all)\s+)*(?:all|every|everything|the\s+last|the\s+lot|what\s+i\s+(?:had|have|got)|it|them|(?:it|them)\s+all)\b)/", $s)) return '';
+    if ($squadMember === null) $squadMember = function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData);
+    if ($squadMember && stobeSentenceDeniesHaving($s)) {
+        // item 69 (semantic): her hand-over goes through (item 67), so any denial is false
+    } elseif (!preg_match("/\b(?:(?:took|taken|had|got|ate|eaten|have|'ve\s+had)\s+(?:the\s+)?last\s+of\s+(?:it|them|my\s+[a-z ]+)|(?:none|nothing|no\s+more)\s+to\s+spare|nothing\s+(?:left|more)|none\s+left|no\s+more|(?:all|clean)\s+out\s+of|(?:i'?m|i\s+am)\s+out\s+of|all\s+gone|(?:don'?t|do\s+not)\s+have\s+any|(?:haven'?t|have\s+not)\s+got\s+any|not\s+carrying\s+any|ran\s+out|already\s+(?:handed|gave|given|passed)\s+(?:(?:you|it|them|over|it\s+all|them\s+all)\s+)*(?:all|every|everything|the\s+last|the\s+lot|what\s+i\s+(?:had|have|got)|it|them|(?:it|them)\s+all)\b)/", $s)) return '';
     $wanted = stobeParseHandoverRequest($playerMessage);
     if (count($wanted) === 0) return '';
     $counts = stobeNegInventoryCounts(strval($npcData['inventory'] ?? ''));

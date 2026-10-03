@@ -509,6 +509,23 @@ check('item 69: "You already took the last of it - three strips, and I had none 
     stobeFalseEmptyClaim('You already took the last of it - three strips, and I had none to spare after.', $npc69, $line69) === 'Dried Meat');
 check('item 69: "You\'ve had the last of it twice over now." (run m3) is false while she has it',
     stobeFalseEmptyClaim("You've had the last of it twice over now.", $npc69, $line69) === 'Dried Meat');
+// item 69 (semantic): every m1-m3 denial sentence from a squad member carrying the requested meat
+$npc69s = ['inventory'=>'Dried Meat x3 value 40, Bread x1 value 10', 'equipment'=>''];
+foreach ([
+    'I already handed you all five strips, remember?',
+    "There's nothing left in my pack but dry bread.",
+    'Again? I already handed over what I had.',
+    'You already took the last of it - three strips, and I had none to spare after.',
+    "You've had the last of it twice over now.",
+    "If the hunger's still gnawing, say so plain and I'll find you something, but I can't give what I don't carry.",
+    "I don't have any meat left.",
+    "I'm not carrying any more.",
+] as $s69) {
+    check('item 69 (semantic, squad member): "' . $s69 . '" is dropped', stobeFalseEmptyClaim($s69, $npc69s, $line69, true) === 'Dried Meat', $s69);
+}
+check('item 69 (semantic): an ordinary sentence stays', stobeFalseEmptyClaim("Here, take them. Eat slowly.", $npc69s, $line69, true) === '');
+check('item 69 (semantic): a denial about another item she names stays', stobeFalseEmptyClaim('No more bread for you though.', $npc69s, $line69, true) === '');
+check('item 69 (semantic): a non-faction NPC keeps the narrow patterns', stobeFalseEmptyClaim("I can't give what I don't carry.", $npc69s, $line69, false) === '');
 check('item 69: a denial about something not asked for is fine', stobeFalseEmptyClaim('No more bread.', $npc69, $line69) === '');
 check('item 69: true when she really has none', stobeFalseEmptyClaim("There's nothing left.", ['inventory'=>'Bread x1 value 10'], $line69) === '');
 check('item 69: no check without a hand-over request', stobeFalseEmptyClaim("There's nothing left.", $npc69, 'How are you?') === '');
