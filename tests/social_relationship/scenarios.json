@@ -946,7 +946,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "open: m16 SLEEP_ON_FLOOR never put Rel Sorn to sleep (15 s, raid nearby; awake witness -10, correct for awake); the native sleeping flag reads 1 for NPCs in beds; scenario now gives her a built bed (USE_BED_ORDER)",
+   "rel_state": "game-pass: m16 rerun Rel Sorn asleep in a bed beside the fight (witness entry conscious false, perceived false, sleeping 1): no effect toward Shay; awake Rel Wren witness_aggression -8 (shadow)",
    "offline_tests": [
     "social_witness_regression"
    ],
@@ -1214,7 +1214,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: m16 enslaved captured; the game re-squads a fresh slave ~5-10 s after the chains (new handle), so the lockpick order hit the old handle and nobody freed him; scenario re-resolves him; native m16 sends storage_alias and the server binds it (social_combat_regression SR32 checks)",
+   "rel_state": "partial: m16 rerun Malzin picked the lock (chains off, shackles gone), but freeing moves him to another squad (new handle, slave state ESCAPING) so the sweep saw a new character \"already enslaved\" and no freed; native m16b follows the handle change, counts ESCAPING/EX_SLAVE as free, liberator from the recent task subject",
    "offline_tests": [
     "social_recruitment_regression"
    ],

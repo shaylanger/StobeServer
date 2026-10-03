@@ -39,9 +39,8 @@ speed 1
 @sleep 5
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=enslaved seq=\d+ load=\d+ actor=${O_S} target=${X_S}
-# run m16: about 5-10 s after the chains the game moves him into another squad and he gets a NEW handle (stobe.log
-# "first seen already enslaved serial=<new> name=Rel Xan"); the m16 lockpick order still pointed at the old one.
-# Wait for the re-squad, then resolve him again by name.
+# run m16 rerun: the handle does NOT change on chaining; it changes when the picked lock frees him (he is moved into
+# another squad, slave state ESCAPING). Resolving him again here is harmless (same handle).
 speed 1
 @sleep 15
 speed 0
@@ -53,6 +52,8 @@ order Malzin PICK_LOCK_ON_SHACKLES target ${X2}
 speed 2
 @sleep 90
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=${X2_S} witnesses=\d+ facts=.*"liberator"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator"
+# run m16b native: the sweep follows him to his new handle (that is where freed is seen)
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_IDENTITY: handle changed \(scan\) name=${XNAME} old=\d+ new=\d+ enslaved=1
 # run m16 native (rel-native-m16): the freed line carries his old storage id as storage_alias, so the server binds his profile
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_IDENTITY: handle changed name=${XNAME} storage=hand_\d+ alias=hand_\d+
