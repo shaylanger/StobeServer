@@ -1456,6 +1456,16 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             $alreadyStreamed = false;
         }
         $actionsStreamedInLlm = boolval($streamResult['actions_streamed'] ?? false);
+        $npcOutNow = $negotiationActive && function_exists('stobeNegNpcOutState') ? stobeNegNpcOutState($targetNpc, $npcData) : '';
+        if ($npcOutNow !== '') {
+            // Item 48: knocked out or dead by the time the reply came back: no deal, no words.
+            stobeLogWarn('Deal reply from a knocked-out or dead NPC dropped (item 48)', [
+                'npc'=>$targetNpc, 'state'=>$npcOutNow, 'text'=>$responseText,
+            ]);
+            $responseText = '';
+            $responseActions = [];
+            $negotiationActive = false;
+        }
         if ($negotiationActive) {
             $dealResult = stobeDealCaptureResponse(
                 strval($streamResult['raw_response'] ?? ''), $targetNpc, $playerName, $npcData, $message,

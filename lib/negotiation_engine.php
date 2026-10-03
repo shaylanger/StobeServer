@@ -1201,6 +1201,16 @@ function stobeNegTick(string $onlyNpc = ''): void {
             stobeLogWarn('Deal tick failed', ['contract_id'=>$deal['contract_id'] ?? '', 'error'=>$e->getMessage()]);
         }
     }
+    // Item 48: an offer waits while its NPC is knocked out (it resumes when they wake).
+    $quiet = $GLOBALS['db']->fetchAll(
+        "SELECT contract_id, npc_name FROM stobe_social_contract
+          WHERE status IN ('PROPOSED','COUNTERED') AND updated_at < NOW() - INTERVAL '10 minutes' LIMIT 20"
+    );
+    foreach (is_array($quiet) ? $quiet : [] as $q) {
+        if (stobeNegNpcOutState(strval($q['npc_name'] ?? '')) === 'unconscious') {
+            $GLOBALS['db']->exec("UPDATE stobe_social_contract SET updated_at=NOW() - INTERVAL '9 minutes' WHERE contract_id=$1", [strval($q['contract_id'])]);
+        }
+    }
     // Bargaining that went quiet expires (Phase 3), accepted-but-unstarted deals are cleaned up.
     $GLOBALS['db']->exec(
         "UPDATE stobe_social_contract SET status='EXPIRED', resolved_at=NOW(), updated_at=NOW()
@@ -1360,6 +1370,9 @@ function stobeNegTickThrottled(string $eventType = '', string $eventData = '', s
         stobeNegTick();
     }
     $type = strtolower(trim($eventType));
+    if ($type === 'recovered') {
+        try { stobeNegResumeAfterKnockout($eventData); } catch (Throwable $e) {} // item 48
+    }
     if ($type === 'combat') {
         try { stobeNegPersonalFightJoiner($eventData); } catch (Throwable $e) {}
         if (function_exists('stobeRelationshipOnAttack')) {
@@ -1465,7 +1478,7 @@ function stobeNegClaimDirective(array $candidateNames, string $onlyNpc = ''): ?a
         stobeNegEnsureSchema();
         $rows = $GLOBALS['db']->fetchAll(
             // Refunds wait for the player to come back (10 min); everything else is time-critical.
-            "SELECT * FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE WHEN kind IN ('refund','reissue_payment') THEN 600 ELSE 45 END) ORDER BY id LIMIT 20",
+            "SELECT * FROM stobe_negotiation_directive WHERE consumed_unix=0 AND created_unix >= $1 - (CASE WHEN kind IN ('refund','reissue_payment') THEN 600 WHEN kind='resume_deal' THEN 120 ELSE 45 END) ORDER BY id LIMIT 20",
             [time()]
         );
         foreach (is_array($rows) ? $rows : [] as $row) {
@@ -1483,6 +1496,7 @@ function stobeNegClaimDirective(array $candidateNames, string $onlyNpc = ''): ?a
                 }
             }
             if (!$present) continue;
+            if (stobeNegNpcOutState($renamed !== '' ? $renamed : $npc) !== '') continue; // item 48
             $claimed = $GLOBALS['db']->exec(
                 "UPDATE stobe_negotiation_directive SET consumed_unix=$2 WHERE id=$1 AND consumed_unix=0",
                 [intval($row['id']), time()]
@@ -1610,6 +1624,89 @@ function stobeNegMajorHitsOn(string $name, int $sinceUnix): int {
     }
 }
 
+// ---- Item 48: knocked out or dead NPCs don't negotiate ------------------------------
+
+/** Unsigned hand serial of an NPC ("hand_<serial>" in her metadata), or ''. */
+function stobeNegNpcHandSerial(string $npc, array|false $npcData): string {
+    $sid = '';
+    if (is_array($npcData)) {
+        $sid = strval($npcData['storage_id'] ?? '');
+        if ($sid === '') {
+            $meta = $npcData['metadata'] ?? [];
+            if (is_string($meta)) $meta = json_decode($meta, true);
+            $sid = is_array($meta) ? strval($meta['storage_id'] ?? '') : '';
+        }
+    }
+    if (preg_match('/^hand_(-?\d+)$/', $sid, $m)) {
+        $serial = intval($m[1]);
+        if ($serial < 0) $serial += 4294967296;
+        return $serial > 0 ? strval($serial) : '';
+    }
+    $serial = function_exists('stobeNegSerialFromStorage') ? stobeNegSerialFromStorage($npc) : 0;
+    return $serial > 0 ? strval($serial) : '';
+}
+
+/**
+ * 'dead' or 'unconscious' from the NPC's newest knockout / death / recovered event (she
+ * is the event's actor; matched on her serial when known, else her name), '' when she is
+ * conscious. Dying but conscious counts as conscious. No events: her stored state decides.
+ */
+function stobeNegNpcOutState(string $npc, array|false $npcData = false): string {
+    $npc = trim($npc);
+    if ($npc === '') return '';
+    if ($npcData === false && function_exists('getNpcData')) $npcData = getNpcData($npc);
+    try {
+        $serial = stobeNegNpcHandSerial($npc, $npcData);
+        $row = $serial !== ''
+            ? $GLOBALS['db']->fetchOne(
+                "SELECT type FROM eventlog WHERE type IN ('knockout','death','recovered') AND people ~ $1
+                  ORDER BY localts DESC, rowid DESC LIMIT 1",
+                ['^\["[^"]*\|hand_' . $serial . '"'])
+            : $GLOBALS['db']->fetchOne(
+                "SELECT type FROM eventlog WHERE type IN ('knockout','death','recovered') AND data LIKE $1
+                  ORDER BY localts DESC, rowid DESC LIMIT 1",
+                [$npc . ':%']);
+        if (is_array($row)) {
+            $type = strval($row['type'] ?? '');
+            return $type === 'death' ? 'dead' : ($type === 'knockout' ? 'unconscious' : '');
+        }
+    } catch (Throwable $e) {
+        // fall through to the stored state
+    }
+    if (is_array($npcData) && function_exists('stobeResolveNpcAwarenessState')) {
+        $state = stobeResolveNpcAwarenessState($npcData);
+        if ($state === 'dead') return 'dead';
+        if (in_array($state, ['unconscious', 'knocked_out'], true)) return 'unconscious';
+    }
+    return '';
+}
+
+/** On "X: regained consciousness": her open offer is refreshed and she brings it up again. */
+function stobeNegResumeAfterKnockout(string $eventData): void {
+    if (!preg_match('/^(.+?):\s*regained consciousness/i', trim($eventData), $m)) return;
+    $npc = normalizeParticipantNameToken($m[1]);
+    $base = preg_match('/\[\s*(.+?)\s*\]$/', $npc, $bm) ? $bm[1] : $npc; // "Hesk [Dust Bandit Bowman]"
+    $deal = $GLOBALS['db']->fetchOne(
+        "SELECT * FROM stobe_social_contract WHERE LOWER(npc_name) IN (LOWER($1), LOWER($2))
+            AND status IN ('PROPOSED','COUNTERED') AND updated_at > NOW() - INTERVAL '2 hours'
+          ORDER BY updated_at DESC LIMIT 1",
+        [$npc, $base]
+    );
+    if (!is_array($deal)) return;
+    $GLOBALS['db']->exec("UPDATE stobe_social_contract SET updated_at=NOW() WHERE contract_id=$1", [strval($deal['contract_id'])]);
+    $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+    $terms = stobeNegDecode($deal['terms'] ?? []);
+    $line = function_exists('stobeDealPlainTermsLine') && is_array($terms) && count($terms) > 0
+        ? trim(stobeDealPlainTermsLine($terms, 'COUNTER')) : '';
+    stobeNegQueueDirective(strval($deal['npc_name']), 'resume_deal', strval($deal['contract_id']), [
+        'actions'=>[],
+        'instruction'=>'You just came to after being knocked out. Before that you were negotiating with ' . $player
+            . ($line !== '' ? ' (the offer on the table: ' . $line . ')' : '')
+            . '. You remember it: bring the deal up again in one short line.',
+    ], true);
+    stobeLogInfo('Deal resumes after a knockout (item 48)', ['npc'=>$npc, 'contract_id'=>$deal['contract_id'] ?? '', 'status'=>$deal['status'] ?? '']);
+}
+
 /** Bug 98: newest live health from the fight ("took a major hit (health N%)"), or null. */
 function stobeNegLiveHealthRatio(string $name, int $sinceUnix): ?float {
     try {
@@ -1669,6 +1766,7 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
             if (stobeNegIsPlayerSide($name, $player)) continue;
             $data = getNpcData($name);
             if (!is_array($data)) continue;
+            if (stobeNegNpcOutState($name, $data) !== '') continue; // item 48: knocked out or dead
             $recentNpc = $GLOBALS['db']->fetchOne(
                 "SELECT MAX(created_unix) AS t FROM stobe_negotiation_directive WHERE kind IN ('surrender','assist') AND LOWER(npc_name)=LOWER($1)",
                 [$name]
