@@ -1361,7 +1361,7 @@ function stobeFalseEmptyClaim(string $sentence, array|false $npcData, string $pl
     if (!is_array($npcData) || trim($playerMessage) === '' || !function_exists('stobeParseHandoverRequest')
         || !function_exists('stobeNegInventoryCounts') || !function_exists('stobeNegItemMatchesTerm')) return '';
     $s = strtolower(str_replace(["\u{2019}", "\u{2018}"], "'", $sentence));
-    if (!preg_match("/\b(?:nothing\s+(?:left|more)|none\s+left|no\s+more|(?:all|clean)\s+out\s+of|(?:i'?m|i\s+am)\s+out\s+of|all\s+gone|(?:don'?t|do\s+not)\s+have\s+any|(?:haven'?t|have\s+not)\s+got\s+any|not\s+carrying\s+any|ran\s+out|already\s+(?:handed|gave|given|passed)\s+(?:you\s+|it\s+|them\s+)?(?:all|every|everything|the\s+last))/", $s)) return '';
+    if (!preg_match("/\b(?:nothing\s+(?:left|more)|none\s+left|no\s+more|(?:all|clean)\s+out\s+of|(?:i'?m|i\s+am)\s+out\s+of|all\s+gone|(?:don'?t|do\s+not)\s+have\s+any|(?:haven'?t|have\s+not)\s+got\s+any|not\s+carrying\s+any|ran\s+out|already\s+(?:handed|gave|given|passed)\s+(?:(?:you|it|them|over|it\s+all|them\s+all)\s+)*(?:all|every|everything|the\s+last|the\s+lot|what\s+i\s+(?:had|have|got)|it|them|(?:it|them)\s+all)\b)/", $s)) return '';
     $wanted = stobeParseHandoverRequest($playerMessage);
     if (count($wanted) === 0) return '';
     $counts = stobeNegInventoryCounts(strval($npcData['inventory'] ?? ''));

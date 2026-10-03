@@ -502,6 +502,9 @@ $reply69 = "I already handed you all five strips, remember? There's nothing left
 $fix69 = stobeDropFalseGearClaims($reply69, $npc69, $line69);
 check('item 69: the run m1 denial sentences are dropped', count($fix69['dropped']) === 2, $fix69);
 check('item 69: "no dried meat left" while she has 5 is false', stobeFalseEmptyClaim('No more dried meat, sorry.', $npc69, $line69) === 'Dried Meat');
+check('item 69: "Again? I already handed over what I had." (run m2) is dropped while she has the meat',
+    stobeDropFalseGearClaims('Again? I already handed over what I had.', ['inventory'=>'Dried Meat x4 value 40', 'equipment'=>''], $line69)['text'] === 'Again?');
+check('item 69: "I already gave you it all." is false while she has it', stobeFalseEmptyClaim('I already gave you it all.', $npc69, $line69) === 'Dried Meat');
 check('item 69: a denial about something not asked for is fine', stobeFalseEmptyClaim('No more bread.', $npc69, $line69) === '');
 check('item 69: true when she really has none', stobeFalseEmptyClaim("There's nothing left.", ['inventory'=>'Bread x1 value 10'], $line69) === '');
 check('item 69: no check without a hand-over request', stobeFalseEmptyClaim("There's nothing left.", $npc69, 'How are you?') === '');
