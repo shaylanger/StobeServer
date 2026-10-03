@@ -1794,6 +1794,12 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
         if (count($segments) === 0) {
             return '';
         }
+        // Cap tiers: a trailing purse mode (GIVE_CATS@Shay@500@topup) is kept for Stobe.dll.
+        $purseMode = '';
+        if ($command === 'GIVE_CATS' && count($segments) >= 2
+            && in_array(strtolower(trim(strval($segments[count($segments) - 1]))), ['topup', 'exact'], true)) {
+            $purseMode = '@' . strtolower(trim(strval(array_pop($segments))));
+        }
         $targetName = '';
         $amount = 0;
         if (count($segments) === 1) {
@@ -1817,9 +1823,9 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
             return '';
         }
         if ($targetName !== '') {
-            return $command . '@' . $targetName . '@' . strval($amount);
+            return $command . '@' . $targetName . '@' . strval($amount) . $purseMode;
         }
-        return $command . '@' . strval($amount);
+        return $command . '@' . strval($amount) . $purseMode;
     }
 
     if ($command === 'TAKE_ITEM' || $command === 'GIVE_ITEM') {

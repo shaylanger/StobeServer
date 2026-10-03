@@ -527,7 +527,9 @@ function stobeNegTermActionToken(array $term, string $player): string {
     $qty = max(1, intval($term['quantity'] ?? 1));
     return match ($kind) {
         'STOP_ATTACK', 'SAFE_PASSAGE' => 'STOP_ATTACK@' . $player,
-        'GIVE_CATS' => 'GIVE_CATS@' . $player . '@' . max(1, intval($term['amount'] ?? 0)),
+        'GIVE_CATS' => 'GIVE_CATS@' . $player . '@' . max(1, intval($term['amount'] ?? 0))
+            . (in_array(strval($term['purse'] ?? ''), ['topup','exact'], true) && getSettingBool('NEG_CATS_PURSE_MODES', false)
+                ? '@' . strval($term['purse']) : ''), // cap tiers: Stobe.dll tops up / pays exactly
         'GIVE_ITEM', 'RETURN_ITEM', 'LOAN_ITEM' => $item !== '' ? 'GIVE_ITEM@' . $player . '@' . $item . '@' . $qty : '',
         'FIRST_AID' => 'FIRST_AID@' . $player,
         'SURRENDER' => 'SURRENDER@' . $player,
@@ -1795,10 +1797,12 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 if (stobeNegIsPlayerSide($other, $player)) $hostileToPlayer = true; else $fightingOthers = true;
             }
             $personality = strval($row['personality'] ?? '');
-            [$offerCap, $offerCarried] = function_exists('stobeNegOfferCap') ? stobeNegOfferCap($name, $data) : [0, 0];
-            $offerLine = $offerCap > 0
+            [$offerCap, $offerCarried, , $offerTopup] = (function_exists('stobeNegOfferCap') ? stobeNegOfferCap($name, $data) : [0, 0]) + [3=>false];
+            $offerLine = $offerTopup
+                ? 'You carry about ' . $offerCarried . ' Cats but can have more brought; if you offer Cats, offer at most ' . $offerCap . '. '
+                : ($offerCap > 0
                 ? 'You carry about ' . $offerCarried . ' Cats; if you offer Cats, offer at most ' . $offerCap . ' (keep it modest). '
-                : 'You have next to no Cats: offer an item, information or just beg - do not offer Cats. ';
+                : 'You have next to no Cats: offer an item, information or just beg - do not offer Cats. ');
             stobeLogDebug('Initiative check', ['npc'=>$name, 'ratio'=>round($ratio, 2), 'hostile_to_player'=>$hostileToPlayer, 'fighting_others'=>$fightingOthers, 'surrender_ready'=>$surrenderReady, 'threshold'=>round(stobeNegCourageThreshold($personality, 0.35), 2)]);
             if ($surrenderReady && $hostileToPlayer && stobeNegPhaseEnabled(4) && $ratio < stobeNegCourageThreshold($personality, 0.35)) {
                 stobeNegQueueDirective($name, 'surrender', '', [
@@ -2082,7 +2086,17 @@ function stobeNegDealPromptExtras(string $npc, array $npcData, array $openDeal =
     $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
     $lines = [];
     $money = stobeNegMoney(stobeNegNpcRow($npc));
-    if ($money['known']) $lines[] = 'Your purse: ' . $money['value'] . ' Cats (you cannot promise more than you have).';
+    if (function_exists('stobeNegOfferCap')) {
+        // Cap tiers / item 53: her real limit, and no "I'm broke" when she has money.
+        [$capNow, $carriedNow, , $topupNow] = stobeNegOfferCap($npc, $npcData) + [3=>false];
+        $lines[] = $topupNow
+            ? 'You carry about ' . $carriedNow . ' Cats, but you can have more brought: the most you will pay in a deal is ' . $capNow . ' Cats.'
+            : ($capNow > 0
+                ? 'You carry about ' . $carriedNow . ' Cats; the most you will pay in a deal is ' . $capNow . ' Cats. Asked for more, refuse or offer ' . $capNow . ' at most; do not claim you have no money.'
+                : 'You have no Cats to pay with: offer an item or something else instead.');
+    } elseif ($money['known']) {
+        $lines[] = 'Your purse: ' . $money['value'] . ' Cats (you cannot promise more than you have).';
+    }
     if (count($openDeal) > 0) {
         $kind = strval($openDeal['kind'] ?? 'combat');
         $rounds = intval($openDeal['rounds'] ?? 0);

@@ -329,26 +329,96 @@ function stobeDealResponseFormat(array $format): array {
     return $format;
 }
 
+// ---- Deal-offer cap tiers (Shay, 2026-10-02) ---------------------------------------
+
+const STOBE_NEG_TIER_CAPS = [0=>100, 1=>300, 2=>5000, 3=>10000, 4=>50000, 5=>100000];
+const STOBE_NEG_TIER_LABELS = [0=>'destitute', 1=>'common', 2=>'professional', 3=>'elite', 4=>'local leader', 5=>'ruler'];
+const STOBE_NEG_TOPUP_COOLDOWN_GAMETS = 259200; // one top-up deal per NPC per 3 game days
+
+/** Template wealth from the survey: lower template name => [cats_min, cats_max, bounty]. */
+function stobeNegWealthTemplates(): array {
+    static $table = null;
+    if ($table === null) {
+        $raw = @file_get_contents(dirname(__DIR__) . '/data/npc_wealth_templates.json');
+        $table = is_string($raw) ? (json_decode($raw, true) ?: []) : [];
+    }
+    return $table;
+}
+
 /**
- * Bug 91: most Cats an NPC offers to be spared / for help. Common bandits
- * 50-300, leaders/bosses up to ~1000, wealthy NPCs scaled to their purse;
- * never more than 35 % of what they carry (Shay, 2026-10-01).
- * Returns [cap, carried, tier].
+ * The NPC's wealth tier: ['tier'=>0..5, 'label', 'cap', 'template', 'tmin', 'tmax' (null = unknown), 'bounty'].
+ * Template = the bracketed part of "Vorl [Dust Bandit Bowman]", else the name.
+ */
+function stobeNegWealthTier(string $npc, array $npcData): array {
+    $name = trim($npc);
+    $template = preg_match('/\[\s*([^\]]+?)\s*\]\s*$/', $name, $m) ? $m[1] : $name;
+    $key = strtolower(preg_replace('/\s+/', ' ', $template) ?? $template);
+    $row = stobeNegWealthTemplates()[$key] ?? null;
+    $bounty = max(intval($npcData['bounty'] ?? 0), is_array($row) ? intval($row[2] ?? 0) : 0);
+    $who = strtolower($template . ' | ' . $name);
+    if (preg_match('/\b(holy lord|phoenix|emperor tengu|tengu|bugmaster)\b/', $who)) $tier = 5;
+    elseif (preg_match('/\b(lords?|lady|nobles?|nobleman|noblewoman|market master|slave master|high inquisitor|shogun|emperor|king|queen)\b/', $who)) $tier = 4;
+    elseif (preg_match('/\b(high paladin|paladin elite|samurai elite|samurai sergeant|inquisitor captain|inquisitor|trader boss|mercenary captain)\b/', $who)) $tier = 3;
+    elseif (preg_match('/\b(samurai|paladins?|holy sentinel|sentinels?|shek|mercenar(?:y|ies)|caravan guard|barman|bartender|bar owner|barkeep|shopkeeper|traders?|merchants?|innkeeper|captain)\b/', $who)) $tier = 2;
+    elseif (preg_match('/\b(hungry|starving|slaves?|savage|beggars?|vagrants?)\b/', $who)) $tier = 0;
+    else $tier = 1;
+    if ($bounty >= 100000) $tier = max($tier, 5);
+    elseif ($bounty >= 30000) $tier = max($tier, 4);
+    elseif ($bounty >= 10000) $tier = max($tier, 3);
+    return ['tier'=>$tier, 'label'=>STOBE_NEG_TIER_LABELS[$tier], 'cap'=>STOBE_NEG_TIER_CAPS[$tier], 'template'=>$template,
+        'tmin'=>is_array($row) ? intval($row[0]) : null, 'tmax'=>is_array($row) ? intval($row[1]) : null, 'bounty'=>$bounty];
+}
+
+/** A top-up deal (tiers 3-5) with this NPC in the last 3 game days (1 h real when no game time is known). */
+function stobeNegTopupOnCooldown(string $npc): bool {
+    $base = preg_match('/\[\s*(.+?)\s*\]$/', trim($npc), $bm) ? $bm[1] : trim($npc);
+    try {
+        $rows = $GLOBALS['db']->fetchAll(
+            "SELECT terms, EXTRACT(EPOCH FROM (NOW() - updated_at))::bigint AS age FROM stobe_social_contract
+              WHERE LOWER(npc_name) IN (LOWER($1), LOWER($2)) AND status IN ('ACCEPTED','AWAITING_PERFORMANCE','COMPLETE')
+                AND terms::text ILIKE '%topup%' ORDER BY updated_at DESC LIMIT 10",
+            [trim($npc), $base]
+        );
+    } catch (Throwable $e) {
+        return false;
+    }
+    $now = function_exists('stobeNegLatestGamets') ? stobeNegLatestGamets() : 0;
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        $terms = json_decode(strval($row['terms'] ?? '[]'), true);
+        foreach (is_array($terms) ? $terms : [] as $t) {
+            if (!is_array($t) || ($t['purse'] ?? '') !== 'topup') continue;
+            $at = intval($t['topup_gamets'] ?? 0);
+            if ($now > 0 && $at > 0) {
+                if ($at <= $now && $now - $at < STOBE_NEG_TOPUP_COOLDOWN_GAMETS) return true;
+            } elseif (intval($row['age'] ?? 0) < 3600) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Most Cats an NPC offers the player in a fight deal (cap tiers). Tiers 0-2: what she
+ * carries, at most the tier cap. Tiers 3-5: the tier cap; the purse is topped up when
+ * she carries less (unless she had a top-up deal in the last 3 game days).
+ * Carried = min(real purse, template max); unknown purse -> template middle.
+ * Returns [cap, carried, tier label, topup allowed].
  */
 function stobeNegOfferCap(string $npc, array $npcData): array {
     $meta = function_exists('normalizeNpcMetadataPayload')
         ? normalizeNpcMetadataPayload($npcData['metadata'] ?? []) : (is_array($npcData['metadata'] ?? null) ? $npcData['metadata'] : []);
-    $carried = max(0, intval($meta['money'] ?? ($npcData['money'] ?? 0)));
-    $who = strtolower($npc . ' ' . strval($npcData['faction'] ?? '') . ' ' . strval($meta['faction'] ?? '') . ' ' . strval($meta['title'] ?? ''));
-    if (preg_match('/\b(traders?|merchants?|caravans?|nobles?|lords?|lady|shopkeepers?|barman|bartenders?|innkeepers?)\b/', $who)) {
-        $tier = 'wealthy'; $tierCap = PHP_INT_MAX;
-    } elseif (preg_match('/\b(leaders?|boss|king|queen|chief|captain|warlord|commander|elder)\b/', $who)) {
-        $tier = 'leader'; $tierCap = 1000;
+    $w = stobeNegWealthTier($npc, $npcData);
+    $purseKnown = array_key_exists('money', $meta) || array_key_exists('money', $npcData);
+    $purse = max(0, intval($meta['money'] ?? ($npcData['money'] ?? 0)));
+    if ($w['tmax'] !== null) {
+        $carried = $purseKnown ? min($purse, intval($w['tmax'])) : intdiv(intval($w['tmin']) + intval($w['tmax']), 2);
     } else {
-        $tier = 'common'; $tierCap = 300;
+        $carried = $purse;
     }
-    $cap = min($tierCap, intval(floor($carried * 0.35)));
-    return [max(0, $cap), $carried, $tier];
+    $topup = $w['tier'] >= 3 && !stobeNegTopupOnCooldown($npc);
+    $cap = $topup ? $w['cap'] : min($w['cap'], $carried);
+    return [max(0, $cap), $carried, $w['label'], $topup];
 }
 
 /**
@@ -526,8 +596,8 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
         if (!$ceasefire) $terms[] = ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player'];
     }
     $capped = null;
-    if (in_array($kind, ['surrender','assist'], true)) {
-        [$offerCap, $offerCarried, $offerTier] = stobeNegOfferCap($npc, $npcData);
+    if (in_array($kind, ['surrender','assist','combat'], true)) {
+        [$offerCap, $offerCarried, $offerTier, $offerTopup] = stobeNegOfferCap($npc, $npcData) + [3=>false];
         foreach ($terms as $ti => $term) {
             if (($term['kind'] ?? '') !== 'GIVE_CATS' || ($term['by'] ?? '') !== 'npc') continue;
             $amount = intval($term['amount'] ?? 0);
@@ -541,6 +611,16 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
             }
         }
         $terms = array_values($terms);
+        // Cap tiers: tiers 3-5 have the rest brought (top-up); tiers 0-2 pay exactly or not at all.
+        foreach ($terms as $ti => $term) {
+            if (($term['kind'] ?? '') !== 'GIVE_CATS' || ($term['by'] ?? '') !== 'npc') continue;
+            if ($offerTopup && intval($term['amount'] ?? 0) > $offerCarried) {
+                $terms[$ti]['purse'] = 'topup';
+                $terms[$ti]['topup_gamets'] = function_exists('stobeNegLatestGamets') ? stobeNegLatestGamets() : 0;
+            } else {
+                $terms[$ti]['purse'] = 'exact';
+            }
+        }
         if ($capped !== null && $decision === 'ACCEPT') {
             // Bug 130: she can't accept more than the cap; what's recorded is her counter at the cap.
             $decision = 'COUNTER';
