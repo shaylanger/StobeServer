@@ -1,0 +1,25 @@
+# id: REL-p2-05-enabled-affinity
+# covers: SR02 in enabled mode (real affinity change), SR41 (R4 excluded while REL is enabled)
+# fixture: auto-home
+# reset: fresh  (a kah-* copy; relationships follow the loaded save, so reloading the fixture undoes this)
+# needs: Capture=1; server mode ENABLED (--set-mode enabled) only for this scenario, then --set-mode off; RELATIONSHIP_FIGHTS_COUNT left as is
+# verify: php tools/social_relationship_inspect.php --relation "<TNAME>" "Malzin" -> aff between -40 and -8 (was 0 / no entry); php tools/social_relationship_inspect.php --relation "Malzin" "<TNAME>" -> no entry or aff 0 (R4 would give -4);
+#   php tools/social_relationship_inspect.php --pair-effects -> applied=true rows only for <TNAME> -> Malzin. Then: --set-mode off; reload the fixture (or purge) so the change is gone.
+@wait-world
+@sleep 8
+speed 0
+@set MALZIN where Malzin ~ Malzin (#\d+)
+spawn "Hungry Bandit" Drifters near Malzin dist 20 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+setname ${BANDIT} "Rel Dov"
+stobe_say "Rel Dov" "Dov, stay where you are."
+speed 1
+@sleep 20
+speed 0
+@set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+attack Malzin ${BANDIT}
+speed 1
+@until 90 where ${BANDIT} ~ KO
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${MALZIN} target=${BANDIT}
+teleport ${BANDIT} Shay dist 300

@@ -1,0 +1,30 @@
+# id: REL-p2-01-player-first-strike
+# covers: SR02 (victim->attacker only), SR03 (retaliation free), SR05 (one escalating harm budget), SR34 (named NPC binds to its profile)
+# fixture: auto-home
+# reset: fresh
+# needs: Delivery 2 (server feature/social-phase1 at the delivery commit + rel-native-phase2.patch build); StobeCustom.ini [SocialRelationships] Capture=1; server mode shadow (--set-mode shadow)
+# verify: in the live server tree, with the names printed by @set TNAME:
+#   php tools/social_relationship_inspect.php --pair-effects --check-shadow --expect-effect "<TNAME>" "Shay" -40 -8 --expect-none "Shay" "<TNAME>" --expect-none "Malzin" "<TNAME>"   -> exit 0
+#   pair_effects shows <TNAME> -> Shay components aggression:+ injury/serious_assault (escalation: total never below the KO band -40); if Malzin joined, <TNAME> -> Malzin aggression too.
+#   If the effect rows are missing: php tools/social_relationship_inspect.php --interpret-log 40 and report the statuses (unresolved_identity = game probe 3, no_encounter = probe 2).
+@wait-world
+@sleep 8
+speed 0
+stobe_ping ~ speaker=Shay
+@set SHAY where Shay ~ Shay (#\d+)
+spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+setname ${BANDIT} "Rel Vorn"
+stobe_say "Rel Vorn" "Hello there. Who are you?"
+speed 1
+@sleep 20
+speed 0
+@set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+attack Shay ${BANDIT}
+speed 1
+@until 90 where ${BANDIT} ~ KO
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=#\d+ target=${BANDIT} facts="level":"knockout"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${BANDIT} target=#\d+
+teleport ${BANDIT} Shay dist 300

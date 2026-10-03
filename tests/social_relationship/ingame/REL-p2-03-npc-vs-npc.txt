@@ -1,0 +1,38 @@
+# id: REL-p2-03-npc-vs-npc
+# covers: SR03/SR04 NPC vs NPC (no player involved): first striker charged, retaliation free
+# fixture: auto-home
+# reset: fresh
+# needs: as REL-p2-01 (Capture=1, mode shadow)
+# verify: php tools/social_relationship_inspect.php --pair-effects --check-shadow --expect-effect "<BNAME>" "<ANAME>" -40 -8 --expect-none "<ANAME>" "<BNAME>"   -> exit 0
+#   Game probe 2: does attackingYou fire for NPC/NPC fights? (the two @log attack lines). If no structured attack line appears, report it: NPC/NPC origin then stays blocked.
+@wait-world
+@sleep 8
+speed 0
+spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
+@set A chars 60 ~ Hungry Bandit (#\d+)
+setname ${A} "Rel Arn"
+spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
+@set B chars 60 ~ Hungry Bandit (#\d+)
+setname ${B} "Rel Bek"
+faction ${B} "Traders Guild"
+@set B chars 60 ~ Rel Bek (#\d+)
+stobe_say "Rel Arn" "Arn, a word."
+speed 1
+@sleep 15
+speed 0
+stobe_say "Rel Bek" "Bek, a word."
+speed 1
+@sleep 15
+speed 0
+@set ANAME where ${A} ~ ^(.+?) #\d+
+@set BNAME where ${B} ~ ^(.+?) #\d+
+teleport ${A} Shay dist 120
+teleport ${B} ${A} dist 3
+order ${A} UNPROVOKED_FOCUSED_MELEE_ATTACK target ${B}
+speed 1
+@sleep 25
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${A} target=${B}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${B} target=${A}
+ko ${A} 30
+ko ${B} 30

@@ -56,4 +56,9 @@ foreach (range(1,200) as $seed) {
  check($d['new_affinity']>=-100 && $d['new_affinity']<=100 && $d['delta']>=0,'bounded aid property');
 }
 if (isset($argv[1])) { $native=SocialEventContract::validate(file_get_contents($argv[1])); check($native['actor']['serial']===1 && $native['facts']['message']==="quote\"\n",'native PHP cross-language contract'); }
+if (isset($argv[2])) { $native=SocialEventContract::validate(file_get_contents($argv[2]));
+ check($native['facts']['source']==='structured' && $native['event_kind']==='attack','native structured kind');
+ check($native['actor']['storage_id']==='hand_11' && $native['actor']['in_player_faction']===true && $native['actor']['conscious']===true,'native structured actor');
+ check($native['target']['conscious']===null && $native['target']['storage_id']===null && $native['target']['name']==='Vorl [Dust "Bandit"]','native structured unknowns stay null');
+ check($native['facts']['victim_targeting_actor']===false && $native['facts']['inventory']===['Dried Meat'=>3],'native structured facts'); }
 echo "$n unit contract/rule checks passed\n";

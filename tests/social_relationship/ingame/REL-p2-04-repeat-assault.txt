@@ -1,0 +1,22 @@
+# id: REL-p2-04-repeat-assault
+# covers: SR06 (a second distinct assault after the encounter ended counts again, x1.15 max), encounter idle calibration
+# fixture: auto-home
+# reset: keep  (right after REL-p2-01, same load; uses its bandit "Rel Vorn")
+# needs: as REL-p2-01
+# verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --check-shadow -> "<TNAME>" -> "Shay" lists TWO aggression rows (two combat:<seq> incidents), the second within [-18,-9];
+#   report the two time lines (game probe 4: game minutes per real second at speed 10, to calibrate encounter_idle_seconds=600).
+@set BANDIT where "Rel Vorn" ~ (#\d+)
+time ~ game_hours=
+teleport ${BANDIT} Shay dist 15
+health ${BANDIT} 100
+speed 10
+@wait-game 15 600
+speed 0
+time ~ game_hours=
+attack Shay ${BANDIT}
+speed 1
+@sleep 8
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=#\d+ target=${BANDIT}
+ko ${BANDIT} 30
+teleport ${BANDIT} Shay dist 300

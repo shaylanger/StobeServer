@@ -16,6 +16,7 @@ final class SocialRules
         }
     }
     public function version(): string { return $this->config['version']; }
+    public function section(string $key): array { $value = $this->config[$key] ?? []; return is_array($value) ? $value : []; }
     public function category(string $component): string
     {
         $category = $this->config['categories'][$component] ?? null;
@@ -40,11 +41,22 @@ final class SocialRules
         $repetition = $positive ? ($life ? 1.0 : ($economic ? pow(.5, min(20,$repeat)) : ($repeat ? 0 : 1))) : 1.0;
         $affinity = $positive && $old < -30 ? ($old <= -76 ? .35 : .6) : 1.0;
         if ($life) $affinity = max(.65, $affinity);
-        $raw = (int)round($base * $personality * $confidence * $repetition * $affinity);
+        // A second distinct deliberate assault by the same culprit can weigh up to 1.15 (never below 1).
+        $severity = $positive ? 1.0 : max(1.0, min(1.15, (float)($context['severity'] ?? 1)));
+        $raw = (int)round($base * $personality * $confidence * $repetition * $affinity * $severity);
         if ($economic) $raw = max(0, min($raw, $this->config['trade_day_cap'] - (int)($context['economic_day_gain'] ?? 0), $this->config['economic_affinity_ceiling'] - $old));
+        $total = $raw;
+        // Escalation inside one incident: only the difference to what this incident already charged
+        // (hit -> KO -> limb is one growing harm budget, not stacked full penalties).
+        if (array_key_exists('prior_total', $context)) {
+            $prior = (int)$context['prior_total'];
+            $raw = $positive ? max(0, $raw - max(0, $prior)) : min(0, $raw - min(0, $prior));
+        }
         $new = max(-100, min(100, $old + $raw));
-        return ['delta'=>$new-$old, 'base'=>$base, 'new_affinity'=>$new, 'rules_version'=>$this->version(),
-            'modifiers'=>compact('personality','confidence','repetition','affinity'), 'reason'=>'known_outcome'];
+        // Certain severe outcomes may force a ceiling (e.g. enslaver -56); never raises affinity.
+        if (!$positive && isset($context['cap_max']) && ($belief['confidence'] ?? '') === 'certain') $new = min($new, (int)$context['cap_max']);
+        return ['delta'=>$new-$old, 'base'=>$base, 'total'=>$total, 'new_affinity'=>$new, 'rules_version'=>$this->version(),
+            'modifiers'=>compact('personality','confidence','repetition','affinity','severity'), 'reason'=>'known_outcome'];
     }
     public static function recruitment(int $affinity, array $trust, array $grievances, bool $vanilla = false): bool
     {

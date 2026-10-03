@@ -10,6 +10,11 @@
  *   php tools/social_relationship_inspect.php --check-stale   exit 1 if an older load's event arrived after a newer load's first event
  *   php tools/social_relationship_inspect.php --expect-pair 123 456 [kind]   exit 1 unless the CURRENT load (session campaign/load/client)
  *                                                  captured an event with actor serial 123 and target serial 456
+ *   php tools/social_relationship_inspect.php --pair-effects         + per observer->culprit name: summed delta, components, applied (current load)
+ *   php tools/social_relationship_inspect.php --expect-effect "Observer" "Culprit" -40 -8   exit 1 unless that summed delta (current load) is in range
+ *   php tools/social_relationship_inspect.php --expect-none "Observer" "Culprit"   exit 1 if any non-zero effect exists for that pair (current load)
+ *   php tools/social_relationship_inspect.php --relation "Observer" "Target"   the stored affinity (relationship map) of observer toward target
+ *   php tools/social_relationship_inspect.php --interpret-log 30    last 30 SOCIAL_INTERPRET lines from log/relationship_worker.log
  *   php tools/social_relationship_inspect.php --set-mode off|shadow|enabled   prints the previous mode (restore with it)
  *   php tools/social_relationship_inspect.php --purge-all --yes            empties the six social tables (test data only)
  *
@@ -112,6 +117,38 @@ if ($has('--check-stale')) {
         GROUP BY 1,2");
     $out['check_stale'] = $bad ? ['FAIL' => $bad] : 'pass';
     if ($bad) $exit = 1;
+}
+$current = [strval($session['character_id'] ?? ''), strval($session['load_id'] ?? '')];
+$pairSql = "SELECT detail->>'observer_name' AS observer, detail->>'culprit_name' AS culprit, sum(delta) AS delta,
+        string_agg(component || ':' || delta, ',' ORDER BY game_ts) AS components, bool_or(applied) AS applied
+    FROM social_effect WHERE campaign_id=\$1 AND timeline_epoch=\$2 GROUP BY 1,2 ORDER BY 1,2";
+if ($has('--pair-effects')) $out['pair_effects'] = $q($pairSql, $current);
+$pairDelta = static function (string $observer, string $culprit) use ($q, $pairSql, $current): ?int {
+    foreach ($q($pairSql, $current) as $row) if (strcasecmp(strval($row['observer']), $observer) === 0 && strcasecmp(strval($row['culprit']), $culprit) === 0) return (int)$row['delta'];
+    return null;
+};
+if (($i = array_search('--expect-effect', $args, true)) !== false) {
+    [$o, $c, $min, $max] = [strval($args[$i+1] ?? ''), strval($args[$i+2] ?? ''), (int)($args[$i+3] ?? 0), (int)($args[$i+4] ?? 0)];
+    $d = $pairDelta($o, $c);
+    $pass = $d !== null && $d >= min($min, $max) && $d <= max($min, $max);
+    $out['expect_effect'] = ($pass ? 'pass' : 'FAIL') . ": $o -> $c delta=" . ($d === null ? 'none' : $d) . " expected [$min,$max]";
+    if (!$pass) $exit = 1;
+}
+if (($i = array_search('--expect-none', $args, true)) !== false) {
+    [$o, $c] = [strval($args[$i+1] ?? ''), strval($args[$i+2] ?? '')];
+    $d = $pairDelta($o, $c);
+    $pass = $d === null || $d === 0;
+    $out['expect_none'] = ($pass ? 'pass' : 'FAIL') . ": $o -> $c delta=" . ($d === null ? 'none' : $d);
+    if (!$pass) $exit = 1;
+}
+if (($i = array_search('--relation', $args, true)) !== false) {
+    $npc = getNpcData(strval($args[$i+1] ?? ''));
+    $out['relation'] = ['observer'=>$args[$i+1] ?? '', 'target'=>$args[$i+2] ?? '', 'entry'=>$npc ? stobeRelationshipEntryFor($npc, strval($args[$i+2] ?? '')) : 'observer not found'];
+}
+if (($n = $opt('--interpret-log')) !== null) {
+    $file = dirname(__DIR__) . '/log/relationship_worker.log';
+    $lines = is_file($file) ? preg_grep('/SOCIAL_INTERPRET/', file($file, FILE_IGNORE_NEW_LINES) ?: []) : [];
+    $out['interpret_log'] = array_values(array_slice($lines ?: [], -max(1, min(500, intval($n)))));
 }
 if (($i = array_search('--expect-pair', $args, true)) !== false) {
     $actor = ltrim(strval($args[$i + 1] ?? ''), '#'); $target = ltrim(strval($args[$i + 2] ?? ''), '#');

@@ -1,170 +1,186 @@
 {
-  "version": "phase1-v1",
-  "ranges": {
-    "aggression": [
-      -15,
-      -8
-    ],
-    "serious_assault": [
-      -40,
-      -25
-    ],
-    "critical_harm": [
-      -55,
-      -35
-    ],
-    "maiming": [
-      -70,
-      -45
-    ],
-    "defensive_maiming": [
-      -20,
-      -8
-    ],
-    "accident": [
-      -3,
-      0
-    ],
-    "routine_healing": [
-      1,
-      3
-    ],
-    "meaningful_aid": [
-      5,
-      12
-    ],
-    "lifesaving": [
-      20,
-      35
-    ],
-    "food_aid": [
-      2,
-      5
-    ],
-    "survival_food": [
-      6,
-      12
-    ],
-    "outsider_pickup": [
-      -12,
-      -5
-    ],
-    "safe_rescue": [
-      8,
-      18
-    ],
-    "imprisonment": [
-      -40,
-      -20
-    ],
-    "enslavement": [
-      -90,
-      -65
-    ],
-    "chains_freed": [
-      8,
-      18
-    ],
-    "slave_escape": [
-      15,
-      65
-    ],
-    "theft": [
-      -18,
-      -8
-    ],
-    "major_theft": [
-      -35,
-      -20
-    ],
-    "primary_weapon_theft": [
-      -45,
-      -25
-    ],
-    "all_property_theft": [
-      -55,
-      -35
-    ],
-    "fair_trade": [
-      0,
-      0
-    ],
-    "favorable_trade": [
-      1,
-      2
-    ],
-    "generous_trade": [
-      2,
-      4
-    ],
-    "exceptional_trade": [
-      4,
-      6
-    ],
-    "gift": [
-      1,
-      4
-    ],
-    "kept_coercive_deal": [
-      0,
-      2
-    ],
-    "kept_promise": [
-      1,
-      3
-    ],
-    "broken_promise": [
-      -15,
-      -5
-    ],
-    "betrayal": [
-      -40,
-      -20
-    ],
-    "defense_of_friend": [
-      5,
-      15
-    ],
-    "insult": [
-      -8,
-      -3
-    ]
+ "version": "phase2-v1",
+ "ranges": {
+  "aggression": [
+   -15,
+   -8
+  ],
+  "injury": [
+   -28,
+   -15
+  ],
+  "serious_assault": [
+   -40,
+   -25
+  ],
+  "critical_harm": [
+   -55,
+   -35
+  ],
+  "maiming": [
+   -70,
+   -45
+  ],
+  "defensive_maiming": [
+   -20,
+   -8
+  ],
+  "accident": [
+   -3,
+   0
+  ],
+  "routine_healing": [
+   1,
+   3
+  ],
+  "meaningful_aid": [
+   5,
+   12
+  ],
+  "lifesaving": [
+   20,
+   35
+  ],
+  "food_aid": [
+   2,
+   5
+  ],
+  "survival_food": [
+   6,
+   12
+  ],
+  "outsider_pickup": [
+   -12,
+   -5
+  ],
+  "safe_rescue": [
+   8,
+   18
+  ],
+  "imprisonment": [
+   -40,
+   -20
+  ],
+  "enslavement": [
+   -90,
+   -65
+  ],
+  "chains_freed": [
+   8,
+   18
+  ],
+  "slave_escape": [
+   15,
+   65
+  ],
+  "theft": [
+   -18,
+   -8
+  ],
+  "major_theft": [
+   -35,
+   -20
+  ],
+  "primary_weapon_theft": [
+   -45,
+   -25
+  ],
+  "all_property_theft": [
+   -55,
+   -35
+  ],
+  "fair_trade": [
+   0,
+   0
+  ],
+  "favorable_trade": [
+   1,
+   2
+  ],
+  "generous_trade": [
+   2,
+   4
+  ],
+  "exceptional_trade": [
+   4,
+   6
+  ],
+  "gift": [
+   1,
+   4
+  ],
+  "kept_coercive_deal": [
+   0,
+   2
+  ],
+  "kept_promise": [
+   1,
+   3
+  ],
+  "broken_promise": [
+   -15,
+   -5
+  ],
+  "betrayal": [
+   -40,
+   -20
+  ],
+  "defense_of_friend": [
+   5,
+   15
+  ],
+  "insult": [
+   -8,
+   -3
+  ]
+ },
+ "trade_day_cap": 6,
+ "economic_affinity_ceiling": 30,
+ "recruitment_affinity": 76,
+ "categories": {
+  "aggression": "combat",
+  "injury": "combat",
+  "serious_assault": "combat",
+  "critical_harm": "combat",
+  "maiming": "combat",
+  "defensive_maiming": "combat",
+  "accident": "combat",
+  "defense_of_friend": "combat",
+  "routine_healing": "aid",
+  "meaningful_aid": "aid",
+  "lifesaving": "aid",
+  "food_aid": "aid",
+  "survival_food": "aid",
+  "safe_rescue": "aid",
+  "outsider_pickup": "carry",
+  "imprisonment": "carry",
+  "enslavement": "slavery",
+  "chains_freed": "slavery",
+  "slave_escape": "slavery",
+  "theft": "property",
+  "major_theft": "property",
+  "primary_weapon_theft": "property",
+  "all_property_theft": "property",
+  "fair_trade": "economy",
+  "favorable_trade": "economy",
+  "generous_trade": "economy",
+  "exceptional_trade": "economy",
+  "gift": "economy",
+  "kept_coercive_deal": "agreements",
+  "kept_promise": "agreements",
+  "broken_promise": "agreements",
+  "betrayal": "agreements",
+  "insult": "dialogue"
+ },
+ "combat": {
+  "encounter_idle_seconds": 600,
+  "repeat_assault_severity": 1.15,
+  "harm_levels": {
+   "aggression": "aggression",
+   "injury": "injury",
+   "knockout": "serious_assault",
+   "maiming": "maiming"
   },
-  "trade_day_cap": 6,
-  "economic_affinity_ceiling": 30,
-  "recruitment_affinity": 76,
-  "categories": {
-    "aggression": "combat",
-    "serious_assault": "combat",
-    "critical_harm": "combat",
-    "maiming": "combat",
-    "defensive_maiming": "combat",
-    "accident": "combat",
-    "defense_of_friend": "combat",
-    "routine_healing": "aid",
-    "meaningful_aid": "aid",
-    "lifesaving": "aid",
-    "food_aid": "aid",
-    "survival_food": "aid",
-    "safe_rescue": "aid",
-    "outsider_pickup": "carry",
-    "imprisonment": "carry",
-    "enslavement": "slavery",
-    "chains_freed": "slavery",
-    "slave_escape": "slavery",
-    "theft": "property",
-    "major_theft": "property",
-    "primary_weapon_theft": "property",
-    "all_property_theft": "property",
-    "fair_trade": "economy",
-    "favorable_trade": "economy",
-    "generous_trade": "economy",
-    "exceptional_trade": "economy",
-    "gift": "economy",
-    "kept_coercive_deal": "agreements",
-    "kept_promise": "agreements",
-    "broken_promise": "agreements",
-    "betrayal": "agreements",
-    "insult": "dialogue"
-  }
+  "note": "encounter_idle_seconds is game seconds (game_ts); calibrate with the REL-p2 game probe"
+ }
 }

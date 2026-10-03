@@ -1,0 +1,29 @@
+# id: REL-p2-02-npc-attacks-squad
+# covers: SR02/SR03 with the player side as victim and defender, SR04 (Shay joining to defend Malzin is not aggression)
+# fixture: auto-home
+# reset: fresh
+# needs: as REL-p2-01 (Capture=1, mode shadow)
+# verify: php tools/social_relationship_inspect.php --pair-effects --check-shadow --expect-effect "Malzin" "<TNAME>" -40 -8 --expect-none "<TNAME>" "Malzin" --expect-none "<TNAME>" "Shay"   -> exit 0
+#   Game probe 1: if the order step fails or the bandit never attacks, report the step; fallback line: fight ${BANDIT} Malzin (then the first attack event decides the initiator; record which).
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+)
+@set MALZIN where Malzin ~ Malzin (#\d+)
+spawn "Hungry Bandit" Drifters near Malzin dist 20 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+setname ${BANDIT} "Rel Kesh"
+stobe_say "Rel Kesh" "You there, state your business."
+speed 1
+@sleep 20
+speed 0
+@set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+order ${BANDIT} UNPROVOKED_FOCUSED_MELEE_ATTACK target Malzin
+speed 1
+@sleep 10
+@sleep 15
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${BANDIT} target=${MALZIN}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${MALZIN} target=${BANDIT}
+ko ${BANDIT} 30
+teleport ${BANDIT} Shay dist 300

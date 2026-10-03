@@ -39,5 +39,24 @@ per request: no restart. **Always end a REL batch with `--set-mode off`** and Ca
 | 4 | `REL-p1-04-reload-stale.txt` | same launch (keep) | shadow | `inspect --events 20 --check-stale --check-shadow --expect-pair <SHAY2> <BANDIT2> combat` exit 0; load_id higher than in 3 |
 | end | - | - | `--set-mode off`, `--purge-all --yes`; Capture=0 | - |
 
+## Phase 2 combat (Delivery 2 build; one launch with Capture=1)
+
+Named NPCs are needed: generic template names ("Hungry Bandit") are never written into relationship
+maps. Each scenario renames its bandit (`setname`) and talks to it once (`stobe_say`) so the server has
+a profile; `@set TNAME`/`ANAME`/`BNAME` print the final names for the checks.
+
+| Order | File | Server mode before | Check after (live tree) |
+|---|---|---|---|
+| 1 | `REL-p2-01-player-first-strike.txt` (fresh) | `--set-mode shadow` | `--pair-effects --check-shadow --expect-effect "<TNAME>" "Shay" -40 -8 --expect-none "Shay" "<TNAME>" --expect-none "Malzin" "<TNAME>"` |
+| 2 | `REL-p2-04-repeat-assault.txt` (keep) | shadow | `--pair-effects --effects 20 --check-shadow`: two aggression rows for `<TNAME>` -> Shay, the second in [-18,-9]; report both `time` lines |
+| 3 | `REL-p2-02-npc-attacks-squad.txt` (fresh) | shadow | `--pair-effects --check-shadow --expect-effect "Malzin" "<TNAME>" -40 -8 --expect-none "<TNAME>" "Malzin" --expect-none "<TNAME>" "Shay"` |
+| 4 | `REL-p2-03-npc-vs-npc.txt` (fresh) | shadow | `--pair-effects --check-shadow --expect-effect "<BNAME>" "<ANAME>" -40 -8 --expect-none "<ANAME>" "<BNAME>"` |
+| 5 | `REL-p2-05-enabled-affinity.txt` (fresh, kah-* copy) | `--set-mode enabled` | `--relation "<TNAME>" "Malzin"` aff in [-40,-8]; `--relation "Malzin" "<TNAME>"` none/0 (R4 off); then `--set-mode off` and reload the fixture |
+| end | - | `--set-mode off`, `--purge-all --yes`, Capture=0 | - |
+
+When a check fails, add `--interpret-log 40 --events 60` to the report: each structured event logs its
+interpretation (`SOCIAL_INTERPRET` in `log/relationship_worker.log`) with statuses such as
+`unresolved_identity`, `no_encounter`, `defence`, `pending_awareness`, `duplicate`.
+
 Pass = every step PASS and every check exit 0. A failure becomes a REL bug row (owner REL); save
 stobe.log and `inspect --events 100 --effects 100` output with it.

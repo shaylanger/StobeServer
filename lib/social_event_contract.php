@@ -9,7 +9,9 @@ final class SocialEventContract
     public const MAX_WITNESSES = 32;
     public const KINDS = ['combat', 'combat_start', 'combat_end', 'major_damage', 'knockout',
         'recovered', 'death', 'limb_loss', 'healing', 'slavery', 'imprisonment', 'carry',
-        'looting', 'item_pickup', 'trade', 'eat', 'predation', 'dialogue', 'semantic'];
+        'looting', 'item_pickup', 'trade', 'eat', 'predation', 'dialogue', 'semantic',
+        // Structured native facts (facts.source = "structured"), explicit roles: actor did it, target had it done.
+        'attack', 'harm', 'item_transfer', 'enslaved', 'freed'];
 
     public static function token(mixed $value, string $field): string
     {
@@ -37,12 +39,20 @@ final class SocialEventContract
         if (!is_string($name) || strlen($name) > 180 || preg_match('/[\x00-\x1f]/', $name)) {
             throw new InvalidArgumentException('Invalid entity name');
         }
-        foreach (['in_player_faction', 'in_player_squad'] as $flag) {
+        foreach (['in_player_faction', 'in_player_squad', 'conscious'] as $flag) {
             if (isset($value[$flag]) && !is_bool($value[$flag])) throw new InvalidArgumentException('Invalid membership');
         }
+        foreach (['storage_id', 'faction'] as $text) {
+            if (isset($value[$text]) && (!is_string($value[$text]) || strlen($value[$text]) > 180 || preg_match('/[\x00-\x1f]/', $value[$text]))) {
+                throw new InvalidArgumentException('Invalid entity ' . $text);
+            }
+        }
+        // null = unknown, never false/zero by default.
         return ['entity_key'=>$key, 'serial'=>$serial, 'name'=>$name,
+            'storage_id'=>$value['storage_id'] ?? null, 'faction'=>$value['faction'] ?? null,
             'in_player_faction'=>$value['in_player_faction'] ?? null,
-            'in_player_squad'=>$value['in_player_squad'] ?? null];
+            'in_player_squad'=>$value['in_player_squad'] ?? null,
+            'conscious'=>$value['conscious'] ?? null];
     }
 
     public static function validate(string|array $input): array
