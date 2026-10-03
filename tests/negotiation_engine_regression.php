@@ -70,6 +70,15 @@ function backdate(string $id, int $seconds): void {
     }
     $GLOBALS['db']->exec("UPDATE stobe_social_contract SET term_state=$2::jsonb WHERE contract_id=$1", [$id, json_encode($state)]);
 }
+/** Item 64: move the deal's game-time deadline back and make sure the game clock is seen at the deal's start time. */
+function backdateGame(string $id, int $gamets): int {
+    $d = stobeNegFetchDeal($id);
+    $GLOBALS['db']->exec("UPDATE stobe_social_contract SET deadline_gamets=GREATEST(1, deadline_gamets-$2) WHERE contract_id=$1", [$id, $gamets]);
+    $start = max(1, intval($d['deadline_gamets'] ?? 0) - STOBE_NEG_PAY_WINDOW_GAMETS);
+    $GLOBALS['db']->exec("INSERT INTO eventlog (type, ts, gamets, data, sess, localts, people, location) VALUES ('info',$1,$2,'NegTest game clock','pending',$1,'','')",
+        [time(), $start]);
+    return $start;
+}
 function status(string $id): string { return strval(stobeNegFetchDeal($id)['status']); }
 function termStatus(string $id, int $i): string { return strval(stobeNegDecode(stobeNegFetchDeal($id)['term_state'])[$i]['status'] ?? ''); }
 
@@ -112,9 +121,13 @@ check('memory event stored', is_array($mem), $mem);
 // ---------------------------------------------------------------- 4. non-payment -> BREACHED_PLAYER + angry directive
 $id = makeDeal('NegTestBandit', [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>300], ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']]);
 stobeNegBeginPerformance($id, ['STOP_ATTACK@' . $player], $player, 1000, '');
-backdate($id, 61);
+// Item 64: past the pay window AND the truce watch (120 s since bug 90; the breach waits for NPC terms in flight),
+// and past the game-time pay window (hostile deals expire on game time too, bug 41).
+backdate($id, max(61, STOBE_NEG_TRUCE_OBSERVE_SECONDS + 1));
+backdateGame($id, STOBE_NEG_PAY_WINDOW_GAMETS + 1);
 stobeNegTick();
 check('unpaid -> BREACHED_PLAYER', status($id) === 'BREACHED_PLAYER', status($id));
+$db->exec("DELETE FROM eventlog WHERE data='NegTest game clock'");
 $dir = $db->fetchOne("SELECT kind, payload FROM stobe_negotiation_directive WHERE contract_id=$1", [$id]);
 check('breach reaction queued with ATTACK', is_array($dir) && $dir['kind'] === 'breach_react' && str_contains($dir['payload'], 'ATTACK@'), $dir);
 $db->exec("DELETE FROM stobe_negotiation_directive");
