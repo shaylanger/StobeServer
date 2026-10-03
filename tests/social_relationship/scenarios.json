@@ -220,7 +220,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass; game m8: second encounter started by the now-hostile bandit (retaliation, correctly no new row); a clean repeat needs a non-hostile victim",
+   "rel_state": "partial: offline-pass; game m16 batch 8 inconclusive: Rel Vorn was still KO from p2-01, so the second strike was pending_awareness (correct for an unconscious victim); p2-04 now wakes him with protect and checks he is up",
    "offline_tests": [
     "social_combat_regression"
    ],
@@ -450,7 +450,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (actor vs later owner): m16 p3-03 Rel Vash woke enslaved: enslavement -73 to the owner Rel Grell only; Shay (the KO attacker) only aggression/serious_assault -37; one enslaved fact; unchaining after waking credited nobody (no_liberator). Repeated chaining: offline only",
+   "rel_state": "game-pass: m16 p3-03 (actor vs later owner: enslavement -73 to the owner only, the KO attacker only harm) and m16 rel-enslaved p7-03 (real slave Izumi first seen enslaved, no blame after a labour shift; camp enslavements reported with the owner). Repeated chaining: offline only",
    "offline_tests": [
     "social_unconscious_regression"
    ],
@@ -1136,7 +1136,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game inconclusive (m8 p7-01: no JoinParty attempted by the NPC, not recruited)",
+   "rel_state": "game inconclusive x3 (m8 p7-01, m16 batch 8 p7-01, m16 rel-enslaved p7-05/06): the NPCs refused in words and never tried JoinParty, so the gate was not exercised; gate logic offline-pass. LLM-dependent: section 2",
    "offline_tests": [
     "social_recruitment_regression"
    ],

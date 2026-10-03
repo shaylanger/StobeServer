@@ -15,6 +15,14 @@
 time ~ game_hours=
 teleport ${BANDIT} Shay dist 15
 health ${BANDIT} 100
+# m16 batch 8: he was still KO from p2-01 the whole time (teleports refused, the second attack was pending_awareness).
+# Wake him with a short protect (clears the KO at once), then check he is up before each strike.
+protect ${BANDIT} on
+speed 1
+@sleep 3
+speed 0
+protect ${BANDIT} off
+where ${BANDIT} ~ dist=[0-9.]+$
 # run m4: he stayed next to Shay during the wait, the fight went on and it stayed one encounter
 teleport ${BANDIT} Shay dist 300
 speed 10
@@ -24,6 +32,7 @@ time ~ game_hours=
 # run m16: in m8 he came back hostile from 15 m and struck first (his encounter). Now, while paused: put him 2 m from
 # Shay and give her attack order first, so the new encounter's first strike is hers.
 teleport ${BANDIT} Shay dist 2
+where ${BANDIT} ~ dist=[0-9.]+$
 attack Shay ${BANDIT}
 speed 1
 @sleep 8
