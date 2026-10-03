@@ -64,6 +64,17 @@ a profile; `@set TNAME`/`ANAME`/`BNAME` print the final names for the checks.
 | 4 | `REL-p3-04-reload-mid-ko.txt` (fresh; saves `kah-rel-ko`) | `--incidents 10 --pair-effects --check-shadow --interpret-log 20 --expect-none "<TNAME>" "Malzin"`; no theft row for `<TNAME>`; delete the `kah-rel-ko` save afterwards |
 | end | - | `--set-mode off`, `--purge-all --yes`, Capture=0 |
 
+## Phase 4 aid, carry, food (Delivery 4 build; Capture=1, mode shadow)
+
+| Order | File | Check after (live tree) |
+|---|---|---|
+| 1 | `REL-p4-01-first-aid.txt` (Crafting base, fresh) | `--pair-effects --effects 20 --check-shadow --expect-effect "<ONAME>" "Malzin" 1 35`; second treatment adds 0; copy the two `kind=aid` log lines (probe 10) |
+| 2 | `REL-p4-02-carry-to-bed.txt` (Crafting base, fresh) | `--pair-effects --incidents 10 --check-shadow --expect-effect "<CNAME>" "Malzin" 8 35` |
+| 3 | `REL-p4-03-carry-to-cage.txt` (Crafting base, fresh) | `--pair-effects --incidents 10 --interpret-log 30 --check-shadow --expect-effect "<KNAME>" "Malzin" -40 -20`; `<UNAME>` has no rows |
+| 4 | `REL-p4-04-food.txt` (auto-home, fresh) | `--pair-effects --interpret-log 30 --check-shadow --expect-effect "<HNAME>" "Shay" 2 5 --expect-none "<FNAME>" "Shay"` |
+
+Carry events come from the world poller, which skips the player actor (Shay); squad mates (Malzin) are covered.
+
 When a check fails, add `--interpret-log 40 --events 60` to the report: each structured event logs its
 interpretation (`SOCIAL_INTERPRET` in `log/relationship_worker.log`) with statuses such as
 `unresolved_identity`, `no_encounter`, `defence`, `pending_awareness`, `duplicate`.
