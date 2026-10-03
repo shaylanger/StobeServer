@@ -1,0 +1,33 @@
+# id: REL-p1-04-reload-stale
+# covers: REL phase 1 smoke gate B3; SR40 (stale old-load events rejected), SR38 (reload prunes later social rows), legacy dialogue after reload
+# fixture: auto-home
+# reset: keep  (runs right after REL-p1-03 and its inspect check, same launch)
+# needs: Capture=1, server mode shadow (as REL-p1-03); the fixture copy loaded this session (status save=...)
+# verify: after the run: php tools/social_relationship_inspect.php --events 20 --check-stale --check-shadow --expect-pair <SHAY2> <BANDIT2> combat  -> exit 0;
+#   "session".load_id is higher than in REL-p1-03; "loads" has rows for the new load_id; rows of the old load_id are gone or all have created_at before the new load's first event
+#   (the reload's playthrough rollback prunes social rows later than the fixture's game time). Optional: grep "SOCIAL_INGRESS rejected" log/stobeserver.log (0 or more, all scope_or_replay_conflict).
+@set SAVE status ~ save=(\S+)
+spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+attack Shay ${BANDIT}
+speed 3
+@sleep 3
+load ${SAVE}
+@wait-world
+@sleep 8
+speed 0
+stobe_ping ~ speaker=Shay
+@set SHAY2 where Shay ~ Shay (#\d+)
+spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
+@set BANDIT2 chars 60 ~ Hungry Bandit (#\d+)
+attack Shay ${BANDIT2}
+speed 1
+@sleep 10
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: queued kind=combat seq=\d+ load=\d+ actor=${SHAY2} target=${BANDIT2}
+stobe_say Malzin "Malzin, are you still with me?"
+speed 1
+@sleep 25
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ queued ACT_SAY target=Malzin
+teleport ${BANDIT2} Shay dist 300

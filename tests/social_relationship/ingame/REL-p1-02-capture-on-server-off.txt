@@ -1,0 +1,20 @@
+# id: REL-p1-02-capture-on-server-off
+# covers: REL phase 1 smoke gate B1; SR41 (native capture on, server mode off stores nothing)
+# fixture: auto-home
+# reset: fresh
+# needs: StobeCustom.ini [SocialRelationships] Capture=1 (set before launch; read only at game start); server SOCIAL_RELATIONSHIP_MODE off (php tools/social_relationship_inspect.php --set-mode off)
+# verify: stobe.log has "SOCIAL_CAPTURE: enabled"; inspect -> "mode": "off", every "counts" value 0 (server answered 'disabled' and wrote nothing)
+@wait-world
+@sleep 8
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: enabled
+stobe_ping ~ speaker=Shay
+@set SHAY where Shay ~ Shay (#\d+)
+spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+attack Shay ${BANDIT}
+speed 1
+@sleep 10
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: queued kind=combat seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT}
+teleport ${BANDIT} Shay dist 300

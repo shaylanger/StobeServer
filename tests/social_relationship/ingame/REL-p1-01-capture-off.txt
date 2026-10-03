@@ -1,0 +1,24 @@
+# id: REL-p1-01-capture-off
+# covers: REL phase 1 smoke gate A; SR41 (disabled mode inert, legacy unchanged)
+# fixture: auto-home
+# reset: fresh
+# needs: server with feature/social-phase1 merged (SOCIAL_RELATIONSHIP_MODE unset/off); Stobe.dll built with pending-fixes/rel-native-phase1.patch; RE_Kenshi\mods\Stobe\StobeCustom.ini without [SocialRelationships] Capture=1
+# verify: after the run (no relaunch): grep -c SOCIAL_CAPTURE stobe.log == 0; in /var/www/html/StobeServer: php tools/social_relationship_inspect.php -> "mode": "off" and every "counts" value 0
+@wait-world
+@sleep 8
+speed 0
+stobe_ping ~ speaker=Shay
+@set SHAY where Shay ~ Shay (#\d+)
+spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+attack Shay ${BANDIT}
+speed 1
+@sleep 10
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_STREAM: queued type=combat
+stobe_say Malzin "Malzin, keep an eye on that bandit."
+speed 1
+@sleep 25
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ queued ACT_SAY target=Malzin
+teleport ${BANDIT} Shay dist 300

@@ -152,6 +152,9 @@ final class SocialStore
     public function rollback(int $cutoff): array
     {
         if ($cutoff < 0) throw new InvalidArgumentException('Invalid rollback time');
+        // Inert when the feature never captured anything (default off): no table locks on a normal rollback.
+        $any = $this->row('SELECT (EXISTS(SELECT 1 FROM social_event_inbox) OR EXISTS(SELECT 1 FROM social_incident) OR EXISTS(SELECT 1 FROM social_checkpoint) OR EXISTS(SELECT 1 FROM social_effect) OR EXISTS(SELECT 1 FROM social_evidence) OR EXISTS(SELECT 1 FROM social_belief)) AS any');
+        if (($any['any'] ?? 'f') !== 't') return ['restored_scopes'=>0,'skipped'=>'empty'];
         return $this->transaction(function () use ($cutoff): array {
             // Exclusive lock prevents ingress race while rebuilding open states/evidence.
             $this->query('LOCK TABLE social_event_inbox,social_incident,social_belief,social_effect,social_evidence,social_checkpoint IN ACCESS EXCLUSIVE MODE');

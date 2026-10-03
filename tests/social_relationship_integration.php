@@ -13,6 +13,7 @@ foreach(['Social A','Social B'] as $name){ q('DELETE FROM core_npc_master_histor
 q("INSERT INTO general_settings(id,value) VALUES('SOCIAL_RELATIONSHIP_MODE','enabled') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value");
 $scope=['campaign_id'=>'campaign','timeline_epoch'=>'1','native_session_id'=>'session'];
 $store=new SocialStore($db);$e=fixture();
+check(($store->rollback(0)['skipped'] ?? '')==='empty','rollback inert while social tables are empty');
 check($store->ingest($e,$scope,'off')['status']==='disabled' && countRows('social_event_inbox')===0,'off no durable side effect');
 check($store->ingest($e,$scope,'enabled')['status']==='captured','capture');
 check($store->ingest($e,$scope,'enabled')['status']==='duplicate','retry dedup');

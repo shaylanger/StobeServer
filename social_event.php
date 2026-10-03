@@ -19,9 +19,11 @@ try {
     $result = (new SocialStore($GLOBALS['db']))->ingest($event,stobeSocialScope($GLOBALS['db']),$mode);
     echo json_encode($result,JSON_THROW_ON_ERROR);
 } catch (DomainException $error) {
-    http_response_code(409); echo json_encode(['status'=>'scope_or_replay_conflict']);
+    http_response_code(409); stobeLogInfo('SOCIAL_INGRESS rejected',['status'=>'scope_or_replay_conflict','reason'=>$error->getMessage()]);
+    echo json_encode(['status'=>'scope_or_replay_conflict']);
 } catch (InvalidArgumentException|JsonException|LengthException $error) {
-    http_response_code(422); echo json_encode(['status'=>'invalid_event']);
+    http_response_code(422); stobeLogInfo('SOCIAL_INGRESS rejected',['status'=>'invalid_event','reason'=>$error->getMessage()]);
+    echo json_encode(['status'=>'invalid_event']);
 } catch (Throwable $error) {
     http_response_code(503); stobeLogWarn('Social capture failed',['error'=>$error->getMessage()]);
     echo json_encode(['status'=>'unavailable']);
