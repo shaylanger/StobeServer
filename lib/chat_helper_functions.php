@@ -15471,6 +15471,13 @@ function streamResponse(
             while (count($taskParts) < 6) $taskParts[] = '';
             [$taskKind,$taskTarget,$taskItem,$taskAmountRaw,$taskDestination,$taskMaxCatsRaw] = array_slice($taskParts,0,6);
             $taskKind = strtoupper(trim(strval($taskKind)));
+            if (function_exists('stobeTaskGoalNormalizeTargetDestination')) { // item 68: person/container swapped
+                [$fixedTarget, $fixedDestination] = stobeTaskGoalNormalizeTargetDestination($taskKind, strval($taskTarget), strval($taskDestination));
+                if ($fixedTarget !== strval($taskTarget)) {
+                    stobeLogInfo('Task goal target/destination swapped (item 68)', ['actor'=>$actor, 'target'=>$fixedTarget, 'destination'=>$fixedDestination]);
+                    $taskTarget = $fixedTarget; $taskDestination = $fixedDestination;
+                }
+            }
             $taskAmount = max(0, min(1000, intval($taskAmountRaw)));
             $taskMaxCats = max(0, min(10000000, intval($taskMaxCatsRaw)));
             $explicitTrade = in_array($taskKind, ['BUY','SELL'], true);

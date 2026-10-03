@@ -49,6 +49,12 @@ check('item 68: the player name -> here (bring it back)', $here(stobeWorkGoalRes
 check('item 68: "me" -> here', $here(stobeWorkGoalResolveDestination('me')));
 check('item 68: a live participant -> here', $here(stobeWorkGoalResolveDestination('GdTestMate')));
 check('item 68: fallback reason is person', stobeGoalDestinationFallback('GdTestPlayer') === 'person');
+// 68 part 2: the run m1 swap TASK_GOAL@FETCH@Shay@mead@1@General Camp Storage Chest@0
+check('item 68: FETCH target=player, destination=chest -> swapped',
+    stobeTaskGoalNormalizeTargetDestination('FETCH', 'GdTestPlayer', 'General Camp Storage Chest') === ['General Camp Storage Chest', 'GdTestPlayer']);
+check('item 68: the right order stays', stobeTaskGoalNormalizeTargetDestination('FETCH', 'General Camp Storage Chest', 'GdTestPlayer') === ['General Camp Storage Chest', 'GdTestPlayer']);
+check('item 68: other kinds untouched', stobeTaskGoalNormalizeTargetDestination('GUARD', 'GdTestPlayer', 'Storage Chest') === ['GdTestPlayer', 'Storage Chest']);
+check('item 68: a container as destination is never a base lookup -> here', $here(stobeWorkGoalResolveDestination('General Camp Storage Chest')));
 
 echo "\n$pass passed, $fail failed\n";
 exit($fail > 0 ? 1 : 0);

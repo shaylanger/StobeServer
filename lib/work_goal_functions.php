@@ -175,6 +175,27 @@ function stobeWorkGoalResolveDestination(string $requested): array|false
     return false;
 }
 
+/** Item 68: a storage container / box name ("General Camp Storage Chest", "the barrel"). */
+function stobeGoalNameIsContainer(string $name): bool
+{
+    return preg_match('/\b(?:storage|chest|chests|box|boxes|crate|crates|barrel|barrels|container|stash|shelf|shelves|rack|cabinet|locker|cupboard|warehouse|silo|trunk|sack)\b/i', $name) === 1;
+}
+
+/**
+ * Item 68: FETCH/DELIVER with the person and the container swapped
+ * (target "Shay", destination "General Camp Storage Chest"): [target, destination] put right.
+ */
+function stobeTaskGoalNormalizeTargetDestination(string $kind, string $target, string $destination): array
+{
+    if (!in_array(strtoupper($kind), ['FETCH','DELIVER'], true)) return [$target, $destination];
+    if (trim($target) === '' || trim($destination) === '') return [$target, $destination];
+    if (stobeGoalDestinationFallback($target) === 'person' && stobeGoalNameIsContainer($destination)
+        && !stobeGoalNameIsContainer($target)) {
+        return [$destination, $target];
+    }
+    return [$target, $destination];
+}
+
 /**
  * Items 66/68: why an unresolved destination still means "here" ('' when it doesn't):
  * 'person' (the player, "me", a live participant: she brings it back to the walk-back target),
@@ -187,6 +208,7 @@ function stobeGoalDestinationFallback(string $requested): string
     $req = trim(preg_replace('/^(?:to|at|in|back\s+to)\s+/', '', $req) ?? $req);
     if ($req === '') return '';
     if (preg_match('/^(?:me|myself|us|player|the\s+player|you|yourself|here|there)$/', $req)) return 'person';
+    if (stobeGoalNameIsContainer($req)) return 'container'; // item 68: a chest/storage is no place to travel to
     $player = function_exists('getSetting') ? strtolower(trim(strval(getSetting('PLAYER_NAME', '')))) : '';
     if ($player !== '' && $req === $player) return 'person';
     if (function_exists('stobeResolveLiveParticipantSerial') && function_exists('normalizeParticipantNameToken')
