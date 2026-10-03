@@ -59,10 +59,12 @@ check('item 68: a container as destination is never a base lookup -> here', $her
 $npc73 = ['inventory'=>'', 'equipment'=>''];
 $line73 = 'Malzin, fetch the mead from the general camp storage chest and bring it to me.';
 $reply73 = "Mead from the storage chest. Right - I'll go dig it out, assuming nobody's already drunk it.";
-check('item 73: the run m2 pair -> TASK_GOAL@FETCH from the chest, back to the player',
-    stobeInferFetchFromAgreedRequest($line73, $npc73, [], $reply73, true) === 'TASK_GOAL@FETCH@General Camp Storage Chest@mead@1@@0',
+check('item 73/76: the run m2 pair -> TASK_GOAL@FETCH from the chest, handed to the player ("to me")',
+    stobeInferFetchFromAgreedRequest($line73, $npc73, [], $reply73, true) === 'TASK_GOAL@FETCH@General Camp Storage Chest@mead@1@me@0',
     stobeInferFetchFromAgreedRequest($line73, $npc73, [], $reply73, true));
-check('item 73: a number is kept', stobeInferFetchFromAgreedRequest('Get me 3 bread from the storage box.', $npc73, [], 'On it.', true) === 'TASK_GOAL@FETCH@Storage Box@bread@3@@0');
+check('item 73: a number is kept ("get me" = to the player)', stobeInferFetchFromAgreedRequest('Get me 3 bread from the storage box.', $npc73, [], 'On it.', true) === 'TASK_GOAL@FETCH@Storage Box@bread@3@me@0');
+check('item 76: plain "fetch X from the chest" keeps no destination', stobeInferFetchFromAgreedRequest('Fetch the mead from the storage chest.', $npc73, [], 'On it.', true) === 'TASK_GOAL@FETCH@Storage Chest@mead@1@@0');
+check('item 76: "me" as person destination is the player', stobeGoalPersonName('me') === 'GdTestPlayer' && stobeGoalPersonName('to GdTestMate') === 'GdTestMate');
 check('item 73: a refusal -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, [], "No. Get it yourself.", true) === '');
 check('item 73: only a question -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, [], 'The mead?', true) === '');
 check('item 73: an existing TASK_GOAL -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, ['TASK_GOAL@FETCH@General Camp Storage Chest@mead@1@@0'], $reply73, true) === '');

@@ -175,6 +175,17 @@ function stobeWorkGoalResolveDestination(string $requested): array|false
     return false;
 }
 
+/** Item 76: the person a "person" destination names: "me"/"player" = the player, else the name. */
+function stobeGoalPersonName(string $requested): string
+{
+    $req = trim(preg_replace('/^(?:to|at|back\s+to)\s+/i', '', trim($requested)) ?? $requested);
+    if (preg_match('/^(?:me|myself|us|player|the\s+player)$/i', $req)) {
+        return function_exists('getSetting') ? trim(strval(getSetting('PLAYER_NAME', ''))) : '';
+    }
+    if (preg_match('/^(?:you|yourself|here|there)$/i', $req)) return '';
+    return function_exists('normalizeParticipantNameToken') ? normalizeParticipantNameToken($req) : $req;
+}
+
 /** Item 68: a storage container / box name ("General Camp Storage Chest", "the barrel"). */
 function stobeGoalNameIsContainer(string $name): bool
 {

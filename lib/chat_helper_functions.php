@@ -15160,7 +15160,9 @@ function stobeInferFetchFromAgreedRequest(string $playerLine, array|false $npcDa
     if (!function_exists('stobeGoalNameIsContainer') || !stobeGoalNameIsContainer($container)) return '';
     if (!stobeReplyAgreesToErrand($reply)) return '';
     $qty = ($m[1] ?? '') !== '' ? max(1, min(1000, intval($m[1]))) : 1;
-    return 'TASK_GOAL@FETCH@' . $container . '@' . $item . '@' . $qty . '@@0';
+    // Item 76: "bring/give/hand it to me", "bring me ..." = hand it to the player on return.
+    $toMe = preg_match("/\b(?:bring|give|hand|pass|take)\s+(?:it|them|that|those|the\s+[a-z' -]{1,40}?)?\s*(?:back\s+)?to\s+me\b|\b(?:bring|fetch|get|grab)\s+me\b/i", $line) === 1;
+    return 'TASK_GOAL@FETCH@' . $container . '@' . $item . '@' . $qty . '@' . ($toMe ? 'me' : '') . '@0';
 }
 
 /**
