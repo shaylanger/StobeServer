@@ -1210,6 +1210,60 @@ function stobeTakeOffOrderGuard(array $actions, string $playerMessage, string $r
     return $fixed;
 }
 
+// ---- Item 41: she says the player has gear she is still wearing ------------------------
+
+/**
+ * A sentence saying the player has / took / was given one of her worn items while it is
+ * still in her Equipment: returns that item's display name, or ''. If the player's line
+ * names the item (he asked for it this turn), that item is not checked.
+ */
+function stobeFalseGearClaim(string $sentence, array|false $npcData, string $playerMessage = ''): string {
+    if (!is_array($npcData) || !function_exists('stobeNegInventoryDisplayNames')) return '';
+    $s = strtolower($sentence);
+    $spans = [];
+    if (preg_match_all("/\b(?:you(?:'ve| have)?\s+(?:got|taken|took|have|own|kept|keep)\s+(?:both\s+|all\s+)?(?:of\s+)?my|(?:gave|given|handed|passed)\s+(?:you|over)\s+(?:both\s+|all\s+)?my|you\s+(?:hold|holding)\s+my)\s+([a-z' -]{2,80})/", $s, $m)) {
+        $spans = array_merge($spans, $m[1]);
+    }
+    if (preg_match_all("/\bmy\s+([a-z' -]{2,40}?)\s+(?:is|are)\s+(?:yours|with you|in your)/", $s, $m)) {
+        $spans = array_merge($spans, $m[1]);
+    }
+    if (count($spans) === 0) return '';
+    $worn = stobeNegInventoryDisplayNames(strval($npcData['equipment'] ?? ''));
+    if (count($worn) === 0) return '';
+    $weapons = function_exists('stobeDealEquippedWeapons') ? stobeDealEquippedWeapons($npcData) : [];
+    $asked = strtolower($playerMessage);
+    foreach ($spans as $span) {
+        foreach ($worn as $lower => $display) {
+            $words = preg_split('/\s+/', $lower) ?: [];
+            $head = strval(end($words));
+            $named = str_contains($span, $lower)
+                || (strlen($head) >= 3 && preg_match('/\b' . preg_quote($head, '/') . 's?\b/', $span));
+            $isWeapon = isset($weapons[$lower]);
+            if (!$named && $isWeapon && preg_match('/\b(weapon|blade|sword)s?\b/', $span)) $named = true;
+            if (!$named) continue;
+            $askedFor = str_contains($asked, $lower)
+                || (strlen($head) >= 3 && preg_match('/\b' . preg_quote($head, '/') . 's?\b/', $asked))
+                || ($isWeapon && preg_match('/\b(weapon|blade|sword)s?\b/', $asked));
+            if ($askedFor) continue;
+            return $display;
+        }
+    }
+    return '';
+}
+
+/** Drops item-41 sentences from a whole reply: ['text'=>..., 'dropped'=>[sentence, ...]]. */
+function stobeDropFalseGearClaims(string $text, array|false $npcData, string $playerMessage = ''): array {
+    $kept = [];
+    $dropped = [];
+    foreach (preg_split('/(?<=[.!?])\s+/', trim($text)) ?: [] as $sentence) {
+        if (trim($sentence) === '') continue;
+        if (stobeFalseGearClaim($sentence, $npcData, $playerMessage) !== '') { $dropped[] = $sentence; continue; }
+        $kept[] = $sentence;
+    }
+    if (count($dropped) === 0) return ['text'=>$text, 'dropped'=>[]];
+    return ['text'=>count($kept) > 0 ? implode(' ', $kept) : 'Hm.', 'dropped'=>$dropped];
+}
+
 /** Item 44: the player said the NPC pays them N Cats, but the only Cats term says the player pays N. */
 function stobeDealFixCatsDirectionFromWords(array $terms, string $playerMessage): array {
     $m = strtolower($playerMessage);

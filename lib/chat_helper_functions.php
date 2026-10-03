@@ -14396,7 +14396,10 @@ function stobeStreamDialogueViaLlm(
     if (boolval($meta['suppress_tts'] ?? false)) {
         $streamOptions['suppress_tts'] = true;
     }
-    unset($streamMeta['suppress_tts'], $streamMeta['defer_structured_stream'], $streamMeta['hold_stream_on_money']);
+    unset($streamMeta['suppress_tts'], $streamMeta['defer_structured_stream'], $streamMeta['hold_stream_on_money'], $streamMeta['player_message']);
+    // Item 41: sentences claiming the player has gear she still wears are not spoken.
+    $gearPlayerMsg = strval($meta['player_message'] ?? '');
+    $gearCheck = function_exists('stobeFalseGearClaim');
     // Underway deal: speak normally, but hold everything from the first sentence about money.
     $holdOnMoney = !empty($meta['hold_stream_on_money']) && function_exists('stobeDealSpeechMentionsMoney');
     if ($streamListener === '') {
@@ -14454,6 +14457,7 @@ function stobeStreamDialogueViaLlm(
         $heldBack = false;
         $spokenText = '';
         $heldFrom = '';
+        $gearDropped = [];
         $messageStreamBuffer = '';
         $lastStructuredMessage = '';
         $structuredListener = '';
@@ -14476,6 +14480,9 @@ function stobeStreamDialogueViaLlm(
             &$heldBack,
             &$spokenText,
             &$heldFrom,
+            &$gearDropped,
+            $gearCheck,
+            $gearPlayerMsg,
             $holdOnMoney,
             $actor,
             $actorData,
@@ -14508,6 +14515,10 @@ function stobeStreamDialogueViaLlm(
                         sanitizeForKenshi(trim(strval($sentenceChunkRaw)))
                     );
                     if ($sentenceChunk === '') {
+                        continue;
+                    }
+                    if ($gearCheck && stobeFalseGearClaim($sentenceChunk, $actorData, $gearPlayerMsg) !== '') {
+                        $gearDropped[] = $sentenceChunk; // item 41: a false claim about her gear
                         continue;
                     }
                     if ($holdOnMoney && !$heldBack && stobeDealSpeechMentionsMoney($sentenceChunk)) {
@@ -14545,6 +14556,10 @@ function stobeStreamDialogueViaLlm(
                     sanitizeForKenshi(trim(strval($remainingChunkRaw)))
                 );
                 if ($remainingChunk === '') {
+                    continue;
+                }
+                if ($gearCheck && stobeFalseGearClaim($remainingChunk, $actorData, $gearPlayerMsg) !== '') {
+                    $gearDropped[] = $remainingChunk; // item 41
                     continue;
                 }
                 if ($holdOnMoney && !$heldBack && stobeDealSpeechMentionsMoney($remainingChunk)) {
@@ -14654,6 +14669,19 @@ function stobeStreamDialogueViaLlm(
             return $result;
         }
 
+        if (count($gearDropped) > 0) {
+            foreach ($gearDropped as $gearSentence) {
+                $finalMessage = trim(preg_replace('/\s+/', ' ', str_replace($gearSentence, '', $finalMessage)) ?? $finalMessage);
+            }
+            if ($finalMessage === '') {
+                $finalMessage = 'Hm.';
+                if ($chunksEmitted === 0 && !$heldBack) {
+                    streamResponse($actor, 'ScriptQueue', $finalMessage, $actorData, [], $streamEventType, $streamListener, $streamGamets, $streamOptions);
+                    $chunksEmitted++;
+                }
+            }
+            stobeLogWarn('False gear claim not spoken (item 41)', ['npc'=>$actor, 'dropped'=>$gearDropped]);
+        }
         $finalActions = [];
         $finalAction = trim(strval($finalSnapshot['action_tag'] ?? ''));
         if ($finalAction !== '') {
@@ -14675,6 +14703,7 @@ function stobeStreamDialogueViaLlm(
         $result['held_back'] = $heldBack;
         $result['spoken_text'] = $spokenText;
         $result['held_from'] = $heldFrom;
+        $result['gear_claims_dropped'] = $gearDropped;
         return $result;
     }
 

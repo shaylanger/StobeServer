@@ -1427,6 +1427,7 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             'action_config' => $actionConfig,
             'stream_event_type' => 'chat',
             'stream_listener' => $speaker, // bug 95: replies go to whoever spoke
+            'player_message' => strval($message ?? ''), // item 41
             'stream_gamets' => $gamets,
             'defer_structured_stream' => $negotiationDefer,
             'hold_stream_on_money' => $negotiationActive && !$negotiationDefer,
@@ -1436,6 +1437,14 @@ if ($manualActionActive && $manualActionCannotSpeak) {
 
     if (boolval($streamResult['ok'] ?? false)) {
         $responseText = sanitizeForKenshi(trim(strval($streamResult['response_text'] ?? '')));
+        if (function_exists('stobeDropFalseGearClaims')) {
+            // Item 41: a deferred/held-back reply still holds the sentence; the streamed one is already clean.
+            $gearFix = stobeDropFalseGearClaims($responseText, $npcData, strval($message ?? ''));
+            if (count($gearFix['dropped']) > 0) {
+                stobeLogWarn('False gear claim dropped (item 41)', ['npc'=>$targetNpc, 'dropped'=>$gearFix['dropped']]);
+                $responseText = $gearFix['text'];
+            }
+        }
         $responseActions = is_array($streamResult['actions'] ?? null) ? $streamResult['actions'] : [];
         $responseListener = normalizeParticipantNameToken(strval($streamResult['listener'] ?? ''));
         $alreadyStreamed = intval($streamResult['chunks_emitted'] ?? 0) > 0;
