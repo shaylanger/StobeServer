@@ -41,6 +41,8 @@ class sql {
         return "'" . str_replace(["\\", "'"], ["\\\\", "\\'"], $value) . "'";
     }
 
+    public function transactionStatus(): int { return pg_transaction_status($this->conn); }
+
     public function exec(string $query, array $params = []): mixed {
         if (empty($params)) {
             // Suppress native PHP warnings from pg_* calls; callers handle false

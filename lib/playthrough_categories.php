@@ -56,7 +56,8 @@ function ptr_storage_overview($conn, string $meta): array {
         }
         $name = $table['relname'];
         $key = $tables[$name] ?? 'other';
-        if ($name === 'eventlog') $key = 'events';
+        if (str_starts_with($name, 'social_')) $key = 'memory';
+        elseif ($name === 'eventlog') $key = 'events';
         elseif (!isset($tables[$name]) && preg_match('/^(memory|memories|oghma|worldknowledge|diary|diaries)(_|$)/', $name)) $key = 'memory';
         $categories[$key]['bytes'] += (int)$table['bytes'];
         $categories[$key]['available'] = true;

@@ -338,6 +338,11 @@ function stobePlaythroughPruneFutureTimeline(int $cutoffGamets): array
         );
     }
 
+    if (stobePlaythroughTableExists('social_checkpoint') && !getSettingBool('NEVER_CLEAR_RELATIONSHIP_DATA', false)) {
+        require_once __DIR__ . '/social_store.php';
+        $counts['social'] = (new SocialStore($GLOBALS['db']))->rollback($cutoff);
+    }
+
     return $counts;
 }
 

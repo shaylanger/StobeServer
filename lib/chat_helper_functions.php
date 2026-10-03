@@ -11903,6 +11903,8 @@ function stobeIsGenericNpcName(string $name): bool {
 
 /** R4: an attack lowers both sides' feelings (once per pair per 15 min). Returns the changes made. */
 function stobeRelationshipOnAttack(string $eventData, ?int $now = null): array {
+    require_once __DIR__ . '/social_runtime.php';
+    if (stobeSocialMode() === 'enabled') return [];
     if (function_exists('getSettingBool') && !getSettingBool('RELATIONSHIP_FIGHTS_COUNT', true)) return [];
     if (!preg_match('/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)/', trim($eventData), $m)) return [];
     $attacker = normalizeParticipantNameToken($m[1]);
@@ -12071,6 +12073,29 @@ function stobePreserveRelationshipCustomInfo(array $existing, array $incoming): 
 }
 
 function stobePersistNpcRelationshipMap(string $speakerName, array $relationshipMap, array|false $npcData = false): bool {
+    require_once __DIR__ . '/social_runtime.php';
+    if (stobeSocialMode() === 'off') return stobePersistNpcRelationshipMapUnlocked($speakerName, $relationshipMap, $npcData);
+    $db = $GLOBALS['db'];
+    $base = is_array($npcData) ? $npcData : getNpcData($speakerName);
+    if (!$base || intval($base['id'] ?? 0) < 1) return false;
+    $owns = $db->transactionStatus() === PGSQL_TRANSACTION_IDLE;
+    if ($owns && $db->exec('BEGIN') === false) return false;
+    try {
+        if ($db->exec('SELECT id FROM core_npc WHERE id=$1 FOR UPDATE', [intval($base['id'])]) === false) throw new RuntimeException('Relationship row lock failed');
+        $fresh = getNpcById(intval($base['id']));
+        if (!$fresh) throw new RuntimeException('Relationship subject disappeared');
+        $merged = stobeSocialMergeMap(stobeGetNpcRelationshipMap($base), $relationshipMap, stobeGetNpcRelationshipMap($fresh));
+        if (!stobePersistNpcRelationshipMapUnlocked($speakerName, $merged, $fresh)) throw new RuntimeException('Relationship snapshot failed');
+        if ($owns && $db->exec('COMMIT') === false) throw new RuntimeException('Relationship commit failed');
+        return true;
+    } catch (Throwable $error) {
+        if ($owns) $db->exec('ROLLBACK');
+        else throw $error;
+        return false;
+    }
+}
+
+function stobePersistNpcRelationshipMapUnlocked(string $speakerName, array $relationshipMap, array|false $npcData = false): bool {
     $normalizedSpeaker = normalizeParticipantNameToken($speakerName);
     if ($normalizedSpeaker === '') {
         return false;
@@ -12112,7 +12137,7 @@ function stobePersistNpcRelationshipMap(string $speakerName, array $relationship
                 [$serializedMap, $serializedJsonbMap, $npcId]
             );
             if ($result !== false) {
-                stobeRelationshipTimelineStamp($npcId);
+                if (!stobeRelationshipTimelineStamp($npcId) && stobeSocialMode() !== 'off') return false;
             }
             return $result;
         },

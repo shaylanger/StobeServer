@@ -1,0 +1,1307 @@
+{
+  "schema_version": 1,
+  "scope": "All full-system assertions remain BLOCKED until each required gate is implemented and run. Phase1 test mappings are partial framework evidence, not scenario passes.",
+  "scenarios": [
+    {
+      "id": "SR01",
+      "assertion": "Every tier boundary -100..100; directed maps; clamp/type independent; deterministic retry delta",
+      "required_modes": [
+        "U",
+        "I"
+      ],
+      "phase1_tests": [
+        "social_unit",
+        "social_integration"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR02",
+      "assertion": "A deliberately attacks B: immediate B\u2192A loss; A\u2192B unchanged until separate consequence",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR03",
+      "assertion": "B retaliates normally in NPC/NPC fight: no A\u2192B aggression penalty; repeat with player on each side",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR04",
+      "assertion": "Multi-party fight, late joiner and defender protecting friend: origin retained; unrelated pair not mislabeled",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR05",
+      "assertion": "Many hits then KO then combat_end: one escalated harm budget, not stacked full penalties",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR06",
+      "assertion": "Duel/consent and accidental hit: distinct intent; no invented consent; second distinct assault still matters",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR07",
+      "assertion": "Defensive limb loss grievance distinct from aggression; duplicate limb hook/poll applies once",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR08",
+      "assertion": "B KO by A, C takes property: B has no immediate loss toward C or A for theft; wake missing item blames A",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR09",
+      "assertion": "Same but B has verified better evidence of C: C blamed; no double inferred A charge",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR10",
+      "assertion": "KO from unknown actor, own item consumption, restored item or normal squad inventory change: no invented theft blame",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR11",
+      "assertion": "C enslaves unconscious B after A's attack: latent until aware; enslaver C receives slavery penalty; A only harm",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR12",
+      "assertion": "Unknown owner/captor, actor versus later owner, repeated chaining/poll: no false attribution/duplicate",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR13",
+      "assertion": "Conscious theft caught versus unseen; permission denied/check-only; confirmed removal absent: only confirmed known loss scores",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR14",
+      "assertion": "Trivial item versus primary weapon/most belongings, starving victim's food, returned property: severity and budgets appropriate",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR15",
+      "assertion": "Heal unconscious critically bleeding B with real medicine: stabilization verified; provider credited, not every tick",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR16",
+      "assertion": "Routine aid repeated same episode gives bounded/zero extras; ten distinct genuine lifesaving episodes can reach >=91",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR17",
+      "assertion": "A injures B then patches B; staged self-harm or accomplice loop: no cheap positive trust farming",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR18",
+      "assertion": "Outsider pickup conscious versus KO: initial suspicion only when known; bed/safe outcome resolves second component",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR19",
+      "assertion": "Carry ends in cage/slavery/dump/death/unknown destination: outcome fact required and attributed; no generic drop rescue",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR20",
+      "assertion": "Same carrying/looting/equipment controls on squad member: no routine penalties; critical rescue positive",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR21",
+      "assertion": "Hungry recipient supplied food then eats: need/consumption reward; full NPC, own food, repeated supply do not farm",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR22",
+      "assertion": "Ordinary trades near zero; six exceptional deals cannot reach Bonded; economic-only affinity cannot qualify recruit",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR23",
+      "assertion": "Missing/heuristic seller, shared faction purse, atomic buy failure: no guessed personal reward or partial effect",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR24",
+      "assertion": "Friend harmed/helped, actual witness with affinity 0/31/56/76/91: expected scaling and direction",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR25",
+      "assertion": "Witness absent/occluded/asleep/KO; server nearby recovery: zero omniscient propagation",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR26",
+      "assertion": "Multiple friends and simultaneous events: pre-event relationships, single-hop bounded propagation, no cascade",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR27",
+      "assertion": "Insult heard by friend versus unseen dialogue: dialogue event validated once; mechanical consequences not counted twice by LLM",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR28",
+      "assertion": "Enemy affinity -85 with low health: surrender offered; rational payment/ceasefire accepted; no affection gate",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR29",
+      "assertion": "Dishonest hated enemy can betray; honored coercive deal minimal gain; attacking after accepted surrender adds betrayal",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR30",
+      "assertion": "Join at 75/76 with/without trust, grievance, independent personality: dispatch gates enforce actual outcomes",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR31",
+      "assertion": "Join bypass attempts via autonomy/director/inline action; forced override and already-companion migration",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR32",
+      "assertion": "Non-scripted slave +10/+20 complete escape: varied lawful results, some >=76; chains only/failed escape no guaranteed join",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR33",
+      "assertion": "Vanilla paid recruit and vanilla slave escape recruitment unchanged; real faction/squad membership proves join",
+      "required_modes": [
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR34",
+      "assertion": "Unknown/generic names, rename, same-name NPCs, reused serial after reload: no cross-entity attribution",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR35",
+      "assertion": "Duplicate retry, same-tick distinct events, out-of-order KO/theft/wake: exactly once and correct causal state",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_integration",
+        "social_http"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR36",
+      "assertion": "Concurrent dialogue + game effect + worker update to same map: no lost deltas, ledger/snapshot atomic",
+      "required_modes": [
+        "I"
+      ],
+      "phase1_tests": [
+        "social_concurrency",
+        "social_integration"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR37",
+      "assertion": "Crash between ledger/map/history writes and server restart mid-KO/carry/escape: recover without partial or duplicate effect",
+      "required_modes": [
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_integration"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR38",
+      "assertion": "Rollback before attack, during KO, after loot before wake: maps/evidence/incidents/baselines/cursors restore together",
+      "required_modes": [
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_integration"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR39",
+      "assertion": "A\u2192B\u2192A server playthrough switch, New, old save upgrade, export/import: global/unmanaged data preserved",
+      "required_modes": [
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_save_migration"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR40",
+      "assertion": "Failed migration/capture, stale old-epoch HTTP event, runtime barrier, NEVER_CLEAR option: documented consistent state",
+      "required_modes": [
+        "I"
+      ],
+      "phase1_tests": [
+        "social_save_migration",
+        "social_http"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR41",
+      "assertion": "Feature disabled/shadow/category flags, old DLL/protocol: no R4 double-count or retroactive backlog",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_integration",
+        "legacy_relationship"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR42",
+      "assertion": "Hidden objective culprit in dialogue/history: victim prompt knows only inferred A blame; C truth stays diagnostic",
+      "required_modes": [
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR43",
+      "assertion": "Large combat flood, witness caps, bounded unresolved ledger, cleanup/restart: no lost severe event or unbounded growth",
+      "required_modes": [
+        "U",
+        "I",
+        "G"
+      ],
+      "phase1_tests": [
+        "social_unit"
+      ],
+      "phase1_coverage": "partial",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    },
+    {
+      "id": "SR44",
+      "assertion": "Harness interruption/lost acknowledgement/fix/rebuild: manifest resumes safely; no duplicate mutation or fabricated pass",
+      "required_modes": [
+        "I",
+        "G"
+      ],
+      "phase1_tests": [],
+      "phase1_coverage": "deferred",
+      "full_status": "BLOCKED",
+      "blockers": [
+        "Later-phase interpreters and scenario-specific fixtures/actions are required",
+        "No isolated in-game test installation or harness lease authorized yet"
+      ],
+      "fixture": {
+        "game_save": null,
+        "server_playthrough": null,
+        "checksum": null
+      },
+      "setup_commands": [],
+      "real_action": null,
+      "expected_native_fields": [],
+      "baseline_assertions": [],
+      "expected_directed_effects": [],
+      "timeout_seconds": 120,
+      "cleanup": "restore_paired_fixture",
+      "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation"
+    }
+  ]
+}

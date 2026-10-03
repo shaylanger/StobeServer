@@ -49,7 +49,8 @@ BEGIN
             required_version := CASE WHEN table_name=version_key THEN 202608300001::bigint ELSE NULL END;
             -- These historical policies kept the listed tables global and saved no copy.
             -- Initialize only that known omission; never borrow another game's live data.
-            IF (source_policy=2 AND table_name=ANY(ARRAY['world_knowledge','world_knowledge_context_rule']))
+            IF (source_policy IN (1,2,3,4) AND table_name=ANY(ARRAY['social_event_inbox','social_incident','social_belief','social_effect','social_evidence','social_checkpoint']))
+                OR (source_policy=2 AND table_name=ANY(ARRAY['world_knowledge','world_knowledge_context_rule']))
                 OR (source_policy IN (1,2,3) AND table_name=ANY(ARRAY['world_state_addendum','world_state_addendum_custom','world_state_definition'])) THEN
                 empty_tables := array_append(empty_tables,table_name);
             ELSE
@@ -164,7 +165,7 @@ BEGIN
     ) THEN RAISE EXCEPTION 'Snapshot sequence defaults still reference another schema'; END IF;
 
     EXECUTE format('COMMENT ON SCHEMA %I IS %L',stage_schema,
-        jsonb_build_object('format','stobe_selected_tables_v2','table_policy_version',4,
+        jsonb_build_object('format','stobe_selected_tables_v2','table_policy_version',5,
             'tables',live_names,'missing_tables',missing_tables,'empty_tables',empty_tables,'source_schema',source_schema,
             'upgrade_version',2)::text);
     RETURN stage_schema;
@@ -204,4 +205,4 @@ END;
 $$ LANGUAGE plpgsql SET lock_timeout = '10s';
 
 CREATE OR REPLACE FUNCTION stobe_meta.playthrough_api_version()
-RETURNS integer LANGUAGE sql IMMUTABLE AS 'SELECT 8';
+RETURNS integer LANGUAGE sql IMMUTABLE AS 'SELECT 9';

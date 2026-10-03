@@ -2933,6 +2933,12 @@ If the resulting summary would exceed roughly 25 bullet points, merge or general
             }
         });
 
+        $applyPatch('social_event_inbox', 202610020001, static function () use ($db): void {
+            if ($db->exec(file_get_contents(dirname(__DIR__) . '/data/social_relationship_schema.sql')) === false) {
+                throw new RuntimeException('Social relationship schema migration failed');
+            }
+        });
+
         stobeLogInfo('DB updates completed (release consolidator)');
     }
 }

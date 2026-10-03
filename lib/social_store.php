@@ -1,0 +1,171 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/social_event_contract.php';
+require_once __DIR__ . '/social_rules.php';
+
+// Ingress owns the transaction. All queries fail closed; no partial history/ledger commit.
+final class SocialStore
+{
+    public function __construct(private object $db, private SocialRules $rules = new SocialRules()) {}
+    private function query(string $sql, array $params = []): mixed
+    {
+        $result = $this->db->exec($sql, $params);
+        if ($result === false) throw new RuntimeException('Social database operation failed');
+        return $result;
+    }
+    private function row(string $sql, array $params = []): ?array
+    {
+        $result = $this->query($sql, $params);
+        return pg_fetch_assoc($result) ?: null;
+    }
+    private static function json(mixed $value): string { return json_encode($value, JSON_THROW_ON_ERROR); }
+    private function lock(string $campaign): void
+    {
+        $this->query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', ['social:' . $campaign]);
+    }
+    private function transaction(callable $body): mixed
+    {
+        $owned = !method_exists($this->db, 'transactionStatus') || $this->db->transactionStatus() === PGSQL_TRANSACTION_IDLE;
+        $savepoint = 'social_' . bin2hex(random_bytes(8));
+        $this->query($owned ? 'BEGIN' : 'SAVEPOINT ' . $savepoint);
+        try {
+            $out = $body();
+            $this->query($owned ? 'COMMIT' : 'RELEASE SAVEPOINT ' . $savepoint);
+            return $out;
+        } catch (Throwable $error) {
+            $this->db->exec($owned ? 'ROLLBACK' : 'ROLLBACK TO SAVEPOINT ' . $savepoint);
+            if (!$owned) $this->db->exec('RELEASE SAVEPOINT ' . $savepoint);
+            throw $error;
+        }
+    }
+    // Scope is resolved by the authenticated playthrough receipt at HTTP ingress, never a client assertion.
+    public function ingest(string|array $input, array $scope, string $mode = 'off'): array
+    {
+        if ($mode === 'off') return ['status'=>'disabled', 'effects'=>[]];
+        if (!in_array($mode, ['shadow', 'enabled'], true)) throw new InvalidArgumentException('Unknown social mode');
+        $event = SocialEventContract::validate($input);
+        foreach (['campaign_id','timeline_epoch','native_session_id'] as $field) {
+            if (($event[$field] ?? null) !== ($scope[$field] ?? null)) throw new DomainException('Stale or mismatched social scope');
+        }
+        return $this->transaction(function () use ($event, $mode): array {
+            $this->lock($event['campaign_id']);
+            $key = [$event['campaign_id'],$event['timeline_epoch'],$event['event_id']];
+            $existing = $this->row('SELECT payload_hash FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND event_id=$3', $key);
+            $hash = SocialEventContract::hash($event);
+            if ($existing) {
+                if ($existing['payload_hash'] !== $hash) throw new DomainException('Event ID payload conflict');
+                return ['status'=>'duplicate','effects'=>[]];
+            }
+            $high = $this->row('SELECT MAX(sequence) AS sequence,MAX(game_ts) AS game_ts FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND native_session_id=$3', [$event['campaign_id'],$event['timeline_epoch'],$event['native_session_id']]);
+            $late = isset($high['sequence']) && ($event['sequence'] <= (int)$high['sequence'] || $event['game_ts'] < (int)$high['game_ts']);
+            $active = $this->row('SELECT COUNT(*) AS n FROM social_incident WHERE campaign_id=$1 AND timeline_epoch=$2 AND state->>\'phase\'=\'pending_awareness\'',[$event['campaign_id'],$event['timeline_epoch']]);
+            if ((int)$active['n'] >= 256 && !$this->row('SELECT 1 FROM social_incident WHERE campaign_id=$1 AND timeline_epoch=$2 AND incident_id=$3',[$event['campaign_id'],$event['timeline_epoch'],$event['incident_id']])) throw new LengthException('Social active incident limit reached');
+            $status = $event['origin'] === 'setup' ? 'setup' : ($late ? 'late' : 'captured');
+            $this->query('INSERT INTO social_event_inbox(campaign_id,timeline_epoch,event_id,native_session_id,sequence,game_ts,incident_id,payload,payload_hash,status,mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)',
+                array_merge($key,[$event['native_session_id'],$event['sequence'],$event['game_ts'],$event['incident_id'],self::json($event),$hash,$status,$mode]));
+            if ($status !== 'captured') return ['status'=>$status,'effects'=>[]];
+            $this->query('INSERT INTO social_incident(campaign_id,timeline_epoch,incident_id,state,game_ts,last_sequence) VALUES($1,$2,$3,$4::jsonb,$5,$6) ON CONFLICT(campaign_id,timeline_epoch,incident_id) DO UPDATE SET state=social_incident.state || (EXCLUDED.state - \'pending\' - \'phase\'),game_ts=EXCLUDED.game_ts,last_sequence=EXCLUDED.last_sequence',
+                [$event['campaign_id'],$event['timeline_epoch'],$event['incident_id'],self::json(['phase'=>'observed','last_event'=>$event,'pending'=>(object)[]]),$event['game_ts'],$event['sequence']]);
+            // Phase 1 captures raw events only. Semantic interpretation is supplied by later modules.
+            $this->checkpoint($event);
+            return ['status'=>'captured','effects'=>[]];
+        });
+    }
+    private function checkpoint(array $event): void
+    {
+        $params = [$event['campaign_id'],$event['timeline_epoch'],$event['incident_id']];
+        $snapshot = [];
+        foreach (['social_incident','social_belief'] as $table) {
+            $snapshot[$table] = pg_fetch_all($this->query("SELECT * FROM $table WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND incident_id=\$3", $params)) ?: [];
+        }
+        $snapshot['social_evidence'] = pg_fetch_all($this->query("SELECT e.* FROM social_evidence e JOIN social_belief b ON e.campaign_id=b.campaign_id AND e.timeline_epoch=b.timeline_epoch AND e.observer_key=b.observer_key AND e.culprit_key=b.belief->>'responsible_entity' WHERE b.campaign_id=\$1 AND b.timeline_epoch=\$2 AND b.incident_id=\$3",$params)) ?: [];
+        $this->query('INSERT INTO social_checkpoint(campaign_id,timeline_epoch,incident_id,event_id,game_ts,sequence,snapshot) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT(campaign_id,timeline_epoch,event_id) DO UPDATE SET snapshot=EXCLUDED.snapshot',
+            array_merge(array_slice($params,0,2),[$event['incident_id'],$event['event_id'],$event['game_ts'],$event['sequence'],self::json($snapshot)]));
+    }
+    // Internal semantic adapter boundary; deliberately not exposed as a client-supplied affinity API.
+    public function apply(array $event, string $observer, string $culprit, string $component, array $belief,
+        callable $resolve, string $mode = 'shadow', array $context = []): array
+    {
+        $event = SocialEventContract::validate($event);
+        if (!in_array($mode,['shadow','enabled'],true)) return ['status'=>'disabled'];
+        if (!getSettingBool('SOCIAL_CATEGORY_' . strtoupper($this->rules->category($component)),true)) return ['status'=>'category_disabled'];
+        if ($event['origin'] !== 'gameplay') return ['status'=>'setup'];
+        SocialEventContract::token($observer,'observer'); SocialEventContract::token($culprit,'culprit');
+        if (($belief['responsible_entity'] ?? null) !== $culprit) throw new DomainException('Belief culprit mismatch');
+        return $this->transaction(function () use ($event,$observer,$culprit,$component,$belief,$resolve,$mode,$context): array {
+            $this->lock($event['campaign_id']);
+            $captured = $this->row('SELECT status,mode,payload_hash FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND event_id=$3',[$event['campaign_id'],$event['timeline_epoch'],$event['event_id']]);
+            if (!$captured || $captured['payload_hash'] !== SocialEventContract::hash($event) || $captured['status'] !== 'captured' || $captured['mode'] !== $mode) throw new DomainException('Event not captured in this mode');
+            $key = [$event['campaign_id'],$event['timeline_epoch'],$event['incident_id'],$observer,$culprit,$component];
+            if ($this->row('SELECT delta FROM social_effect WHERE campaign_id=$1 AND timeline_epoch=$2 AND incident_id=$3 AND observer_key=$4 AND culprit_key=$5 AND component=$6',$key)) return ['status'=>'duplicate'];
+            $high = $this->row('SELECT MAX(sequence) AS n FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND native_session_id=$3',[$event['campaign_id'],$event['timeline_epoch'],$event['native_session_id']]);
+            if ((int)$high['n'] !== $event['sequence']) throw new DomainException('Late interpretation requires a new causal event');
+            // Resolve only unique persistent IDs. Name-only guessing is forbidden.
+            $a = $resolve($observer); $b = $resolve($culprit);
+            if (!$a || !$b || $a['id'] === $b['id']) return ['status'=>'unresolved_identity'];
+            $ids = [(int)$a['id'],(int)$b['id']]; sort($ids);
+            foreach ($ids as $id) $this->query('SELECT id FROM core_npc WHERE id=$1 FOR UPDATE',[$id]);
+            $fresh = getNpcById((int)$a['id']);
+            $map = stobeGetNpcRelationshipMap($fresh);
+            $entryKey = stobeFindRelationshipEntryKey($map,$b['name']);
+            $context['affinity'] = (int)($map[$entryKey]['aff'] ?? 0);
+            $effect = $this->rules->calculate($event['incident_id'],$observer,$component,$belief,$context);
+            if ($effect['reason'] === 'not_known') return ['status'=>'pending_awareness','effect'=>$effect];
+            $applied = $mode === 'enabled';
+            if ($applied && $effect['delta'] !== 0) {
+                $updates = stobeApplyRelationshipUpdatesMap($map,[['target'=>$b['name'],'aff_delta'=>$effect['delta'],'note'=>strval($belief['note'] ?? $component)]]);
+                if (($updates['updated'] ?? 0) !== 1) throw new RuntimeException('Canonical relationship update refused');
+                $previous = $GLOBALS['gameRequest'] ?? null;
+                $GLOBALS['gameRequest'] = ['social',0,$event['game_ts']];
+                try {
+                    if (!stobePersistNpcRelationshipMap($a['name'],$updates['map'],$fresh)) throw new RuntimeException('Relationship write failed');
+                } finally {
+                    if ($previous === null) unset($GLOBALS['gameRequest']); else $GLOBALS['gameRequest'] = $previous;
+                }
+            }
+            $this->query('INSERT INTO social_effect(campaign_id,timeline_epoch,incident_id,observer_key,culprit_key,component,game_ts,delta,detail,applied,rules_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)',array_merge($key,[$event['game_ts'],$effect['delta'],self::json($effect),$applied,$this->rules->version()]));
+            $this->query('INSERT INTO social_belief(campaign_id,timeline_epoch,incident_id,observer_key,belief,game_ts) VALUES($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT(campaign_id,timeline_epoch,incident_id,observer_key) DO UPDATE SET belief=EXCLUDED.belief,game_ts=EXCLUDED.game_ts',array_merge(array_slice($key,0,4),[self::json($belief),$event['game_ts']]));
+            if ($applied) {
+                $this->query('INSERT INTO social_evidence(campaign_id,timeline_epoch,observer_key,culprit_key,evidence,game_ts) VALUES($1,$2,$3,$4,jsonb_build_object($5::text,1),$6) ON CONFLICT(campaign_id,timeline_epoch,observer_key,culprit_key) DO UPDATE SET evidence=jsonb_set(social_evidence.evidence,ARRAY[$5::text],to_jsonb(COALESCE((social_evidence.evidence->>$5)::int,0)+1)),game_ts=EXCLUDED.game_ts',[$key[0],$key[1],$observer,$culprit,$component,$event['game_ts']]);
+            }
+            $this->checkpoint($event);
+            return ['status'=>$mode,'effect'=>$effect];
+        });
+    }
+    public function pending(array $event, string $observer, array $facts): void
+    {
+        $event = SocialEventContract::validate($event);
+        SocialEventContract::token($observer, 'observer');
+        $this->transaction(function () use ($event,$observer,$facts): void {
+            $this->lock($event['campaign_id']);
+            $row = $this->row('SELECT payload_hash,status FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND event_id=$3',[$event['campaign_id'],$event['timeline_epoch'],$event['event_id']]);
+            if (!$row || $row['status'] !== 'captured' || $row['payload_hash'] !== SocialEventContract::hash($event)) throw new DomainException('Pending evidence requires captured event');
+            $high = $this->row('SELECT MAX(sequence) AS n FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND native_session_id=$3',[$event['campaign_id'],$event['timeline_epoch'],$event['native_session_id']]);
+            if ((int)$high['n'] !== $event['sequence']) throw new DomainException('Late pending evidence requires a new causal event');
+            $active = $this->row("SELECT COUNT(*) AS n FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'phase'='pending_awareness'",[$event['campaign_id'],$event['timeline_epoch']]);
+            $incident = $this->row('SELECT state FROM social_incident WHERE campaign_id=$1 AND timeline_epoch=$2 AND incident_id=$3',[$event['campaign_id'],$event['timeline_epoch'],$event['incident_id']]);
+            if ((int)$active['n'] >= 256 && (json_decode($incident['state'] ?? '{}',true)['phase'] ?? '') !== 'pending_awareness') throw new LengthException('Social active incident limit reached');
+            $this->query('UPDATE social_incident SET state=jsonb_set(state || \'{"phase":"pending_awareness"}\'::jsonb,ARRAY[\'pending\', $4::text],$5::jsonb,true) WHERE campaign_id=$1 AND timeline_epoch=$2 AND incident_id=$3',[$event['campaign_id'],$event['timeline_epoch'],$event['incident_id'],$observer,self::json($facts)]);
+            $this->checkpoint($event);
+        });
+    }
+    public function rollback(int $cutoff): array
+    {
+        if ($cutoff < 0) throw new InvalidArgumentException('Invalid rollback time');
+        return $this->transaction(function () use ($cutoff): array {
+            // Exclusive lock prevents ingress race while rebuilding open states/evidence.
+            $this->query('LOCK TABLE social_event_inbox,social_incident,social_belief,social_effect,social_evidence,social_checkpoint IN ACCESS EXCLUSIVE MODE');
+            $snapshots = pg_fetch_all($this->query('SELECT * FROM (SELECT DISTINCT ON(campaign_id,timeline_epoch,incident_id) snapshot,game_ts,sequence FROM social_checkpoint WHERE game_ts<=$1 ORDER BY campaign_id,timeline_epoch,incident_id,game_ts DESC,sequence DESC) latest ORDER BY game_ts,sequence',[$cutoff])) ?: [];
+            foreach (['social_incident','social_belief','social_evidence'] as $table) $this->query("DELETE FROM $table");
+            foreach ($snapshots as $row) {
+                $snapshot = json_decode($row['snapshot'],true,32,JSON_THROW_ON_ERROR);
+                foreach (['social_incident','social_belief','social_evidence'] as $table) foreach ($snapshot[$table] ?? [] as $record) {
+                    if ($table === 'social_evidence') $this->query('DELETE FROM social_evidence WHERE campaign_id=$1 AND timeline_epoch=$2 AND observer_key=$3 AND culprit_key=$4',[$record['campaign_id'],$record['timeline_epoch'],$record['observer_key'],$record['culprit_key']]);
+                    $this->query("INSERT INTO $table SELECT * FROM jsonb_populate_record(NULL::$table,\$1::jsonb) ON CONFLICT DO NOTHING",[self::json($record)]);
+                }
+            }
+            foreach (['social_event_inbox','social_effect','social_checkpoint'] as $table) $this->query("DELETE FROM $table WHERE game_ts>\$1",[$cutoff]);
+            return ['restored_scopes'=>count($snapshots)];
+        });
+    }
+}

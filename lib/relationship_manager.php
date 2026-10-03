@@ -592,17 +592,8 @@ class RelationshipManager {
 
         $extended['relationships'] = $rels;
         $npcId = intval($npcData['id'] ?? 0);
-        $extendedJson = json_encode($extended, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $updated = stobeRunWithRelationshipExtendedDataWrite(
-            static function () use ($npcMaster, $npcId, $extendedJson): bool {
-                $result = $npcMaster->update($npcId, ['extended_data' => $extendedJson]);
-                if ($result !== false) {
-                    stobeRelationshipTimelineStamp($npcId);
-                }
-                return $result;
-            },
-            $npcId
-        );
+        require_once __DIR__ . '/chat_helper_functions.php';
+        $updated = stobePersistNpcRelationshipMap($npcName, $rels, $npcData);
         if ($updated === false) {
             return false;
         }
