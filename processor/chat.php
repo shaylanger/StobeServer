@@ -1632,6 +1632,15 @@ if (!$narratorMode && function_exists('stobeInferFetchFromAgreedRequest')
         stobeLogInfo('Agreed fetch without action: TASK_GOAL added (item 73)', ['npc'=>$targetNpc, 'action'=>$inferredFetch]);
     }
 }
+if (!$narratorMode && function_exists('stobeInferBuyFromAgreedRequest')
+    && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+    $inferredBuy = stobeInferBuyFromAgreedRequest(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
+        strval($responseText ?? ''));
+    if ($inferredBuy !== '') {
+        $responseActions[] = $inferredBuy;
+        stobeLogInfo('Agreed purchase without action: TASK_GOAL added (item 74)', ['npc'=>$targetNpc, 'action'=>$inferredBuy]);
+    }
+}
 if (!$narratorMode && function_exists('stobeInferFollowFromOrder')
     && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
     $inferredFollow = stobeInferFollowFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,

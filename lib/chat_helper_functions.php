@@ -15139,6 +15139,32 @@ function stobeInferFetchFromAgreedRequest(string $playerLine, array|false $npcDa
 }
 
 /**
+ * Item 74: "(go) buy (me) [N] X from <trader>" to a squad member who agreed in words but sent no
+ * action -> TASK_GOAL@BUY@<trader>@<item>@<N>@@0. The trader must be a known NPC ($traderKnown
+ * overrides the lookup for tests).
+ */
+function stobeInferBuyFromAgreedRequest(string $playerLine, array|false $npcData, array $actions, string $reply, ?bool $squadMember = null, ?callable $traderKnown = null): string {
+    if (!is_array($npcData)) return '';
+    if ($squadMember === null) $squadMember = function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData);
+    if (!$squadMember) return '';
+    foreach ($actions as $a) {
+        if (preg_match('/^(TASK_GOAL|WORK_GOAL|TASK_CONTROL|BUY_ITEM|BUYITEM|SELL_ITEM)@/i', trim(strval($a)))) return '';
+    }
+    $line = trim(function_exists('stobeNegWordsToNumbers') ? stobeNegWordsToNumbers($playerLine) : $playerLine);
+    if ($line === '' || str_contains($line, '?') || preg_match("/\b(don'?t|do\s+not|never|stop|cancel)\b/i", $line)) return '';
+    if (!preg_match("/\b(?i:buy)\s+(?:me\s+|us\s+)?(?:(\d{1,4})\s+)?(?:(?:a|an|the|some)\s+)?([A-Za-z][A-Za-z' -]{1,60}?)\s+from\s+(?:the\s+)?([A-Z][A-Za-z' -]{1,60}?)(?=\s*(?:\band\b|\bfor\b|[,.!;]|$))/", $line, $m)) return '';
+    $item = trim(preg_replace('/\s+/', ' ', $m[2]) ?? '');
+    $trader = trim(preg_replace('/\s+/', ' ', $m[3]) ?? '');
+    if ($item === '' || $trader === '' || preg_match('/^(it|them|that|this|something|stuff)$/i', $item)) return '';
+    $known = $traderKnown !== null ? boolval($traderKnown($trader))
+        : (function_exists('getNpcData') && is_array(getNpcData($trader)));
+    if (!$known) return '';
+    if (!function_exists('stobeReplyAgreesToErrand') || !stobeReplyAgreesToErrand($reply)) return '';
+    $qty = ($m[1] ?? '') !== '' ? max(1, min(1000, intval($m[1]))) : 1;
+    return 'TASK_GOAL@BUY@' . $trader . '@' . $item . '@' . $qty . '@@0';
+}
+
+/**
  * Bug 87: "follow me" / "guard me" to a squad member answered without a
  * movement action -> BODYGUARD@<player>.
  */

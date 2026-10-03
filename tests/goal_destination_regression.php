@@ -67,6 +67,19 @@ check('item 73: a refusal -> nothing', stobeInferFetchFromAgreedRequest($line73,
 check('item 73: only a question -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, [], 'The mead?', true) === '');
 check('item 73: an existing TASK_GOAL -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, ['TASK_GOAL@FETCH@General Camp Storage Chest@mead@1@@0'], $reply73, true) === '');
 check('item 73: not a container (a town) -> nothing', stobeInferFetchFromAgreedRequest('Fetch the mead from Squin.', $npc73, [], "I'll go.", true) === '');
+// 74: agreed purchase without an action (run m2, 06:56:48)
+$known74 = static fn(string $n): bool => $n === 'Apothecary Abia';
+$line74 = 'Malzin, go buy a Standard First Aid Kit from Apothecary Abia.';
+$reply74 = "Apothecary Abia, Standard First Aid Kit. I'll see what she's asking for it - assuming she's still got stock this late.";
+check('item 74: the run m2 pair -> TASK_GOAL@BUY from the trader',
+    stobeInferBuyFromAgreedRequest($line74, $npc73, [], $reply74, true, $known74) === 'TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@@0',
+    stobeInferBuyFromAgreedRequest($line74, $npc73, [], $reply74, true, $known74));
+check('item 74: a number is kept', stobeInferBuyFromAgreedRequest('Buy 2 bread from Apothecary Abia.', $npc73, [], 'Will do.', true, $known74) === 'TASK_GOAL@BUY@Apothecary Abia@bread@2@@0');
+check('item 74: an unknown trader -> nothing', stobeInferBuyFromAgreedRequest('Go buy a kit from Nobody Here.', $npc73, [], "I'll go.", true, $known74) === '');
+check('item 74: a refusal -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, [], "No, I'm not wasting cats on that.", true, $known74) === '');
+check('item 74: a question from the player -> nothing', stobeInferBuyFromAgreedRequest('Could you buy a kit from Apothecary Abia?', $npc73, [], "Sure.", true, $known74) === '');
+check('item 74: an action already there -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, ['TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@@0'], $reply74, true, $known74) === '');
+check('item 74: a non-faction NPC -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, [], $reply74, false, $known74) === '');
 check('item 73: a non-faction NPC -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, [], $reply73, false) === '');
 
 echo "\n$pass passed, $fail failed\n";
