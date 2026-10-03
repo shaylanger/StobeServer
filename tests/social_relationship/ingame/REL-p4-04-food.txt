@@ -30,6 +30,10 @@ speed 0
 # Hand it over while he is full, then make him hungry and let him eat it.
 hunger ${H} 290
 hunger ${F} 280
+teleport ${H} Shay dist 3
+speed 1
+@sleep 4
+speed 0
 inv Shay ~ Dried Meat
 transfer Shay ${H} "Dried Meat"
 speed 1

@@ -18,6 +18,8 @@
  *   php tools/social_relationship_inspect.php --incidents 20       combat/ko/slavery incidents (phase, remembered attacker, transfers, enslaver)
  *   php tools/social_relationship_inspect.php --interpret-log 30    last 30 SOCIAL_INTERPRET lines from log/relationship_worker.log
  *   php tools/social_relationship_inspect.php --set-relation "Observer" "Target" 91   TEST SETUP: write a stored affinity (fixture copies only)
+ *   php tools/social_relationship_inspect.php --interpret-log 40 --log-filter "Rel Vash"   only log lines mentioning that text
+ *   php tools/social_relationship_inspect.php --retention [campaign]   run the retention pass now (phase 8)
  *   php tools/social_relationship_inspect.php --set-mode off|shadow|enabled   prints the previous mode (restore with it)
  *   php tools/social_relationship_inspect.php --purge-all --yes            empties the six social tables (test data only)
  *
@@ -60,6 +62,13 @@ if (($i = array_search('--set-relation', $args, true)) !== false) {
     echo json_encode(['set_relation'=>$ok, 'observer'=>$args[$i+1] ?? '', 'target'=>$args[$i+2] ?? '', 'aff'=>(int)($args[$i+3] ?? 0)]), "
 ";
     exit($ok ? 0 : 1);
+}
+if (($i = array_search('--retention', $args, true)) !== false) {
+    // Phase 8: run the retention pass now for one campaign (default: the current scope's campaign).
+    $campaign = strval($args[$i+1] ?? '');
+    if ($campaign === '' || str_starts_with($campaign, '--')) { try { $campaign = stobeSocialScope($db)['campaign_id']; } catch (Throwable $e) { $campaign = 'legacy'; } }
+    echo json_encode(['retention'=>(new SocialStore($db))->retention($campaign), 'campaign'=>$campaign]), "\n";
+    exit(0);
 }
 if ($has('--purge-all')) {
     if (!$has('--yes')) { fwrite(STDERR, "--purge-all needs --yes\n"); exit(2); }
@@ -181,6 +190,8 @@ if (($n = $opt('--incidents')) !== null) {
 if (($n = $opt('--interpret-log')) !== null) {
     $file = dirname(__DIR__) . '/log/relationship_worker.log';
     $lines = is_file($file) ? preg_grep('/SOCIAL_INTERPRET/', file($file, FILE_IGNORE_NEW_LINES) ?: []) : [];
+    $filter = $opt('--log-filter');
+    if ($filter !== null && $filter !== '') $lines = array_filter($lines ?: [], fn($l) => stripos($l, $filter) !== false);
     $out['interpret_log'] = array_values(array_slice($lines ?: [], -max(1, min(500, intval($n)))));
 }
 if (($i = array_search('--expect-pair', $args, true)) !== false) {

@@ -1,0 +1,32 @@
+# id: REL-p8-01-soak
+# covers: phase 8 soak + performance gate (SR43): an hour of Hub play with capture on, shadow mode
+# fixture: Crafting base   (the Hub: raids, medics, guards = the busiest place seen in m4-m9)
+# reset: fresh
+# needs: Capture=1, mode shadow. A/B: run once with Capture=0 (baseline) and once with Capture=1, same fixture/speed.
+# verify: every 10 min (between @wait-game blocks, the game paused) record: inspect counts (no --events), `health` from kenshi-ctl,
+#   stobe.log size and the count of "SERIAL_HTTP: queue overflow" lines, harness `status` (fps if shown).
+#   Pass: no crash/hang; no queue overflow lines; inspect counts stop growing linearly once retention starts (raw inbox bounded);
+#   --check-shadow exit 0; frame time / fps with Capture=1 within 5% of the Capture=0 run (performance gate).
+@wait-world
+@sleep 8
+speed 0
+hunger Shay 280
+hunger Malzin 280
+time ~ game_hours=
+speed 5
+@wait-game 120 1200
+speed 0
+status ~ phase=world
+hunger Shay 280
+hunger Malzin 280
+speed 5
+@wait-game 120 1200
+speed 0
+status ~ phase=world
+hunger Shay 280
+hunger Malzin 280
+speed 5
+@wait-game 120 1200
+speed 0
+time ~ game_hours=
+status ~ phase=world

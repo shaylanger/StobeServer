@@ -69,6 +69,8 @@ final class SocialStore
             if (($event['facts']['source'] ?? null) !== 'structured') return ['status'=>'captured','effects'=>[]];
             require_once __DIR__ . '/social_interpreter.php';
             $effects = (new SocialInterpreter($this, $this->rules))->interpret($event, $mode);
+            // Phase 8: bounded tables; every 2000th fact of a native session runs the retention pass.
+            if ($event['sequence'] % 2000 === 0) $this->retention($event['campaign_id'], (int)($this->rules->section('retention')['keep_seconds'] ?? 259200));
             if (function_exists('stobeLogRelationshipInfo')) {
                 $brief = array_map(static fn($e) => array_intersect_key($e + (isset($e['effect']) ? ['delta'=>$e['effect']['delta'] ?? null, 'reason'=>$e['effect']['reason'] ?? null] : []),
                     array_flip(['status','component','observer','culprit','delta','reason','basis','incident'])), $effects);
@@ -201,6 +203,31 @@ final class SocialStore
             [$event['campaign_id'],$event['timeline_epoch'],$incident,self::json($state),$event['game_ts'],$event['sequence']]);
         $this->checkpoint($event, $incident);
     }
+    /**
+     * Phase 8 retention (SR43): keep the tables bounded during long play. Older than keepSeconds of game
+     * time (default 3 game days) relative to the campaign's newest event: raw inbox rows go, checkpoints of
+     * finished incidents go, finished incidents go. Never removed: effects (the ledger), evidence, beliefs,
+     * and any incident still waiting (pending awareness, a freed slave, an open carry or food gift window).
+     * A rollback to a time before the window restores what is left (documented).
+     */
+    public function retention(string $campaign, int $keepSeconds = 259200): array
+    {
+        return $this->transaction(function () use ($campaign, $keepSeconds): array {
+            $this->lock($campaign);
+            $newest = $this->row('SELECT MAX(game_ts) AS ts FROM social_event_inbox WHERE campaign_id=$1', [$campaign]);
+            if (!isset($newest['ts'])) return ['skipped'=>'empty'];
+            $cutoff = (int)$newest['ts'] - max(3600, $keepSeconds);
+            $open = "state->>'phase' IN ('pending_awareness','freed')"; // a combat/food/carry incident untouched for the whole window is over
+            $out = [];
+            $out['inbox'] = pg_affected_rows($this->query('DELETE FROM social_event_inbox WHERE campaign_id=$1 AND game_ts < $2', [$campaign, $cutoff]));
+            $out['checkpoints'] = pg_affected_rows($this->query("DELETE FROM social_checkpoint c WHERE c.campaign_id=\$1 AND c.game_ts < \$2
+                AND NOT EXISTS (SELECT 1 FROM social_incident i WHERE i.campaign_id=c.campaign_id AND i.timeline_epoch=c.timeline_epoch AND i.incident_id=c.incident_id AND i.$open)", [$campaign, $cutoff]));
+            $out['incidents'] = pg_affected_rows($this->query("DELETE FROM social_incident WHERE campaign_id=\$1 AND game_ts < \$2 AND NOT ($open)", [$campaign, $cutoff]));
+            $out['cutoff'] = $cutoff;
+            return $out;
+        });
+    }
+
     /** A KO incident carried into a newer load is closed in its old load (no double resolution). */
     public function retireIncident(string $campaign, string $epoch, string $incident): void
     {

@@ -30,7 +30,7 @@
   []
  ],
  "SR11": [
-  "offline-pass; game blocked/probe (m8: no 'enslaved' fact although shackle reported chained=1 slave_state=1; first-seen-enslaved probe added; also the KO'd bandit fled out of reach)",
+  "partial game: m9 p3-03 captured the enslaved fact (Rel Vash) after bringing him close; waking result not captured in the snapshot; rerun",
   [
    "social_unconscious_regression"
   ],
@@ -38,7 +38,7 @@
    "REL-p3-03-enslaved-while-ko"
   ],
   [
-   "probe 21: does a spawned bandit already count as a slave/chained when first seen?"
+   "probe 21 answered for p7-02: Rel Xan was first seen already chained (never swept before the shackle)"
   ]
  ],
  "SR12": [
@@ -76,7 +76,7 @@
   ]
  ],
  "SR38": [
-  "partial: offline-pass; game-pass stale/reload (m4+m5 p1-04 25/0)",
+  "game-pass (m9 p3-04 39/0: KO, loot latent, reload; plus p1-04 stale checks)",
   [
    "social_relationship_integration",
    "social_unconscious_regression"
@@ -85,9 +85,7 @@
    "REL-p1-04-reload-stale",
    "REL-p3-04-reload-mid-ko"
   ],
-  [
-   "p3-04 recovered fact missed in m5 (crowd): rerun"
-  ]
+  []
  ],
  "SR42": [
   "partial: offline-pass (beliefs/notes name only the inferred culprit; witnesses learn only what they saw)",
@@ -282,7 +280,7 @@
   ]
  ],
  "SR05": [
-  "game-pass (m4 p2-05, m8 p2-01: aggression -15, KO -21, one budget; KO attributed to Shay)",
+  "game-pass (m4, m8); m9 ally KO without own attack fact now charged (joined assault)",
   [
    "social_combat_regression"
   ],
@@ -346,29 +344,29 @@
   ]
  ],
  "SR43": [
-  "partial: offline-pass; m4 volume: ~1500 inbox rows / 850 checkpoints per load in the Hub (encounter refresh now at most once per game minute)",
+  "offline-pass (perf bench 6000 facts p95 12 ms, retention keeps the raw tables to 3 game days); game soak REL-p8-01 pending",
   [
    "social_concurrency_regression",
-   "social_combat_regression"
+   "social_combat_regression",
+   "social_perf_bench"
   ],
-  [],
   [
-   "retention for the inbox not implemented"
-  ]
+   "REL-p8-01-soak"
+  ],
+  []
  ],
  "SR24": [
-  "game-pass (m8 p6-01b: Rel Wren (91) -> Shay witness -7 of the victim's -10)",
+  "game-pass (m8, m9: Rel Wren -6/-7 of the victim's -10)",
   [
    "social_witness_regression"
   ],
   [
-   "REL-p6-01a-witness-setup",
    "REL-p6-01b-witness-attack"
   ],
   []
  ],
  "SR25": [
-  "real bug fixed (m8: a floor-sleeping friend was counted, -6; sleeping now = not a witness); game rerun needed",
+  "real bug still open in game (m9: the floor-sleeping witness still counted -7 with the sleep fix): witness entries now carry task + prone state for diagnosis",
   [
    "social_witness_regression"
   ],
@@ -376,7 +374,7 @@
    "REL-p6-01b-witness-attack"
   ],
   [
-   "probe 5 answered: isUnconcious() is false while sleeping"
+   "probe 22: which task/prone state a SLEEP_ON_FLOOR character reports"
   ]
  ],
  "SR26": [
@@ -444,6 +442,14 @@
   [],
   [
    "vanilla recruit in game not run"
+  ]
+ ],
+ "SR44": [
+  "partial: offline runner resumable steps + manifest; game runner resume is the coordinator's harness",
+  [],
+  [],
+  [
+   "phase 8 game runner not REL-owned"
   ]
  ]
 }

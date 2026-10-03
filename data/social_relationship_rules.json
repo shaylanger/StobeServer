@@ -1,5 +1,5 @@
 {
- "version": "phase7-v1",
+ "version": "phase8-v1",
  "ranges": {
   "aggression": [
    -15,
@@ -263,5 +263,9 @@
  "escape": {
   "sustain_seconds": 86400,
   "note": "game seconds a freed slave must be seen alive and free before the escape completes"
+ },
+ "retention": {
+  "keep_seconds": 259200,
+  "note": "raw facts/checkpoints/finished incidents older than this (game seconds) are pruned every 2000 facts; ledger, evidence, beliefs and waiting incidents are kept"
  }
 }

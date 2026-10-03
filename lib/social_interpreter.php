@@ -240,6 +240,31 @@ final class SocialInterpreter
         return [$result];
     }
 
+    /**
+     * Run m9: Malzin knocked out a bandit Shay had attacked; the attack hook never reported Malzin's own
+     * attack, so her KO had no encounter. A character who harms someone already being assaulted by an ally
+     * (same faction / both player faction) joined that assault: an encounter with them as initiator.
+     */
+    private function joinedAllyAssault(array $event, array $a, array $b): ?array
+    {
+        $rows = $this->store->fetchRows("SELECT state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='combat'
+              AND state->>'phase'='active' AND state->>'victim'=\$3 AND state->>'initiator'<>\$4 AND (state->>'last_ts')::bigint >= \$5",
+            [$event['campaign_id'], $event['timeline_epoch'], $b['entity_key'], $a['entity_key'], $event['game_ts'] - $this->idle()]);
+        foreach ($rows as $row) {
+            $state = json_decode($row['state'], true);
+            $initiator = $state['parties'][$state['initiator'] ?? ''] ?? null;
+            if (!$initiator || !self::allies($initiator, $a)) continue;
+            $incident = 'combat:' . $event['sequence'] . ':' . substr(hash('sha256', self::pairKey($a['entity_key'], $b['entity_key'])), 0, 16);
+            $new = ['kind'=>'combat', 'phase'=>'active', 'pair'=>self::pairKey($a['entity_key'], $b['entity_key']),
+                'initiator'=>$a['entity_key'], 'victim'=>$b['entity_key'], 'basis'=>'joined_ally_assault', 'ally'=>$initiator['entity_key'],
+                'severity'=>1.0, 'parties'=>[$a['entity_key']=>$a, $b['entity_key']=>$b], 'opened_ts'=>$event['game_ts'],
+                'last_ts'=>$event['game_ts'], 'pending'=>(object)[]];
+            $this->store->saveIncident($event, $incident, $new);
+            return ['id'=>$incident, 'state'=>$new];
+        }
+        return null;
+    }
+
     private function harm(array $event, string $mode): array
     {
         $b = $event['target']; $a = $event['actor']; $level = strval($event['facts']['level'] ?? '');
@@ -260,6 +285,7 @@ final class SocialInterpreter
         }
         if (!$a || $a['entity_key'] === $b['entity_key']) return [['status'=>'unattributed']];
         $open = $this->openPair($event, $a['entity_key'], $b['entity_key']);
+        if (!$open) $open = $this->joinedAllyAssault($event, $a, $b);
         if (!$open) return [['status'=>'no_encounter', 'note'=>'harm without an observed attack between this pair is not scored']];
         $state = $open['state'];
         $state['last_ts'] = $event['game_ts'];

@@ -11,7 +11,7 @@ function sql(string $s, array $p = []): mixed { $r = $GLOBALS['db']->exec($s, $p
 function affOf(string $a, string $b): int { return (int)(stobeRelationshipEntryFor(getNpcData($a), $b)['aff'] ?? 0); }
 function rows(string $t): int { return (int)pg_fetch_result(sql("SELECT count(*) FROM $t"), 0, 0); }
 
-const NAMES = ['Combat Alpha'=>[101,'Red'], 'Combat Bravo'=>[102,'Blue'], 'Combat Charlie'=>[103,'Blue'], 'Combat Delta'=>[104,'Green'], 'Combat Echo'=>[105,'Grey'], 'Combat Foxtrot'=>[106,'Yellow']];
+const NAMES = ['Combat Alpha'=>[101,'Red'], 'Combat Bravo'=>[102,'Blue'], 'Combat Charlie'=>[103,'Blue'], 'Combat Delta'=>[104,'Green'], 'Combat Echo'=>[105,'Grey'], 'Combat Foxtrot'=>[106,'Yellow'], 'Combat Golf'=>[107,'Yellow']];
 foreach (['social_event_inbox','social_incident','social_belief','social_effect','social_evidence','social_checkpoint'] as $t) sql("DELETE FROM $t");
 foreach (NAMES as $name => [$serial, $faction]) {
     sql('DELETE FROM core_npc_master_history WHERE name=$1', [$name]); sql('DELETE FROM core_npc WHERE name=$1', [$name]);
@@ -152,5 +152,13 @@ ok(stobeRelationshipOnAttack('Combat Alpha: Initiated attack (talking to: Combat
 // SR43: bounded per event: an attack writes at most one incident (+ one checkpoint per touched incident).
 ok(rows('social_incident') < 40 && rows('social_checkpoint') < 80, 'bounded incident growth');
 
+// Run m9: an ally who joins an assault without an observed attack of their own (Malzin's KO) is charged; a stranger is not.
+send(ev('attack', ent('Combat Foxtrot'), ent('Combat Echo'), ['victim_targeting_actor'=>false], 7000));
+send(ev('harm', ent('Combat Golf'), ent('Combat Echo', false), ['level'=>'knockout', 'attribution'=>'defeated_by'], 7010));
+$joined = affOf('Combat Echo', 'Combat Golf');
+ok($joined <= -25 && $joined >= -40, "m9 ally joining the assault charged ($joined)");
+$before = affOf('Combat Echo', 'Combat Delta');
+send(ev('harm', ent('Combat Delta'), ent('Combat Echo', false), ['level'=>'injury', 'attribution'=>'attacker_list'], 7020));
+ok(affOf('Combat Echo', 'Combat Delta') === $before, 'm9 a non-ally without an encounter: not charged');
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 echo "$n combat regression checks passed\n";

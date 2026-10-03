@@ -28,6 +28,11 @@ speed 1
 @sleep 20
 speed 0
 @set GNAME where ${G} ~ ^(.+?) #\d+
+teleport ${DONOR} Shay dist 3
+teleport ${G} Shay dist 4
+speed 1
+@sleep 4
+speed 0
 transfer ${DONOR} ${G} "Iron Plates"
 speed 1
 @sleep 4

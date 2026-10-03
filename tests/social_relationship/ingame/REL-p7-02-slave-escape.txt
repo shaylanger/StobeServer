@@ -10,10 +10,10 @@
 @sleep 8
 speed 0
 @set MALZIN where Malzin ~ Malzin (#\d+)
-spawn "Hungry Bandit" Drifters near Malzin dist 6 count 1 ~ spawned 1/1
+spawn "Hungry Bandit" Drifters near Shay dist 6 count 1 ~ spawned 1/1
 @set X chars 40 ~ Hungry Bandit (#\d+)
 setname ${X} "Rel Xan"
-spawn "Hungry Bandit" Drifters near Malzin dist 20 count 1 ~ spawned 1/1
+spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
 @set O chars 40 ~ Hungry Bandit (#\d+)
 setname ${O} "Rel Ober"
 stobe_say "Rel Xan" "Xan, hold still."
@@ -21,6 +21,11 @@ speed 1
 @sleep 12
 speed 0
 @set XNAME where ${X} ~ ^(.+?) #\d+
+# run m9: "first seen already enslaved": let the world sweep see him free first
+teleport Malzin ${X} dist 3
+speed 1
+@sleep 6
+speed 0
 shackle ${X} owner ${O}
 speed 1
 @sleep 5
