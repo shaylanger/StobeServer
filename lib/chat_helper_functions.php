@@ -11851,6 +11851,33 @@ function stobeIsGenericNpcName(string $name): bool {
     }
 }
 
+/** R4: an attack lowers both sides' feelings (once per pair per 15 min). Returns the changes made. */
+function stobeRelationshipOnAttack(string $eventData, ?int $now = null): array {
+    if (function_exists('getSettingBool') && !getSettingBool('RELATIONSHIP_FIGHTS_COUNT', true)) return [];
+    if (!preg_match('/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)/', trim($eventData), $m)) return [];
+    $attacker = normalizeParticipantNameToken($m[1]);
+    $victim = normalizeParticipantNameToken($m[2]);
+    if ($attacker === '' || $victim === '' || strcasecmp($attacker, $victim) === 0) return [];
+    if (stobeIsGenericNpcName($attacker) || stobeIsGenericNpcName($victim)) return [];
+    $now = $now ?? time();
+    $pairKey = 'STOBE_REL_FIGHT_' . md5(strtolower($attacker) . '|' . strtolower($victim));
+    $last = intval(function_exists('getConfOpt') ? getConfOpt($pairKey, '0') : 0);
+    if ($last > 0 && $now - $last < 900) return [];
+    if (function_exists('setConfOpt')) setConfOpt($pairKey, strval($now));
+    $done = [];
+    foreach ([[$victim, $attacker, -10, 'attacked me'], [$attacker, $victim, -4, 'fought them']] as [$who, $target, $delta, $note]) {
+        $data = getNpcData($who);
+        if (!is_array($data)) continue; // the player has no relationship map of her own
+        $map = stobeGetNpcRelationshipMap($data);
+        $r = stobeApplyRelationshipUpdatesMap($map, [['target' => $target, 'aff_delta' => $delta, 'note' => $note]]);
+        if (($r['updated'] ?? 0) > 0 && stobePersistNpcRelationshipMap($who, $r['map'], $data)) {
+            $done[] = ['who' => $who, 'target' => $target, 'delta' => $delta];
+        }
+    }
+    if (count($done) > 0 && function_exists('stobeLogInfo')) stobeLogInfo('Relationship: a fight counts (R4)', ['changes' => $done]);
+    return $done;
+}
+
 function stobeApplyRelationshipUpdatesMap(array $relationshipMap, array $updates, array $allowedTargets = []): array {
     $allowedLookup = [];
     foreach ($allowedTargets as $name) {

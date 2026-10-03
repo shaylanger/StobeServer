@@ -1362,6 +1362,9 @@ function stobeNegTickThrottled(string $eventType = '', string $eventData = '', s
     $type = strtolower(trim($eventType));
     if ($type === 'combat') {
         try { stobeNegPersonalFightJoiner($eventData); } catch (Throwable $e) {}
+        if (function_exists('stobeRelationshipOnAttack')) {
+            try { stobeRelationshipOnAttack($eventData); } catch (Throwable $e) {} // R4: fights count
+        }
     }
     if (in_array($type, ['combat','major_damage','knockout','combat_start'], true)) {
         stobeNegConsiderInitiatives($type, $eventData, $peopleRaw, $gamets);
