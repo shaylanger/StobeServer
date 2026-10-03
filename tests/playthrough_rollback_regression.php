@@ -573,5 +573,24 @@ $GLOBALS['DRAGON_BREAK_AUTO_PLAYTHROUGH'] = true;
     }
 }
 
+// Item 109: goals stamped after the cutoff belong to the abandoned timeline and are pruned; older and
+// unstamped goals stay.
+require_once __DIR__ . '/../lib/task_goal_functions.php';
+stobeTaskGoalEnsureSchema();
+$db->exec("DELETE FROM stobe_task_goal_runtime WHERE goal_id LIKE 'pt109-%'");
+foreach (['pt109-future' => 5000, 'pt109-past' => 100, 'pt109-unstamped' => 0] as $gid => $gts) {
+    $db->exec(
+        "INSERT INTO stobe_task_goal_runtime (goal_id, actor_name, actor_serial, kind, item_name, quantity, status, created_game_ts)
+         VALUES ($1, 'PT109 Avarek', 1, 'FETCH', 'dried meat', 1, 'COMPLETE', $2)",
+        [$gid, $gts]
+    );
+}
+$goalPrune = stobePlaythroughPruneFutureTimeline(1000);
+$left = array_column($db->fetchAll("SELECT goal_id FROM stobe_task_goal_runtime WHERE goal_id LIKE 'pt109-%' ORDER BY goal_id") ?: [], 'goal_id');
+ptAssert($left === ['pt109-past', 'pt109-unstamped'], 'item 109: future-timeline goal pruned, past/unstamped kept: ' . json_encode($left));
+ptAssert(intval($goalPrune['task_goals'] ?? 0) >= 1, 'item 109: task_goals count reported');
+$db->exec("DELETE FROM stobe_task_goal_runtime WHERE goal_id LIKE 'pt109-%'");
+echo "PASS item 109 rollback prunes future-timeline goals" . PHP_EOL;
+
 exit(0);
 

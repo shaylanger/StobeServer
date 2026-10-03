@@ -167,7 +167,23 @@ function stobePlaythroughPruneFutureTimeline(int $cutoffGamets): array
         'player_bases_deleted' => 0,
         'player_bases_restored' => 0,
         'player_base_presence_cleared' => 0,
+        'task_goals' => 0,
+        'work_goals' => 0,
     ];
+
+    // Item 109: goals made in the abandoned timeline (stamped after the cutoff) go too; unstamped rows stay.
+    foreach (['stobe_task_goal_runtime' => 'task_goals', 'stobe_work_goal' => 'work_goals'] as $goalTable => $goalKey) {
+        if (stobePlaythroughTableExists($goalTable) && stobePlaythroughColumnExists($goalTable, 'created_game_ts')) {
+            $counts[$goalKey] = stobePlaythroughDeleteCount(
+                'WITH deleted AS (
+                    DELETE FROM ' . $goalTable . '
+                    WHERE created_game_ts > $1
+                    RETURNING 1
+                 ) SELECT COUNT(*)::int AS c FROM deleted',
+                [$cutoff]
+            );
+        }
+    }
 
     if (stobePlaythroughTableExists('eventlog')) {
         $counts['eventlog'] = stobePlaythroughDeleteCount(
