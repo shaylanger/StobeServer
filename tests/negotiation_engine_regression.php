@@ -600,6 +600,46 @@ foreach (['Torek71 [NegTest71 Bandit]', 'Varn71 [NegTest71 Bandit]'] as $n71) {
     $db->exec("DELETE FROM core_npc WHERE name=$1", [$n71]);
 }
 
+// ---------------------------------------------------------------- 12h4c. item 72: his offer survives his "no" to a counter
+$n72 = 'Weth72 [NegTest72 Bandit]';
+fixtureNpc($n72, ['money'=>500,'money_observed_at'=>time(),'is_in_combat'=>true], 'Bread x1', 'A tough raider.', '30/100');
+$db->exec("DELETE FROM stobe_social_contract WHERE npc_name=$1", [$n72]);
+$offer72 = json_encode(['message'=>'Two hundred cats and I walk away.','deal_decision'=>'PROPOSE','deal_terms'=>json_encode([
+    ['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>200],['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player'],['kind'=>'SPARE','by'=>'player','target'=>'npc']])]);
+$p72 = stobeDealCaptureResponse($offer72, $n72, $player, getNpcData($n72) ?: [], '', 'surrender', 'npc');
+$reject72 = json_encode(['message'=>"There's no third fifty hiding anywhere. Two hundred, and I stop swinging. That's the whole offer.",'deal_decision'=>'REJECT','deal_terms'=>'']);
+$r72 = stobeDealCaptureResponse($reject72, $n72, $player, getNpcData($n72) ?: [], "Weth, two hundred isn't enough. Make it 350.");
+check('item 72: his REJECT of the counter keeps his offer on the table',
+    ($r72['offer_kept'] ?? false) === true && ($db->fetchOne("SELECT status FROM stobe_social_contract WHERE contract_id=$1", [strval($p72['id'] ?? '')])['status'] ?? '') === 'PROPOSED', [$p72, $r72]);
+$accept72 = json_encode(['message'=>"Good. Two hundred, and we both stop. I'll get the cats out.",'deal_decision'=>'ACCEPT','deal_terms'=>json_encode([
+    ['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>200],['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']])]);
+$a72 = stobeDealCaptureResponse($accept72, $n72, $player, getNpcData($n72) ?: [], 'Fine Weth, two hundred. Deal, you can walk.');
+$cats72 = array_values(array_filter($a72['terms'] ?? [], static fn($t) => ($t['kind'] ?? '') === 'GIVE_CATS'));
+check('item 72: "fine, two hundred, deal" accepts HIS offer (same deal, he pays)',
+    ($a72['id'] ?? '') === ($p72['id'] ?? 'x') && ($a72['status'] ?? '') === 'ACCEPTED' && ($cats72[0]['by'] ?? '') === 'npc', $a72);
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name=$1 AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE','REJECTED')", [$n72]);
+// (b) his offer was already rejected (old server): the accept takes it up, not a player-pays combat deal
+$p72b = stobeDealCaptureResponse($offer72, $n72, $player, getNpcData($n72) ?: [], '', 'surrender', 'npc');
+stobeDealTransition(strval($p72b['id'] ?? ''), 'PROPOSED', 'REJECTED', ['rejected_by'=>'npc']);
+$accept72b = json_encode(['message'=>'Good. Two hundred, and we both stop.','deal_decision'=>'ACCEPT','deal_terms'=>json_encode([
+    ['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>200],['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']])]);
+$a72b = stobeDealCaptureResponse($accept72b, $n72, $player, getNpcData($n72) ?: [], 'Fine Weth, two hundred. Deal, you can walk.');
+$cats72b = array_values(array_filter($a72b['terms'] ?? [], static fn($t) => ($t['kind'] ?? '') === 'GIVE_CATS'));
+check('item 72: accepting a just-rejected offer of his: he pays, kind surrender',
+    ($a72b['kind'] ?? '') === 'surrender' && ($cats72b[0]['by'] ?? '') === 'npc', $a72b);
+$db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name=$1 AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE','REJECTED')", [$n72]);
+// (a) a REJECT that ends the talks still kills his offer
+$p72c = stobeDealCaptureResponse($offer72, $n72, $player, getNpcData($n72) ?: [], '', 'surrender', 'npc');
+stobeDealCaptureResponse(json_encode(['message'=>'Forget it. No deal.','deal_decision'=>'REJECT','deal_terms'=>'']), $n72, $player, getNpcData($n72) ?: [], 'Make it 350.');
+check('item 72: "Forget it. No deal." withdraws his offer',
+    ($db->fetchOne("SELECT status FROM stobe_social_contract WHERE contract_id=$1", [strval($p72c['id'] ?? '')])['status'] ?? '') === 'REJECTED');
+check('item 72: "I\'ll get the cats out" flips a player-paid term to her',
+    (stobeDealFixCatsDirectionFromHerWords([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>200]], "I'll get the cats out.")[0]['by'] ?? '') === 'npc');
+check('item 72: "you\'ll pay me, I\'ll count the cats" does not flip',
+    (stobeDealFixCatsDirectionFromHerWords([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>200]], "You'll pay me first, then I'll count the cats.")[0]['by'] ?? '') === 'player');
+$db->exec("DELETE FROM stobe_social_contract WHERE npc_name=$1", [$n72]);
+$db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n72]);
+
 // ---------------------------------------------------------------- 12h5. deal-offer cap tiers
 $tierOf = static fn(string $n, array $d = []) => stobeNegWealthTier($n, $d)['tier'];
 check('cap tiers: Hungry Bandit is tier 0', $tierOf('Karric [Hungry Bandit]') === 0);

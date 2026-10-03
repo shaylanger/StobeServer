@@ -523,6 +523,13 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
         stobeDealLog('info', 'Negotiation: REJECT with her own price recorded as COUNTER', ['npc'=>$npc]);
     }
     $open = stobeDealOpenForNpc($npc);
+    if ($decision === 'REJECT' && $open !== null && strval($open['status']) === 'PROPOSED'
+        && strval($open['proposer'] ?? '') === 'npc' && !stobeDealReplyEndsTalks(strval($response['message'] ?? ''))) {
+        // Item 72: he turned down the player's counter; his own offer stays on the table.
+        stobeDealLog('info', "Negotiation: REJECT of the player's counter, his own offer stays (item 72)",
+            ['npc'=>$npc, 'contract_id'=>strval($open['contract_id'])]);
+        return ['ok'=>true,'decision'=>'REJECT','id'=>strval($open['contract_id']),'offer_kept'=>true];
+    }
     if ($decision === 'REJECT' && $open !== null && in_array(strval($open['status']), ['PROPOSED','COUNTERED'], true)) {
         stobeDealTransition(strval($open['contract_id']), strval($open['status']), 'REJECTED', ['rejected_by'=>'npc']);
         return ['ok'=>true,'decision'=>'REJECT','id'=>strval($open['contract_id'])];
@@ -565,7 +572,18 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     $terms = stobeDealFixTargetField($terms); // item 46
     $terms = stobeDealFixCatsDirection($terms, $response, $player); // item 44
     $terms = stobeDealFixCatsDirectionFromWords($terms, $playerMessage); // item 44
-    $terms = stobeDealFixCatsDirectionFromTable($terms, $open, $playerMessage); // item 44
+    // Item 72: no open deal, but he just offered one that got rejected: that offer is the table.
+    $table = $open;
+    if ($table === null && $decision === 'ACCEPT') {
+        $table = stobeDealRecentRejectedNpcOffer($npc);
+        if ($table !== null) {
+            $kind = strval($table['kind'] ?? $kind) ?: $kind;
+            $proposer = 'npc';
+            stobeDealLog('info', 'Negotiation: ACCEPT takes up his just-rejected offer (item 72)', ['npc'=>$npc, 'contract_id'=>strval($table['contract_id'])]);
+        }
+    }
+    $terms = stobeDealFixCatsDirectionFromHerWords($terms, strval($response['message'] ?? '')); // item 72
+    $terms = stobeDealFixCatsDirectionFromTable($terms, $table, $playerMessage); // item 44
     $terms = stobeDealDropZeroCatsTerms($terms); // item 45
     // A social deal needs something from the NPC. Counters often restate only the price:
     // keep the NPC's side from the deal on the table, else refuse the one-sided terms.
@@ -1413,6 +1431,40 @@ function stobeDealFixCatsDirectionFromWords(array $terms, string $playerMessage)
 }
 
 /** Item 44: the open deal has the NPC paying and the player's line doesn't say the player pays. */
+/** Item 72: his reply ends the talks ("no deal", "forget it", "then we fight"). */
+function stobeDealReplyEndsTalks(string $message): bool {
+    return preg_match("/\b(no\s+deal|forget\s+it|forget\s+the\s+deal|deal'?s\s+off|offer'?s\s+(?:off|gone|withdrawn)|we\s+fight|fight\s+it\s+is|to\s+the\s+death|then\s+die|i\s+take\s+it\s+back)\b/i", $message) === 1;
+}
+
+/** Item 72: an NPC offer (proposer npc) he himself rejected in the last 10 minutes, or null. */
+function stobeDealRecentRejectedNpcOffer(string $npc): ?array {
+    try {
+        $row = $GLOBALS['db']->fetchOne(
+            "SELECT * FROM stobe_social_contract WHERE LOWER(npc_name)=LOWER($1) AND status='REJECTED' AND proposer='npc'
+               AND COALESCE(evidence->>'rejected_by','')='npc' AND updated_at > NOW() - INTERVAL '10 minutes'
+             ORDER BY updated_at DESC LIMIT 1", [$npc]);
+        return is_array($row) ? $row : null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** Item 72: her line says she pays ("I'll get the cats out", "I'll pay you 200"): the one player-paid Cats term is hers. */
+function stobeDealFixCatsDirectionFromHerWords(array $terms, string $message): array {
+    $m = strtolower(str_replace(["\u{2019}", "\u{2018}"], "'", $message));
+    if (!preg_match("/\b(?:i'?ll|i\s+will|let\s+me|i'?m\s+(?:getting|handing))\s+(?:get|dig|fish|pull|count|hand|pay|give|getting|handing)\b[^.?!]{0,30}\b(?:cats|coin|coins|money|purse|\d{2,7}|hundred|thousand)\b/", $m)) return $terms;
+    if (preg_match("/\byou(?:'ll|\s+will)?\s+(?:pay|give|hand)\b/", $m)) return $terms;
+    $cats = [];
+    foreach ($terms as $i => $t) {
+        if (is_array($t) && strtoupper(strval($t['kind'] ?? '')) === 'GIVE_CATS') $cats[] = $i;
+    }
+    if (count($cats) !== 1 || ($terms[$cats[0]]['by'] ?? '') !== 'player') return $terms;
+    $terms[$cats[0]]['by'] = 'npc';
+    $terms[$cats[0]]['to'] = 'player';
+    stobeDealLog('warn', 'Negotiation term fixed: her words say she pays (item 72)', ['amount'=>intval($terms[$cats[0]]['amount'] ?? 0)]);
+    return $terms;
+}
+
 function stobeDealFixCatsDirectionFromTable(array $terms, ?array $open, string $playerMessage): array {
     if ($open === null) return $terms;
     $m = strtolower($playerMessage);
