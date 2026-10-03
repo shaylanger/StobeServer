@@ -1,0 +1,28 @@
+# id: REL-probe-theft-unseen   (probe for SR09/SR13/SR14 feasibility; no SR verdict)
+# fixture: kah-trader or kah-squin; reset: fresh; Capture=1; mode shadow; harness KAH 22
+# what it answers: the same pickup with stealth on and the owner knocked out (owner unaware): stolen tag yes/no,
+#   no hunt / bounty expected, and what Stobe captured (it must not look "caught").
+#   Other shop members may still see it: the crime step reports who hunts.
+# after: as REL-probe-theft-seen
+@wait-world
+@sleep 8
+speed 0
+@set P where @player ~ (#\d+/\d+)
+@set P_S where ${P} ~ (#\d+)/\d+
+@set TRADER traders 300 ~ traders within [0-9.]+: (.+?) #\d+
+@set ITEM shopstock "${TRADER}" ~ \((?!carried)[^)]*\): \[([^\]\[]+?) x\d+
+crime ${P} ~ .
+ko "${TRADER}" 120
+stealth ${P} on
+teleport ${P} "${TRADER}" dist 6
+speed 1
+@sleep 4
+speed 0
+pickup ${P} "${ITEM}" radius 40 ~ stolen=
+speed 1
+@sleep 20
+speed 0
+crime ${P} ~ .
+chars 40 ~ .
+stealth ${P} off
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: (queued|structured) kind=(item_gain|item_transfer|item_pickup|trade)[^\n]*actor=${P_S}

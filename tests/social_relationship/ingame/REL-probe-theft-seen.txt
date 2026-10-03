@@ -1,0 +1,31 @@
+# id: REL-probe-theft-seen   (probe for SR09/SR13/SR14 feasibility; no SR verdict)
+# fixture: kah-trader (one player character next to 5 traders) or kah-squin; reset: fresh; Capture=1; mode shadow
+# needs: harness KAH 22 (`pickup <npc> <item> [near <x>|radius <m>]` -> owner faction + stolen=0/1, `stealth`, `crime`)
+# what it answers: does a player-style pickup of a faction-owned world item, in plain view of the owner, (1) get the
+#   game's stolen tag, (2) make the owner/guards hunt the thief (crime: bounty + hunters), (3) reach Stobe as a fact
+#   (item_gain / item_transfer, with "caught"/stolen fields and witnesses w=[...])?
+# after: php tools/social_relationship_inspect.php --events 60 --interpret-log 40 --effects 20 --check-shadow
+#        grep -a "SOCIAL_CAPTURE: .*actor=<P_S>" stobe.log ; grep -a "INV_TRANSFER\|gain without loss" stobe.log | tail
+@wait-world
+@sleep 8
+speed 0
+@set P where @player ~ (#\d+/\d+)
+@set P_S where ${P} ~ (#\d+)/\d+
+@set PNAME where ${P} ~ ^(.+?) #\d+
+@set TRADER traders 300 ~ traders within [0-9.]+: (.+?) #\d+
+shopstock "${TRADER}" ~ .
+# a world/shop item that is not on a person: the first item of a non-carried section (edit if the probe finds none)
+@set ITEM shopstock "${TRADER}" ~ \((?!carried)[^)]*\): \[([^\]\[]+?) x\d+
+crime ${P} ~ .
+stealth ${P} off
+teleport ${P} "${TRADER}" dist 3
+speed 1
+@sleep 4
+speed 0
+pickup ${P} "${ITEM}" radius 40 ~ stolen=
+speed 1
+@sleep 20
+speed 0
+crime ${P} ~ .
+chars 40 ~ .
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: (queued|structured) kind=(item_gain|item_transfer|item_pickup|trade)[^\n]*actor=${P_S}
