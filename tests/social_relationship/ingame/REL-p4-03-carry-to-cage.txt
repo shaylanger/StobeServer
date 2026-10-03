@@ -25,7 +25,8 @@ ko ${K} 90
 speed 1
 @sleep 4
 speed 0
-@set CAGE buildings 400 Cage ~ ([A-Za-z ]*Cage[A-Za-z ]*)
+# run m10: the old regex captured " Prisoner Cage dist"; take the name between "| " and " dist="
+@set CAGE buildings 400 Cage ~ \| ([A-Za-z ]*Cage[A-Za-z ]*?) dist=
 order Malzin LIFT_PERSON target ${K}
 speed 2
 @sleep 10

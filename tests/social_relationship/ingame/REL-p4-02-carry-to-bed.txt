@@ -27,7 +27,14 @@ speed 1
 @sleep 4
 speed 0
 buildings 200 Bed ~ Bed
-order Malzin FIND_BED_AND_PUT_IN target ${C}
+# run m10: FIND_BED_AND_PUT_IN did nothing (Malzin stayed, someone else hauled Cobb 218 m); LIFT_PERSON works (p4-03 m10)
+order Malzin LIFT_PERSON target ${C}
+speed 2
+@sleep 10
+speed 0
+where Malzin
+where ${C}
+order Malzin PUT_SOMEONE_IN_BED building "Bed"
 speed 2
 @sleep 40
 speed 0
