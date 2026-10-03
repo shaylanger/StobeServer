@@ -1,5 +1,5 @@
 {
- "version": "phase4-v1",
+ "version": "phase5-v1",
  "ranges": {
   "aggression": [
    -15,
@@ -132,6 +132,14 @@
   "insult": [
    -8,
    -3
+  ],
+  "petty_theft": [
+   -8,
+   -3
+  ],
+  "property_returned": [
+   3,
+   9
   ]
  },
  "trade_day_cap": 6,
@@ -170,7 +178,9 @@
   "kept_promise": "agreements",
   "broken_promise": "agreements",
   "betrayal": "agreements",
-  "insult": "dialogue"
+  "insult": "dialogue",
+  "petty_theft": "property",
+  "property_returned": "property"
  },
  "combat": {
   "encounter_idle_seconds": 600,
@@ -195,5 +205,14 @@
   "survival_hunger_below": 1.0,
   "moderate_hunger_below": 2.0,
   "note": "health = worst body part flesh/max (can be < 0), blood = blood/max, hunger native 0..3 (UI x100); thresholds need the REL-p4 game probes"
+ },
+ "economy": {
+  "favorable_above": 1.25,
+  "generous_above": 1.75,
+  "exceptional_above": 2.5,
+  "cheap_favorable_below": 0.8,
+  "cheap_generous_below": 0.6,
+  "cheap_exceptional_below": 0.4,
+  "note": "price paid / the game value of the goods (getValueAll(false)); calibrate with the REL-p5 trade probe"
  }
 }

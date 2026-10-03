@@ -1962,6 +1962,10 @@ function stobeNegApplyConsequences(array $deal, string $player): void {
             'IMPOSSIBLE' => [0, 'Our deal fell through; it could not be carried out (' . $summary . ').', ''],
             default => [0, '', ''],
         };
+        // REL (phase 5): with SOCIAL_RELATIONSHIP_MODE=enabled the relationship system scores the outcome
+        // (kept/broken promise, betrayal) and the legacy delta is skipped; off/shadow keep the legacy delta.
+        require_once __DIR__ . '/social_agreements.php';
+        if (stobeSocialAgreementOutcome($deal, $player, $status, is_array($state) ? $state : [])) $delta = 0;
         if ($delta !== 0 && function_exists('stobeGetNpcRelationshipMap')) {
             $npcData = getNpcData($npc);
             if (is_array($npcData)) {

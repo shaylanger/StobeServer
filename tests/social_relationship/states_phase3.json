@@ -58,14 +58,15 @@
   ]
  ],
  "SR20": [
-  "partial: offline-pass (squad carry/caging exempt, routine bedding 0, critical rescue positive, squad inventory on waking)",
+  "partial: offline-pass (squad carry/caging/inventory/equipment exempt, critical rescue positive)",
   [
    "social_unconscious_regression",
-   "social_care_regression"
+   "social_care_regression",
+   "social_property_regression"
   ],
   [],
   [
-   "equipment controls and squad looting of a conscious mate: phase 5"
+   "in-game squad looting of a conscious mate not scripted"
   ]
  ],
  "SR37": [
@@ -196,6 +197,65 @@
   ],
   [
    "probe 13: transfer/eat facts (food_items, hunger)"
+  ]
+ ],
+ "SR13": [
+  "offline-pass; game blocked",
+  [
+   "social_property_regression"
+  ],
+  [],
+  [
+   "probe 16: no proven engine 'caught' (theft detection) signal; native sends caught=null so no theft scores in game",
+   "no steal action driver in the harness"
+  ]
+ ],
+ "SR14": [
+  "offline-pass (petty/ordinary/near-total/starving-food severity, returned property once); game blocked",
+  [
+   "social_property_regression"
+  ],
+  [],
+  [
+   "same blocker as SR13; item value not used (counts/share only)"
+  ]
+ ],
+ "SR22": [
+  "offline-pass; needs-game",
+  [
+   "social_property_regression"
+  ],
+  [
+   "REL-p5-01-trade",
+   "REL-p5-02-gift"
+  ],
+  [
+   "probe 14: price ratio of a normal purchase (calibrate economy thresholds)"
+  ]
+ ],
+ "SR23": [
+  "offline-pass; needs-game",
+  [
+   "social_property_regression"
+  ],
+  [
+   "REL-p5-01-trade"
+  ],
+  [
+   "probe 14: is the shop seller a character or storage"
+  ]
+ ],
+ "SR29": [
+  "partial: offline-pass (kept promise, honored coercive deal minimal, betrayal after accepted surrender, legacy delta replaced only when enabled); needs-game",
+  [
+   "social_property_regression",
+   "negotiation_engine_regression"
+  ],
+  [
+   "RUN_ORDER phase 5 rows 3-4 (scenarios.sh surrender)"
+  ],
+  [
+   "'dishonest hated enemy can betray' is the negotiation engine's existing rule (unchanged)"
   ]
  ]
 }

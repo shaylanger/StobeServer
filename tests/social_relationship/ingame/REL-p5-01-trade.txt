@@ -1,0 +1,22 @@
+# id: REL-p5-01-trade
+# covers: SR22 (ordinary trade earns ~nothing), SR23 (shop storage / faction purse seller: nobody credited); game probe 14
+# fixture: Trader
+# reset: fresh
+# needs: Delivery 5 build (rel-native-phase5.patch) + server at the Delivery 5 commit; Capture=1; mode shadow; Shay has cats (money step)
+# verify: php tools/social_relationship_inspect.php --interpret-log 20 --pair-effects --check-shadow   -> exit 0; the interpret-log line for kind "trade" shows one of:
+#   no_personal_seller (the goods came from shop storage), shared_purse (cats went to a faction purse), fair_trade with "ratio",
+#   or a favorable/generous/exceptional component. Report which, and the "structured kind=trade" stobe.log line (probe 14: seller is a
+#   character? buyer_spent vs reference_value = the price ratio of a normal purchase; calibrates rules "economy").
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+)
+money Shay 5000
+@set TRADER traders 300 ~ ^(.+?) #\d+
+shopstock "${TRADER}" ~ .
+@set ITEM shopstock "${TRADER}" ~ \[([^\]]+)\]
+trade Shay "${TRADER}" "${ITEM}"
+speed 1
+@sleep 5
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=trade seq=\d+ load=\d+ actor=${SHAY}

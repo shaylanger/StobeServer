@@ -171,6 +171,26 @@ final class SocialStore
             $this->checkpoint($event, $incident);
         });
     }
+    /**
+     * Server-owned semantic event (e.g. a deal outcome) in the current scope, on its own 'server' sequence.
+     * Returns the captured event, or null when this event id was already recorded (retry).
+     */
+    public function recordInternal(array $scope, string $mode, string $eventId, int $gameTs, ?array $actor, ?array $target, array $facts): ?array
+    {
+        if (!in_array($mode, ['shadow', 'enabled'], true)) return null;
+        return $this->transaction(function () use ($scope, $mode, $eventId, $gameTs, $actor, $target, $facts): ?array {
+            $this->lock($scope['campaign_id']);
+            if ($this->row('SELECT 1 AS x FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND event_id=$3', [$scope['campaign_id'], $scope['timeline_epoch'], $eventId])) return null;
+            $next = $this->row('SELECT COALESCE(MAX(sequence),0)+1 AS n FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND native_session_id=$3', [$scope['campaign_id'], $scope['timeline_epoch'], 'server']);
+            $event = SocialEventContract::validate(['schema_version'=>1, 'event_id'=>$eventId, 'incident_id'=>$eventId, 'campaign_id'=>$scope['campaign_id'],
+                'timeline_epoch'=>$scope['timeline_epoch'], 'native_session_id'=>'server', 'sequence'=>(int)$next['n'], 'game_ts'=>max(0, $gameTs),
+                'event_kind'=>'semantic', 'origin'=>'gameplay', 'actor'=>$actor, 'target'=>$target, 'state_before'=>[], 'state_after'=>[], 'witnesses'=>[], 'facts'=>$facts]);
+            $this->query('INSERT INTO social_event_inbox(campaign_id,timeline_epoch,event_id,native_session_id,sequence,game_ts,incident_id,payload,payload_hash,status,mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)',
+                [$event['campaign_id'], $event['timeline_epoch'], $event['event_id'], 'server', $event['sequence'], $event['game_ts'], $event['incident_id'], self::json($event), SocialEventContract::hash($event), 'captured', $mode]);
+            return $event;
+        });
+    }
+
     // Interpreter helpers (server-owned; never reachable from client input directly).
     public function fetchRows(string $sql, array $params = []): array { return pg_fetch_all($this->query($sql, $params)) ?: []; }
     public function saveIncident(array $event, string $incident, array $state): void

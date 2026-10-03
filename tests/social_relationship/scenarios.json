@@ -502,11 +502,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 5)",
-   "offline_tests": [],
+   "rel_state": "offline-pass; game blocked",
+   "offline_tests": [
+    "social_property_regression"
+   ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "later phase"
+    "probe 16: no proven engine 'caught' (theft detection) signal; native sends caught=null so no theft scores in game",
+    "no steal action driver in the harness"
    ]
   },
   {
@@ -537,11 +540,13 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 5)",
-   "offline_tests": [],
+   "rel_state": "offline-pass (petty/ordinary/near-total/starving-food severity, returned property once); game blocked",
+   "offline_tests": [
+    "social_property_regression"
+   ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "later phase"
+    "same blocker as SR13; item value not used (counts/share only)"
    ]
   },
   {
@@ -771,14 +776,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (squad carry/caging exempt, routine bedding 0, critical rescue positive, squad inventory on waking)",
+   "rel_state": "partial: offline-pass (squad carry/caging/inventory/equipment exempt, critical rescue positive)",
    "offline_tests": [
     "social_unconscious_regression",
-    "social_care_regression"
+    "social_care_regression",
+    "social_property_regression"
    ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "equipment controls and squad looting of a conscious mate: phase 5"
+    "in-game squad looting of a conscious mate not scripted"
    ]
   },
   {
@@ -850,11 +856,16 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 5)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_property_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p5-01-trade",
+    "REL-p5-02-gift"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 14: price ratio of a normal purchase (calibrate economy thresholds)"
    ]
   },
   {
@@ -885,11 +896,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 5)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_property_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p5-01-trade"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 14: is the shop seller a character or storage"
    ]
   },
   {
@@ -1095,11 +1110,16 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 5)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "partial: offline-pass (kept promise, honored coercive deal minimal, betrayal after accepted surrender, legacy delta replaced only when enabled); needs-game",
+   "offline_tests": [
+    "social_property_regression",
+    "negotiation_engine_regression"
+   ],
+   "ingame_scenarios": [
+    "RUN_ORDER phase 5 rows 3-4 (scenarios.sh surrender)"
+   ],
    "open_blockers": [
-    "later phase"
+    "'dishonest hated enemy can betray' is the negotiation engine's existing rule (unchanged)"
    ]
   },
   {

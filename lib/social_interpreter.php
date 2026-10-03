@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/social_identity.php';
 require_once __DIR__ . '/social_care.php';
+require_once __DIR__ . '/social_property.php';
 
 /**
  * Server-owned interpretation of structured native facts (facts.source = "structured").
@@ -18,6 +19,7 @@ require_once __DIR__ . '/social_care.php';
 final class SocialInterpreter
 {
     use SocialCareInterpreter;
+    use SocialPropertyInterpreter;
     public const HARM_GROUP = ['aggression', 'injury', 'serious_assault', 'critical_harm', 'maiming'];
     private array $combat;
 
@@ -33,7 +35,7 @@ final class SocialInterpreter
             'attack' => $this->attack($event, $mode),
             'harm' => $this->harm($event, $mode),
             'recovered' => $this->recovered($event, $mode),
-            'item_transfer' => $this->itemTransfer($event),
+            'item_transfer' => $this->itemTransfer($event, $mode),
             'enslaved' => $this->enslaved($event, $mode),
             'freed' => $this->freed($event),
             'aid' => $this->aid($event, $mode),
@@ -41,6 +43,7 @@ final class SocialInterpreter
             'carry_end' => $this->carryEnd($event, $mode),
             'placed' => $this->placed($event, $mode),
             'eat' => $this->eat($event, $mode),
+            'trade' => $this->trade($event, $mode),
             default => [['status'=>'recorded']],
         };
     }
@@ -235,15 +238,13 @@ final class SocialInterpreter
         return $out;
     }
 
-    private function itemTransfer(array $event): array
+    private function itemTransfer(array $event, string $mode = 'shadow'): array
     {
         $loser = $event['target']; $taker = $event['actor'];
         if (!$loser) return [['status'=>'incomplete_roles']];
         $ko = $this->activeKo($event, $loser)[0] ?? null;
-        if (!$ko || ($loser['conscious'] ?? null) === true) {
-            $gift = ($loser['conscious'] ?? null) === true ? $this->foodGift($event) : null;
-            return [$gift ?? ['status'=>'recorded', 'note'=>'conscious transfers are scored by the property phase']];
-        }
+        if (($loser['conscious'] ?? null) === true) return $this->consciousTransfer($event, $mode);
+        if (!$ko) return [['status'=>'recorded', 'note'=>'owner state unknown: no blame']];
         $ko['state']['objective']['transfers'][] = ['taker'=>$taker, 'to_ground'=>($event['facts']['to_ground'] ?? false) === true,
             'items'=>$event['facts']['items'] ?? [], 'game_ts'=>$event['game_ts'], 'sequence'=>$event['sequence']];
         $ko['state']['objective']['transfers'] = array_slice($ko['state']['objective']['transfers'], -64);

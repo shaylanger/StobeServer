@@ -75,6 +75,18 @@ a profile; `@set TNAME`/`ANAME`/`BNAME` print the final names for the checks.
 
 Carry events come from the world poller, which skips the player actor (Shay); squad mates (Malzin) are covered.
 
+## Phase 5 property, economy, agreements (Delivery 5 build; Capture=1, mode shadow)
+
+| Order | File / procedure | Check after (live tree) |
+|---|---|---|
+| 1 | `REL-p5-01-trade.txt` (Trader, fresh) | `--interpret-log 20 --pair-effects --check-shadow`; report the trade status/ratio and the `kind=trade` log line (probe 14) |
+| 2 | `REL-p5-02-gift.txt` (auto-home, fresh) | `--pair-effects --interpret-log 20 --check-shadow --expect-effect "<GNAME>" "Shay" 1 4` |
+| 3 | Deal kept (auto-home, fresh): `tools/automation/scenarios.sh surrender`, accept with the full name (`stobe-say say "<NAME>" "<NAME>, deal."`), pay as the deal says, wait for COMPLETE (`negotiation_admin.php deals 3`) | `--interpret-log 20 --effects 20`: an `agreement` line with component `kept_coercive_deal`, result `shadow`; the legacy +4 still applied (shadow) |
+| 4 | Deal broken by attacking after acceptance (fresh): as 3, then `stobe-auto attack Shay "<NAME>"` before paying | `--interpret-log 20`: `agreement` lines `broken_promise` and `betrayal` for that contract (BREACHED_PLAYER with player_broke_truce) |
+
+Theft (SR13/SR14) has no in-game row: the engine "caught" signal is not proven, so native sends `caught: null`
+and REL scores no theft (by design); see DELIVERY.md probe 16.
+
 When a check fails, add `--interpret-log 40 --events 60` to the report: each structured event logs its
 interpretation (`SOCIAL_INTERPRET` in `log/relationship_worker.log`) with statuses such as
 `unresolved_identity`, `no_encounter`, `defence`, `pending_awareness`, `duplicate`.

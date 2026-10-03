@@ -1,0 +1,26 @@
+# id: REL-p5-02-gift
+# covers: gifts (+1..+4; the day budget and the +30 economic ceiling are offline checks)
+# fixture: auto-home
+# reset: fresh
+# needs: as REL-p5-01
+# verify: php tools/social_relationship_inspect.php --pair-effects --interpret-log 20 --check-shadow --expect-effect "<GNAME>" "Shay" 1 4   -> exit 0
+#   pair_effects: one gift row for <GNAME> -> Shay (transfer moves the whole stack once).
+#   Game probe 15: the transfer step gives "structured kind=item_transfer" with the giver conscious and no stolen_items.
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+)
+give Shay "Iron Plates" 6 ~ 6/6
+spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
+@set G chars 40 ~ Hungry Bandit (#\d+)
+setname ${G} "Rel Gav"
+stobe_say "Rel Gav" "Gav, I have something for you."
+speed 1
+@sleep 20
+speed 0
+@set GNAME where ${G} ~ ^(.+?) #\d+
+transfer Shay ${G} "Iron Plates"
+speed 1
+@sleep 4
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${G} target=${SHAY}
