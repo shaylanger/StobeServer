@@ -37,10 +37,14 @@ ko ${BANDIT} 60
 @until 20 where ${BANDIT} ~ KO
 # run m9: he died because the fight went on over the KO'd body: everyone steps back at once
 teleport Shay ${BANDIT} dist 40
+# run m13: the KO fact comes from the world sweep (every few s, not while paused): let it run before checking
+@sleep 4
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT} witnesses=\d+ facts="level":"knockout".*"inventory"
 teleport Malzin ${BANDIT} dist 2
-order Malzin LOOT_TARGET target ${BANDIT}
+# run m13 (probe 6): LOOT_TARGET on a KO'd NPC moved nothing in 20 s (Malzin's inventory unchanged), so the
+# loot itself is done by the harness (the capture path is the same inventory sweep)
+transfer ${BANDIT} Malzin "Iron Plates"
 speed 1
 @sleep 20
 speed 0

@@ -14,13 +14,17 @@
 teleport ${W} ${V} dist 8
 teleport ${S} ${V} dist 8
 sleep ${S}
+# run m13: 5 s was too short (her task was not SLEEP_ON_FLOOR, not prone, at the attack): give her time to lie down
 speed 1
-@sleep 5
+@sleep 15
 speed 0
+@set SN where "Rel Sorn" ~ #(\d+)
 attack Shay ${V}
 speed 1
 @sleep 6
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY} target=${V} witnesses=[1-9]
+# run m13: the witness entry for Sorn must say she is asleep (StateBroadcastData isSleeping=1, conscious false)
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ "serial":${SN},"name":"Rel Sorn"[^]]*?"conscious":false[^]]*?"sleeping":1
 teleport ${V} Shay dist 300
 wake ${S}

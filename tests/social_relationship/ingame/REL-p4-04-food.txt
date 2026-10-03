@@ -44,9 +44,11 @@ speed 0
 inv ${H} ~ Dried Meat
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} witnesses=\d+ facts=.*"food_items":\{"
 # hungry now: he eats it himself within a few seconds (m4/m5 behaviour); that meal is the one scored
-hunger ${H} 150
+# run m13: at 150 he did not eat within 8 s; hungrier, then the harness makes him eat the gift
+hunger ${H} 120
+eat ${H} "Dried Meat"
 speed 1
-@sleep 8
+@sleep 6
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=eat seq=\d+ load=\d+ actor=${H}
 transfer Shay ${F} "Dried Meat"

@@ -66,7 +66,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (m4, m5, m8: p2-01 Rel Vorn->Shay aggression -15 + KO -21)",
+   "rel_state": "game-pass (m4, m5, m8, m13: p2-01 Rel Vorn->Shay aggression -15 + KO -21)",
    "offline_tests": [
     "social_combat_regression"
    ],
@@ -298,7 +298,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game rerun needed (m8: KO and remembered attacker Shay OK; the loot showed only Malzin's gain: item_gain fix)",
+   "rel_state": "partial: game-pass for the KO part (m13 p3-01: KO by Shay with the inventory baseline, Rel Tam -> Shay -38, waking resolved); loot: probe 6 answered (LOOT_TARGET on a KO'd NPC moves nothing), rerun with a harness transfer",
    "offline_tests": [
     "social_unconscious_regression"
    ],
@@ -413,7 +413,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial game: m11 enslaved fact with the owner captured (probe 7 yes: owner = shackle owner); waking charge failed because the KO itself was not seen: server now keeps the enslavement for waking anyway",
+   "rel_state": "game-pass (m13 p3-03: Rel Vash -> Rel Grell enslavement -86 on waking although his KO was not seen; owner = shackle owner, probe 7)",
    "offline_tests": [
     "social_unconscious_regression"
    ],
@@ -450,7 +450,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game as SR11",
+   "rel_state": "offline-pass; game as SR11 (m13 pass)",
    "offline_tests": [
     "social_unconscious_regression"
    ],
@@ -676,7 +676,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (m11 p4-02: Rel Cobb -> Malzin safe_rescue +9 after LIFT_PERSON + PUT_SOMEONE_IN_BED on the built bed)",
+   "rel_state": "game-pass (m11 +9, m13 +8: Rel Cobb -> Malzin safe_rescue after LIFT_PERSON + PUT_SOMEONE_IN_BED); m13: the placed fact had no actor (bed flag seen 5 ms before the drop): native fallback to the current carrier",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -715,7 +715,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (m11 p4-03: Rel Kade -> Malzin imprisonment -31 after LIFT_PERSON + PUT_IN_CAGE)",
+   "rel_state": "game-pass (m11 -31, m13 -33: Rel Kade -> Malzin imprisonment after LIFT_PERSON + PUT_IN_CAGE)",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -795,7 +795,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: game-pass for the full recipient (m8: food_gift_recorded, eat not_hungry); hungry case rerun (log regex)",
+   "rel_state": "partial: m13 the food handed to Rel Hask is captured (food_items, recipient_hunger); he did not eat at 1.50 within 8 s, rerun makes him eat at 1.20; full recipient not_hungry (m8, m13 Rel Fenn)",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -834,7 +834,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (m8 fair trade, m11 gift Rel Gav -> Rel Dona +3)",
+   "rel_state": "game-pass (m8 fair trade, m11 +3 / m13 +2 gift Rel Gav -> Rel Dona)",
    "offline_tests": [
     "social_property_regression"
    ],
@@ -909,7 +909,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (m8, m9: Rel Wren -6/-7 of the victim's -10)",
+   "rel_state": "game-pass (m8, m9, m13: Rel Wren -6/-7/-8 of the victim's share)",
    "offline_tests": [
     "social_witness_regression"
    ],
@@ -946,7 +946,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "open: m11 the floor-sleeping witness still counted (-5); witness task/prone now logged (w=...) to decide (possibly woken by the fight)",
+   "rel_state": "open: m13 Rel Sorn -9 again; her witness entry said task 290, prone 0 (5 s after the floor-sleep order she was not asleep by our check); native now also reads StateBroadcastData::isSleeping (logged as \"sleeping\"); scenario waits 15 s and checks the entry",
    "offline_tests": [
     "social_witness_regression"
    ],
@@ -1214,7 +1214,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game blocked: m11 Rel Xan first seen already chained (raid facts flooded the focus); native focus now limited to player-side facts",
+   "rel_state": "partial: m13 Rel Xan again \"first seen already enslaved\": Stobe's world event sweep starts 45 s (real time) after a load and he was shackled ~25 s after; scenario now waits 50 s; liberator (probe 20) still unseen",
    "offline_tests": [
     "social_recruitment_regression"
    ],
@@ -1656,7 +1656,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass (bench p95 12 ms); m11 soak healthy but quiet (68 facts): soak now spawns raids; Capture=0 vs 1 frame-time gate pending",
+   "rel_state": "partial: m13 soaks A (Capture=0) and B (Capture=1, shadow) 30/0, no queue overflow, check-shadow 0; fps window 157 s: avg 54.5 vs 54.8 (99.5%), worst frame 348.5 vs 323.5 ms (107.7%); memory inconclusive (both fell during the run; B fell 137 MB less); a longer measured window is requested",
    "offline_tests": [
     "social_concurrency_regression",
     "social_combat_regression",

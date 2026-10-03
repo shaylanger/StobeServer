@@ -7,7 +7,9 @@
 #   the escape incident is "freed" (completion needs 24 game hours; optional: speed 50 with the goal watch, then any event with him: slave_escape row)
 #   Game probe 20: PICK_LOCK_ON_SHACKLES gives the freed line a liberator (stobe.log "structured kind=freed ... liberator").
 @wait-world
-@sleep 8
+# run m13: Stobe's world event sweep only starts 45 s (real time) after a load; Xan was shackled before it ran
+# and was "first seen already enslaved"
+@sleep 50
 speed 0
 @set MALZIN where Malzin ~ Malzin (#\d+)
 spawn "Hungry Bandit" Drifters near Shay dist 6 count 1 ~ spawned 1/1
