@@ -1637,8 +1637,10 @@ if (!$narratorMode && function_exists('stobeInferMissingHandovers')
     $missingHandovers = stobeInferMissingHandovers(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
         strval($responseText ?? ''), strval($playerName ?? ''));
     if (count($missingHandovers) > 0) {
+        $hadGiveItem = count(preg_grep('/^\s*GIVE_ITEM@/i', array_map('strval', $responseActions)) ?: []) > 0;
         $responseActions = array_merge($responseActions, $missingHandovers);
-        stobeLogInfo('Two-part hand-over: missing GIVE_ITEM added (item 43)', ['npc'=>$targetNpc, 'added'=>$missingHandovers]);
+        stobeLogInfo($hadGiveItem ? 'Two-part hand-over: missing GIVE_ITEM added (item 43)'
+            : 'Agreed hand-over without action: GIVE_ITEM added (item 67)', ['npc'=>$targetNpc, 'added'=>$missingHandovers]);
     }
 }
 if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {

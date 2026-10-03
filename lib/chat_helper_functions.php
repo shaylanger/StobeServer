@@ -15096,10 +15096,29 @@ function stobeParseHandoverRequest(string $playerLine): array {
 }
 
 /**
+ * Item 67: her reply clearly agrees to hand something over ("whatever's there is yours",
+ * "here you go", "take them") and doesn't refuse. A reply that is only a question is no agreement.
+ */
+function stobeReplyAgreesToHandover(string $reply): bool {
+    $sentences = preg_split('/(?<=[.!?])\s+/', strtolower(trim(str_replace(["\u{2019}", "\u{2018}"], "'", $reply)))) ?: [];
+    $agree = false;
+    foreach ($sentences as $sentence) {
+        $sentence = trim($sentence);
+        if ($sentence === '') continue;
+        if (preg_match("/\b(no|nope|won'?t|will\s+not|not\s+giving|not\s+handing|mine|keep|keeping|get\s+your\s+own|never|refuse|forget\s+it)\b/", $sentence)) return false;
+        if (str_ends_with($sentence, '?')) continue;
+        if (preg_match("/\b(yours|here\s+you\s+(?:go|are)|here\s+(?:it\s+is|they\s+are)|take\s+(?:it|them|what|whatever|all)|have\s+(?:it|them)|help\s+yourself|sure|fine|go\s+ahead|of\s+course|alright|all\s+right)\b/", $sentence)) $agree = true;
+    }
+    return $agree;
+}
+
+/**
  * Item 43: the player asked for several carried items in one line and her reply hands
  * over one of them (a reply carries one action): the missing GIVE_ITEM actions.
+ * Item 67: a squad member who agreed in words but sent no GIVE_ITEM at all: the requested
+ * items she carries ($squadMember null = npcIsInPlayerFaction).
  */
-function stobeInferMissingHandovers(string $playerLine, array|false $npcData, array $actions, string $reply, string $playerName): array {
+function stobeInferMissingHandovers(string $playerLine, array|false $npcData, array $actions, string $reply, string $playerName, ?bool $squadMember = null): array {
     if ($playerName === '' || !is_array($npcData) || !function_exists('stobeNegInventoryCounts')
         || !function_exists('stobeNegItemMatchesTerm')) return [];
     $given = [];
@@ -15109,9 +15128,14 @@ function stobeInferMissingHandovers(string $playerLine, array|false $npcData, ar
         if (strcasecmp(trim($parts[1]), $playerName) !== 0 && strtolower(trim($parts[1])) !== 'player') continue;
         $given[] = strtolower(trim($parts[2]));
     }
-    if (count($given) === 0) return [];
     $wanted = stobeParseHandoverRequest($playerLine);
-    if (count($wanted) < 2) return [];
+    if (count($given) === 0) {
+        // Item 67: only a squad member who clearly agreed; others go through deals/gifts.
+        if ($squadMember === null) $squadMember = function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData);
+        if (!$squadMember || count($wanted) < 1 || !stobeReplyAgreesToHandover($reply)) return [];
+    } elseif (count($wanted) < 2) {
+        return [];
+    }
     $counts = stobeNegInventoryCounts(strval($npcData['inventory'] ?? ''));
     $display = function_exists('stobeItemListDisplayNames') ? stobeItemListDisplayNames(strval($npcData['inventory'] ?? '')) : [];
     $sentences = preg_split('/(?<=[.!?])\s+/', strtolower($reply)) ?: [];

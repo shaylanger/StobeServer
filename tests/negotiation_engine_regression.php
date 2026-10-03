@@ -464,6 +464,24 @@ check('item 43: something she does not carry -> nothing added',
 check('item 43: a one-item order -> nothing added',
     stobeInferMissingHandovers('Give me your bread.', $npc43, ['GIVE_ITEM@Shay@Bread@1'], 'Here.', 'Shay') === []);
 
+// ---------------------------------------------------------------- 12h3b. item 67: a squad member agrees but sends no GIVE_ITEM
+$line67 = 'Malzin, please hand me all your bread and all your dried meat, I need it for the trip.';
+check('item 67: the run m1 reply (squad member agrees, no action) -> bread + dried meat added',
+    stobeInferMissingHandovers($line67, $npc43, [], "Bread and dried meat - let me check what I've actually got on me. I'm not carrying much, but whatever's there is yours.", 'Shay', true)
+    === ['GIVE_ITEM@Shay@Bread@2', 'GIVE_ITEM@Shay@Dried Meat@10']);
+check('item 67: one item, "here you go" -> added',
+    stobeInferMissingHandovers('Give me 3 dried meat.', $npc43, [], 'Here you go.', 'Shay', true) === ['GIVE_ITEM@Shay@Dried Meat@3']);
+check('item 67: a pure question ("All of it?") -> nothing added',
+    stobeInferMissingHandovers($line67, $npc43, [], 'All of it?', 'Shay', true) === []);
+check('item 67: a refusal -> nothing added',
+    stobeInferMissingHandovers($line67, $npc43, [], "Not giving you my food. Get your own.", 'Shay', true) === []);
+check('item 67: "sure" but the meat stays -> nothing (a refusal word)',
+    stobeInferMissingHandovers($line67, $npc43, [], 'Sure, the bread. The meat I keep.', 'Shay', true) === []);
+check('item 67: a non-faction NPC agreeing in words -> nothing added (deal/gift rules)',
+    stobeInferMissingHandovers($line67, $npc43, [], "Whatever's there is yours.", 'Shay', false) === []);
+check('item 67: something she does not carry -> nothing added',
+    stobeInferMissingHandovers('Give me your katana.', $npc43, [], 'Here you go.', 'Shay', true) === []);
+
 // ---------------------------------------------------------------- 12h4. item 48: knocked out or dead NPCs don't negotiate
 $koEvent = static function (string $type, string $data, string $people, int $at) use ($db): void {
     $db->exec("INSERT INTO eventlog (type, ts, gamets, data, sess, localts, people, location) VALUES ($1,$2,1000,$3,'pending',$2,$4,'')",
