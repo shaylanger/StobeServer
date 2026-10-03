@@ -368,7 +368,7 @@ function stobeNegFightEventsForNpc(string $name, array|false $npcData, int $sinc
 function stobeNegPlayerHarmedNpc(string $npc, string $player, int $fromUnix, int $toUnix): bool {
     try {
         $rows = $GLOBALS['db']->fetchAll(
-            "SELECT type, data FROM eventlog WHERE type IN ('major_damage','knockout','death')
+            "SELECT type, data FROM eventlog WHERE type IN ('major_damage','knockout','death','combat')
                AND localts >= $1 AND localts <= $2 AND data LIKE $3 ORDER BY localts LIMIT 40",
             [$fromUnix, $toUnix, '%' . $npc . '%']);
     } catch (Throwable $e) {
@@ -378,6 +378,9 @@ function stobeNegPlayerHarmedNpc(string $npc, string $player, int $fromUnix, int
         $data = trim(strval($row['data'] ?? ''));
         if (!str_starts_with(strtolower($data), strtolower($npc) . ':')) continue;
         if ($row['type'] === 'death') return true;
+        // item 86b: he fights back right after (a restarted fight, not a re-reported attack)
+        if ($row['type'] === 'combat' && preg_match('/:\s*Initiated attack\s*\(talking to:\s*(.+?)\)\s*$/', $data, $m)
+            && stobeNegIsPlayerSide(trim($m[1]), $player)) return true;
         if (preg_match('/took a major hit from\s+(.+?)(?:\s+using\s+.+)?$/', $data, $m) && stobeNegIsPlayerSide(trim($m[1]), $player)) return true;
         if (preg_match('/Knocked out by .+? from\s+(.+?)\s*$/i', $data, $m) && stobeNegIsPlayerSide(trim($m[1]), $player)) return true;
     }

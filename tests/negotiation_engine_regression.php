@@ -195,6 +195,7 @@ storeEvent('combat', time(), 1000, "$player: Initiated attack (talking to: NegTe
 stobeNegTick();
 check('bug 127: a swing 5 s after sparing is not a breach', termStatus($id, 0) !== 'UNMET', [status($id), termStatus($id, 0)]);
 backdate($id, 7);
+$db->exec("DELETE FROM eventlog WHERE data LIKE 'NegTestBandit: Initiated attack%'"); // item 86b: he doesn't fight back here (m8)
 storeEvent('combat', time(), 1000, "$player: Initiated attack (talking to: NegTestBandit)");
 stobeNegTick();
 // Item 86 (run m8): the game re-reports "Initiated attack" while a personal truce holds; no hit, no breach.
