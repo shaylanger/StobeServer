@@ -795,7 +795,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: m15 transfer + eat captured for Rel Hask, but hunger_before was the stale 2.90 (harness hunger and eat in one sweep) -> not_hungry; scenario now lets a sweep see the lowered hunger first; full recipient not_hungry (m8, m13, m15)",
+   "rel_state": "game-pass: m16 Rel Hask hungry (hunger_before 1.20) -> Shay food_aid +5 (shadow); full recipient Rel Fenn not_hungry (m8, m13, m15, m16)",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -946,7 +946,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "open: m15 run invalid: the spawned \"Rel Vik\" was Outlaw Watch Jamin 4.5 km away (harness #serial matched another character), so Sorn was never beside the fight; native sleeping flag (m13) logs \"sleeping\" (seen as 0 for awake fighters); setname now must rename the spawned bandit",
+   "rel_state": "open: m16 SLEEP_ON_FLOOR never put Rel Sorn to sleep (15 s, raid nearby; awake witness -10, correct for awake); the native sleeping flag reads 1 for NPCs in beds; scenario now gives her a built bed (USE_BED_ORDER)",
    "offline_tests": [
     "social_witness_regression"
    ],
@@ -1214,7 +1214,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: m15 enslaved captured with owner (50 s warm-up fix works); no freed: Malzin did not pick the lock in 80 game s; scenario raises her lockpicking to 100 and waits 180 game s; liberator (probe 20) still unseen",
+   "rel_state": "partial: m16 enslaved captured; the game re-squads a fresh slave ~5-10 s after the chains (new handle), so the lockpick order hit the old handle and nobody freed him; scenario re-resolves him; native m16 sends storage_alias and the server binds it (social_combat_regression SR32 checks)",
    "offline_tests": [
     "social_recruitment_regression"
    ],

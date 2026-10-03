@@ -42,14 +42,17 @@ final class SocialEventContract
         foreach (['in_player_faction', 'in_player_squad', 'conscious'] as $flag) {
             if (isset($value[$flag]) && !is_bool($value[$flag])) throw new InvalidArgumentException('Invalid membership');
         }
-        foreach (['storage_id', 'faction'] as $text) {
+        // storage_alias: the storage id this character had earlier in the session (Kenshi gives a re-squadded
+        // character, e.g. a fresh slave, a new handle, so hand_<serial> changes; the profile keeps the old one).
+        foreach (['storage_id', 'storage_alias', 'faction'] as $text) {
             if (isset($value[$text]) && (!is_string($value[$text]) || strlen($value[$text]) > 180 || preg_match('/[\x00-\x1f]/', $value[$text]))) {
                 throw new InvalidArgumentException('Invalid entity ' . $text);
             }
         }
         // null = unknown, never false/zero by default.
         return ['entity_key'=>$key, 'serial'=>$serial, 'name'=>$name,
-            'storage_id'=>$value['storage_id'] ?? null, 'faction'=>$value['faction'] ?? null,
+            'storage_id'=>$value['storage_id'] ?? null, 'storage_alias'=>$value['storage_alias'] ?? null,
+            'faction'=>$value['faction'] ?? null,
             'in_player_faction'=>$value['in_player_faction'] ?? null,
             'in_player_squad'=>$value['in_player_squad'] ?? null,
             'conscious'=>$value['conscious'] ?? null];

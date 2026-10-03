@@ -126,6 +126,17 @@ ok(affOf('Combat Charlie', 'Combat Grunt') === 0, 'SR34 generic culprit name not
 $imposter = ent('Combat Delta', true, 'hand_999');
 send(ev('attack', $A, $imposter, ['victim_targeting_actor'=>false], 4010));
 ok(affOf('Combat Delta', 'Combat Alpha') === 0, 'SR34 reused serial / other storage id not attributed');
+// SR32 (m16): the same live character after a re-squad (new handle, new hand_<serial>) carries its old storage id as
+// storage_alias: still bound to its profile. The imposter above (no alias) stays unattributed.
+$resquad = ['entity_key'=>'sess2:7:998', 'serial'=>998, 'name'=>'Combat Delta', 'storage_id'=>'hand_998', 'storage_alias'=>'hand_104',
+    'faction'=>'Green', 'in_player_faction'=>false, 'conscious'=>true];
+send(ev('attack', $A, $resquad, ['victim_targeting_actor'=>false], 4015));
+ok(affOf('Combat Delta', 'Combat Alpha') < 0, 'SR32 storage_alias binds a re-squadded character to its profile');
+$wrongAlias = ['entity_key'=>'sess2:7:997', 'serial'=>997, 'name'=>'Combat Echo', 'storage_id'=>'hand_997', 'storage_alias'=>'hand_104',
+    'faction'=>'Grey', 'in_player_faction'=>false, 'conscious'=>true];
+$echoBefore = affOf('Combat Echo', 'Combat Bravo');
+send(ev('attack', $B, $wrongAlias, ['victim_targeting_actor'=>false], 4016));
+ok(affOf('Combat Echo', 'Combat Bravo') === $echoBefore, 'SR32 an alias of another profile does not bind');
 
 // Death closes the encounter; later harm in it is not scored.
 send(ev('harm', null, $C, ['level'=>'death'], 4020));

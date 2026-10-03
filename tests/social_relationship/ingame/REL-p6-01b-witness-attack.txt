@@ -15,10 +15,12 @@
 @set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 teleport ${W} ${V} dist 8
 teleport ${S} ${V} dist 8
-sleep ${S}
-# run m13: 5 s was too short (her task was not SLEEP_ON_FLOOR, not prone, at the attack): give her time to lie down
+# run m16: SLEEP_ON_FLOOR never put her to sleep (15 s, raid nearby: awake, not prone), while NPCs in beds read
+# conscious false / sleeping 1. Give her her own bed beside Vik and order her into it.
+build Bed near ${V} dist 6 faction Drifters ~ built Bed
+sleep ${S} bed Bed ~ USE_BED_ORDER -> Bed
 speed 1
-@sleep 15
+@sleep 20
 speed 0
 @set SN where "Rel Sorn" ~ #(\d+)/\d+
 attack Shay ${V}
@@ -30,3 +32,4 @@ speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ "serial":${SN},"name":"Rel Sorn"[^]]*?"conscious":false[^]]*?"sleeping":1
 teleport ${V} Shay dist 300
 wake ${S}
+unbuild Bed

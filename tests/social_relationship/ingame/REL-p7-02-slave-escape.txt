@@ -39,10 +39,20 @@ speed 1
 @sleep 5
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=enslaved seq=\d+ load=\d+ actor=${O_S} target=${X_S}
+# run m16: about 5-10 s after the chains the game moves him into another squad and he gets a NEW handle (stobe.log
+# "first seen already enslaved serial=<new> name=Rel Xan"); the m16 lockpick order still pointed at the old one.
+# Wait for the re-squad, then resolve him again by name.
+speed 1
+@sleep 15
+speed 0
+@set X2 where "${XNAME}" ~ (#\d+/\d+)
+@set X2_S where ${X2} ~ (#\d+)/\d+
 # run m15: no freed in 80 game s at her own skill: raise lockpicking and wait longer
 setstat Malzin lockpicking 100
-order Malzin PICK_LOCK_ON_SHACKLES target ${X}
+order Malzin PICK_LOCK_ON_SHACKLES target ${X2}
 speed 2
 @sleep 90
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=${X_S} witnesses=\d+ facts=.*"liberator"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=${X2_S} witnesses=\d+ facts=.*"liberator"
+# run m16 native (rel-native-m16): the freed line carries his old storage id as storage_alias, so the server binds his profile
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_IDENTITY: handle changed name=${XNAME} storage=hand_\d+ alias=hand_\d+
