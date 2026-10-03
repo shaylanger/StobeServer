@@ -572,6 +572,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
     $terms = stobeDealPromoteClothingPromises($terms, $npcData);
     $terms = stobeDealFixTakeOffTerms($terms, $npcData, $playerMessage);
     $terms = stobeDealFixTargetField($terms); // item 46
+    $terms = stobeDealFixWrongPerformer($terms, $npc); // Item 106
     $terms = stobeDealFixCatsDirection($terms, $response, $player); // item 44
     $terms = stobeDealFixCatsDirectionFromWords($terms, $playerMessage); // item 44
     // Item 72: no open deal, but he just offered one that got rejected: that offer is the table.
@@ -1544,6 +1545,40 @@ function stobeDealFixCatsDirection(array $terms, array $response, string $player
 // ---- Item 46: "to" instead of "target" ----------------------------------------------------
 
 /** STOP_ATTACK/FIRST_AID/SAFE_PASSAGE/SPARE/PROTECT terms get their target from "to" or the obvious default. */
+/** Item 106: a term on the side that can't perform it is repaired when its meaning is clear, else dropped. */
+function stobeDealFixWrongPerformer(array $terms, string $npc = ''): array {
+    if (!function_exists('stobeNegTermPerformer')) return $terms;
+    $has = static function (array $ts, string $kind, string $by): bool {
+        foreach ($ts as $t) if (is_array($t) && ($t['kind'] ?? '') === $kind && ($t['by'] ?? '') === $by) return true;
+        return false;
+    };
+    $out = [];
+    foreach ($terms as $t) {
+        if (!is_array($t)) { $out[] = $t; continue; }
+        $kind = strval($t['kind'] ?? ''); $by = strval($t['by'] ?? '');
+        $performer = stobeNegTermPerformer($kind);
+        if ($performer === '' || $performer === $by || !in_array($by, ['npc', 'player'], true)) { $out[] = $t; continue; }
+        $fixed = null;
+        if ($by === 'npc' && in_array($kind, ['SPARE', 'PROTECT'], true)) {
+            $fixed = ['kind' => 'STOP_ATTACK', 'by' => 'npc', 'target' => 'player'];   // her "sparing" him = her ceasefire
+        } elseif ($by === 'player' && in_array($kind, ['STOP_ATTACK', 'SAFE_PASSAGE'], true)) {
+            $fixed = ['kind' => 'SPARE', 'by' => 'player', 'target' => 'npc'];         // his ceasefire = sparing her
+        }
+        $merged = array_merge($terms, $out);
+        if ($fixed !== null && !$has($merged, $fixed['kind'], $fixed['by'])) $out[] = $fixed;
+        if (function_exists('stobeDealLog')) stobeDealLog('info', 'Negotiation term on the wrong side repaired (item 106)',
+            ['npc' => $npc, 'term' => $kind . ' by ' . $by, 'now' => $fixed !== null ? $fixed['kind'] . ' by ' . $fixed['by'] : 'dropped']);
+    }
+    // a repaired term may now duplicate one the deal already had
+    $seen = []; $final = [];
+    foreach ($out as $t) {
+        $key = is_array($t) && in_array($t['kind'] ?? '', ['STOP_ATTACK', 'SPARE'], true) ? ($t['kind'] . '|' . ($t['by'] ?? '')) : null;
+        if ($key !== null) { if (isset($seen[$key])) continue; $seen[$key] = true; }
+        $final[] = $t;
+    }
+    return $final;
+}
+
 function stobeDealFixTargetField(array $terms): array {
     foreach ($terms as $i => $t) {
         if (!is_array($t)) continue;

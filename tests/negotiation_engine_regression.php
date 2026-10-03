@@ -900,6 +900,19 @@ unset($GLOBALS['STOBE_PLAYER_ACTOR']);
 check('item 100: without a speaking character, "me" is the persona (Shay/Malzin unchanged)', strcasecmp(stobeGoalPersonName('me'), $player) === 0, stobeGoalPersonName('me'));
 foreach (['NegTestBeaks', 'NegTestAvarek'] as $n) { $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n]); $db->exec("DELETE FROM core_npc WHERE name=$1", [$n]); }
 
+// ---------------------------------------------------------------- Item 106: a term on the wrong side doesn't sink the deal
+$fixed = stobeDealFixWrongPerformer([
+    ['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>200],
+    ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player'],
+    ['kind'=>'SPARE','by'=>'npc','target'=>'player'],
+], 'NegTestBandit');
+check('item 106: SPARE by npc folds into her STOP_ATTACK (m16 18)', count($fixed) === 2
+    && stobeDealValidate(['parties'=>['npc'=>'NegTestBandit','player'=>$player], 'terms'=>$fixed])['ok'] === true, $fixed);
+$fixed2 = stobeDealFixWrongPerformer([['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>50], ['kind'=>'STOP_ATTACK','by'=>'player','target'=>'npc']], 'NegTestBandit');
+check('item 106: STOP_ATTACK by player becomes SPARE by player', ($fixed2[1]['kind'] ?? '') === 'SPARE' && ($fixed2[1]['by'] ?? '') === 'player', $fixed2);
+$fixed3 = stobeDealFixWrongPerformer([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>50], ['kind'=>'LOAN_ITEM','by'=>'player','to'=>'npc','item'=>'Katana']], 'NegTestBandit');
+check('item 106: an unclear wrong-side term is dropped, the rest stands', count($fixed3) === 1 && ($fixed3[0]['kind'] ?? '') === 'GIVE_CATS', $fixed3);
+
 // ---------------------------------------------------------------- cleanup
 $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");
