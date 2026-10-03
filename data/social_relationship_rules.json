@@ -1,5 +1,5 @@
 {
- "version": "phase2-v1",
+ "version": "phase4-v1",
  "ranges": {
   "aggression": [
    -15,
@@ -182,5 +182,18 @@
    "maiming": "maiming"
   },
   "note": "encounter_idle_seconds is game seconds (game_ts); calibrate with the REL-p2 game probe"
+ },
+ "care": {
+  "near_death_health": -0.5,
+  "near_death_blood": 0.35,
+  "critical_blood": 0.5,
+  "meaningful_gain": 0.15,
+  "bleed_stop_ratio": 0.25,
+  "own_harm_window_seconds": 86400,
+  "carry_window_seconds": 3600,
+  "food_gift_window_seconds": 86400,
+  "survival_hunger_below": 1.0,
+  "moderate_hunger_below": 2.0,
+  "note": "health = worst body part flesh/max (can be < 0), blood = blood/max, hunger native 0..3 (UI x100); thresholds need the REL-p4 game probes"
  }
 }

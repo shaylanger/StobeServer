@@ -1,0 +1,38 @@
+# id: REL-p4-01-first-aid
+# covers: SR15 (real first aid on a badly hurt, unconscious patient: provider credited once by measured outcome), SR16 (treating the same injury again adds nothing)
+# fixture: Crafting base
+# reset: fresh
+# needs: Delivery 4 build (rel-native-phase4.patch) + server at the Delivery 4 commit; Capture=1; mode shadow
+# verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --check-shadow --expect-effect "<ONAME>" "Malzin" 1 35   -> exit 0
+#   effects: ONE aid class row (routine_healing|meaningful_aid|lifesaving) for <ONAME> -> Malzin; the second treatment (step "order ... again")
+#   adds a row with delta 0 or a "duplicate" status in --interpret-log (no extra trust).
+#   Game probe 10: copy the two "structured kind=aid" stobe.log lines (before_/after_ health, blood, bleed) into the report:
+#   they calibrate the aid classes (data/social_relationship_rules.json "care").
+@wait-world
+@sleep 8
+speed 0
+@set MALZIN where Malzin ~ Malzin (#\d+)
+spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
+@set P chars 60 ~ Hungry Bandit (#\d+)
+setname ${P} "Rel Ona"
+stobe_say "Rel Ona" "Ona, are you hurt?"
+speed 1
+@sleep 20
+speed 0
+@set ONAME where ${P} ~ ^(.+?) #\d+
+damage ${P} chest 140 ~ flesh
+damage ${P} left_leg 90 ~ flesh
+blood ${P} 30%
+hp ${P} ~ worst=
+give Malzin "Basic First Aid Kit" 3 ~ 3/3
+order Malzin FIRST_AID_ORDER target ${P} ~ FIRST_AID_ORDER
+speed 2
+@until 90 hp ${P} ~ bandaged
+@sleep 8
+speed 0
+hp ${P} ~ worst=
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=aid seq=\d+ load=\d+ actor=${MALZIN} target=${P}
+order Malzin FIRST_AID_ORDER target ${P} ~ FIRST_AID_ORDER
+speed 2
+@sleep 12
+speed 0

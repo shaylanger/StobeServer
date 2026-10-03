@@ -1,0 +1,32 @@
+# id: REL-p4-02-carry-to-bed
+# covers: SR18 (unconscious outsider carried and put in a bed: no suspicion, a safe-rescue credit), SR19 (no credit for the drop alone)
+# fixture: Crafting base
+# reset: fresh
+# needs: as REL-p4-01
+# verify: php tools/social_relationship_inspect.php --pair-effects --incidents 10 --check-shadow --expect-effect "<CNAME>" "Malzin" 8 35   -> exit 0
+#   incidents: a "carry" incident Malzin -> <CNAME> resolved with outcome bed (in the incident state). No outsider_pickup row.
+#   Game probe 11: FIND_BED_AND_PUT_IN (or LIFT_PERSON + PUT_SOMEONE_IN_BED) puts him in the bed: "structured kind=placed" with "place":"bed"
+#   and actor=Malzin (carrier remembered for 15 s). If it fails, report which step and the stobe.log carry lines.
+@wait-world
+@sleep 8
+speed 0
+@set MALZIN where Malzin ~ Malzin (#\d+)
+spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
+@set C chars 60 ~ Hungry Bandit (#\d+)
+setname ${C} "Rel Cobb"
+stobe_say "Rel Cobb" "Cobb, you look unwell."
+speed 1
+@sleep 20
+speed 0
+@set CNAME where ${C} ~ ^(.+?) #\d+
+ko ${C} 120
+speed 1
+@sleep 4
+speed 0
+buildings 200 Bed ~ Bed
+order Malzin FIND_BED_AND_PUT_IN target ${C}
+speed 2
+@sleep 40
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=carry_start seq=\d+ load=\d+ actor=${MALZIN} target=${C}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${C} facts="place":"bed"

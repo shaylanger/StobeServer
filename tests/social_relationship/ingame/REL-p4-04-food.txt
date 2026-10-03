@@ -1,0 +1,53 @@
+# id: REL-p4-04-food
+# covers: SR21 (food handed to a hungry person and eaten: donor credited; a second meal the same day adds nothing; a full person: nothing)
+# fixture: auto-home
+# reset: fresh
+# needs: as REL-p4-01; Shay carries Dried Meat (give step)
+# verify: php tools/social_relationship_inspect.php --pair-effects --interpret-log 30 --check-shadow --expect-effect "<HNAME>" "Shay" 2 5 --expect-none "<FNAME>" "Shay"   -> exit 0
+#   interpret-log: the second eat of <HNAME> reports duplicate/zero; <FNAME>'s eat reports not_hungry.
+#   Game probe 13: the transfer step gives a "structured kind=item_transfer" line with "food_items" and "recipient_hunger" (~1.2), and eat gives "structured kind=eat".
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+)
+give Shay "Dried Meat" 4 ~ 4/4
+spawn "Hungry Bandit" Drifters near Shay dist 10 count 2 ~ spawned 2/2
+@set H chars 40 ~ Hungry Bandit (#\d+)
+setname ${H} "Rel Hask"
+@set F chars 40 ~ Hungry Bandit (#\d+)
+setname ${F} "Rel Fenn"
+stobe_say "Rel Hask" "Hask, you look starved."
+speed 1
+@sleep 15
+speed 0
+stobe_say "Rel Fenn" "Fenn, are you hungry?"
+speed 1
+@sleep 15
+speed 0
+@set HNAME where ${H} ~ ^(.+?) #\d+
+@set FNAME where ${F} ~ ^(.+?) #\d+
+hunger ${H} 120
+hunger ${F} 280
+transfer Shay ${H} "Dried Meat"
+speed 1
+@sleep 4
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} facts=.*"food_items":\{"
+eat ${H} "Dried Meat"
+speed 1
+@sleep 6
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=eat seq=\d+ load=\d+ actor=${H}
+transfer Shay ${H} "Dried Meat"
+speed 1
+@sleep 4
+speed 0
+eat ${H} "Dried Meat"
+transfer Shay ${F} "Dried Meat"
+speed 1
+@sleep 4
+speed 0
+eat ${F} "Dried Meat"
+speed 1
+@sleep 6
+speed 0

@@ -16,6 +16,7 @@ final class SocialRules
         }
     }
     public function version(): string { return $this->config['version']; }
+    public function positive(string $component): bool { return (($this->config['ranges'][$component] ?? [0, 0])[1] ?? 0) > 0; }
     public function section(string $key): array { $value = $this->config[$key] ?? []; return is_array($value) ? $value : []; }
     public function category(string $component): string
     {

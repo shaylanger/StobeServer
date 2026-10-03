@@ -122,9 +122,10 @@ final class SocialStore
             $group = $context['escalation_group'] ?? null; unset($context['escalation_group']);
             if (is_array($group) && $group) {
                 // One growing budget per incident/observer/culprit: charge only the difference to the worst level so far.
-                $prior = $this->row('SELECT MIN((detail->>\'total\')::int) AS worst FROM social_effect WHERE campaign_id=$1 AND timeline_epoch=$2 AND incident_id=$3 AND observer_key=$4 AND culprit_key=$5 AND component = ANY($6::text[]) AND detail ? \'total\'',
+                $positive = $this->rules->positive($component);
+                $prior = $this->row('SELECT ' . ($positive ? 'MAX' : 'MIN') . '((detail->>\'total\')::int) AS worst FROM social_effect WHERE campaign_id=$1 AND timeline_epoch=$2 AND incident_id=$3 AND observer_key=$4 AND culprit_key=$5 AND component = ANY($6::text[]) AND detail ? \'total\'',
                     [$key[0],$key[1],$key[2],$observer,$culprit,'{' . implode(',', array_map('strval', $group)) . '}']);
-                $context['prior_total'] = min(0, (int)($prior['worst'] ?? 0));
+                $context['prior_total'] = $positive ? max(0, (int)($prior['worst'] ?? 0)) : min(0, (int)($prior['worst'] ?? 0));
             }
             $effect = $this->rules->calculate($incident,$observer,$component,$belief,$context);
             $effect['observer_name'] = $a['name']; $effect['culprit_name'] = $b['name'];

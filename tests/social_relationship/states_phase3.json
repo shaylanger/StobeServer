@@ -58,13 +58,14 @@
   ]
  ],
  "SR20": [
-  "partial: offline-pass for squad inventory exemption on waking",
+  "partial: offline-pass (squad carry/caging exempt, routine bedding 0, critical rescue positive, squad inventory on waking)",
   [
-   "social_unconscious_regression"
+   "social_unconscious_regression",
+   "social_care_regression"
   ],
   [],
   [
-   "carry/equipment controls: phase 4"
+   "equipment controls and squad looting of a conscious mate: phase 5"
   ]
  ],
  "SR37": [
@@ -123,6 +124,78 @@
   [],
   [
    "needs a scenario with a stored -85 affinity + low health (scenarios.sh surrender); no REL code involved"
+  ]
+ ],
+ "SR15": [
+  "offline-pass; needs-game",
+  [
+   "social_care_regression"
+  ],
+  [
+   "REL-p4-01-first-aid"
+  ],
+  [
+   "probe 10: vitals scale/units (health ratio, blood, bleed) to calibrate aid classes"
+  ]
+ ],
+ "SR16": [
+  "offline-pass; needs-game",
+  [
+   "social_care_regression",
+   "social_relationship_unit"
+  ],
+  [
+   "REL-p4-01-first-aid"
+  ],
+  [
+   "ten real lifesaving episodes in game: not scripted (offline only)"
+  ]
+ ],
+ "SR17": [
+  "offline-pass (own harm / ally harm then healing earns nothing)",
+  [
+   "social_care_regression"
+  ],
+  [],
+  [
+   "staged self-harm by the patient: harness damage has no attacker, so it is unattributed; real self-harm path not testable"
+  ]
+ ],
+ "SR18": [
+  "offline-pass; needs-game",
+  [
+   "social_care_regression"
+  ],
+  [
+   "REL-p4-02-carry-to-bed"
+  ],
+  [
+   "probe 11: FIND_BED_AND_PUT_IN; carry by the player actor is not captured (poller skips it)"
+  ]
+ ],
+ "SR19": [
+  "offline-pass; needs-game",
+  [
+   "social_care_regression"
+  ],
+  [
+   "REL-p4-02-carry-to-bed",
+   "REL-p4-03-carry-to-cage"
+  ],
+  [
+   "probe 12: LIFT_PERSON + PUT_IN_CAGE; carry ending in slavery/death covered by phase 3 events only"
+  ]
+ ],
+ "SR21": [
+  "offline-pass; needs-game",
+  [
+   "social_care_regression"
+  ],
+  [
+   "REL-p4-04-food"
+  ],
+  [
+   "probe 13: transfer/eat facts (food_items, hunger)"
   ]
  ]
 }

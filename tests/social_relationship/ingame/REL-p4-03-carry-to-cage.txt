@@ -1,0 +1,46 @@
+# id: REL-p4-03-carry-to-cage
+# covers: SR19 (carried into a prison cage while unconscious: no charge until waking, then coercive imprisonment toward the carrier); unknown captor (harness cage) = nobody blamed
+# fixture: Crafting base
+# reset: fresh
+# needs: as REL-p4-01
+# verify: php tools/social_relationship_inspect.php --pair-effects --incidents 10 --interpret-log 30 --check-shadow --expect-effect "<KNAME>" "Malzin" -40 -20   -> exit 0
+#   (the effect appears only after the "recovered" line); the second NPC <UNAME>, caged by the harness without a carrier, has no effect rows.
+#   Game probe 12: LIFT_PERSON + PUT_IN_CAGE (building "Cage") works for a squad member; placed line has "place":"prison".
+@wait-world
+@sleep 8
+speed 0
+@set MALZIN where Malzin ~ Malzin (#\d+)
+spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
+@set K chars 60 ~ Hungry Bandit (#\d+)
+setname ${K} "Rel Kade"
+stobe_say "Rel Kade" "Kade, stop there."
+speed 1
+@sleep 20
+speed 0
+@set KNAME where ${K} ~ ^(.+?) #\d+
+ko ${K} 90
+speed 1
+@sleep 4
+speed 0
+@set CAGE buildings 400 Cage ~ ([A-Za-z ]*Cage[A-Za-z ]*)
+order Malzin LIFT_PERSON target ${K}
+speed 2
+@sleep 10
+order Malzin PUT_IN_CAGE building "${CAGE}"
+@sleep 60
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${K} facts="place":"prison"
+speed 5
+@until 300 where ${K} ~ dist=[0-9.]+$
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${K}
+spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
+@set U chars 60 ~ Hungry Bandit (#\d+)
+setname ${U} "Rel Ulf"
+@set UNAME where ${U} ~ ^(.+?) #\d+
+cage ${U}
+speed 1
+@sleep 6
+speed 0
+uncage ${U}
+uncage ${K}

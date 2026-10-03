@@ -572,11 +572,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 4)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_care_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p4-01-first-aid"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 10: vitals scale/units (health ratio, blood, bleed) to calibrate aid classes"
    ]
   },
   {
@@ -609,11 +613,16 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 4)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_care_regression",
+    "social_relationship_unit"
+   ],
+   "ingame_scenarios": [
+    "REL-p4-01-first-aid"
+   ],
    "open_blockers": [
-    "later phase"
+    "ten real lifesaving episodes in game: not scripted (offline only)"
    ]
   },
   {
@@ -644,11 +653,13 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 4)",
-   "offline_tests": [],
+   "rel_state": "offline-pass (own harm / ally harm then healing earns nothing)",
+   "offline_tests": [
+    "social_care_regression"
+   ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "later phase"
+    "staged self-harm by the patient: harness damage has no attacker, so it is unattributed; real self-harm path not testable"
    ]
   },
   {
@@ -679,11 +690,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 4)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_care_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p4-02-carry-to-bed"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 11: FIND_BED_AND_PUT_IN; carry by the player actor is not captured (poller skips it)"
    ]
   },
   {
@@ -714,11 +729,16 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 4)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_care_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p4-02-carry-to-bed",
+    "REL-p4-03-carry-to-cage"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 12: LIFT_PERSON + PUT_IN_CAGE; carry ending in slavery/death covered by phase 3 events only"
    ]
   },
   {
@@ -751,13 +771,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass for squad inventory exemption on waking",
+   "rel_state": "partial: offline-pass (squad carry/caging exempt, routine bedding 0, critical rescue positive, squad inventory on waking)",
    "offline_tests": [
-    "social_unconscious_regression"
+    "social_unconscious_regression",
+    "social_care_regression"
    ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "carry/equipment controls: phase 4"
+    "equipment controls and squad looting of a conscious mate: phase 5"
    ]
   },
   {
@@ -788,11 +809,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 4)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_care_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p4-04-food"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 13: transfer/eat facts (food_items, hunger)"
    ]
   },
   {

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/social_identity.php';
+require_once __DIR__ . '/social_care.php';
 
 /**
  * Server-owned interpretation of structured native facts (facts.source = "structured").
@@ -16,6 +17,7 @@ require_once __DIR__ . '/social_identity.php';
  */
 final class SocialInterpreter
 {
+    use SocialCareInterpreter;
     public const HARM_GROUP = ['aggression', 'injury', 'serious_assault', 'critical_harm', 'maiming'];
     private array $combat;
 
@@ -34,6 +36,11 @@ final class SocialInterpreter
             'item_transfer' => $this->itemTransfer($event),
             'enslaved' => $this->enslaved($event, $mode),
             'freed' => $this->freed($event),
+            'aid' => $this->aid($event, $mode),
+            'carry_start' => $this->carryStart($event, $mode),
+            'carry_end' => $this->carryEnd($event, $mode),
+            'placed' => $this->placed($event, $mode),
+            'eat' => $this->eat($event, $mode),
             default => [['status'=>'recorded']],
         };
     }
@@ -233,7 +240,10 @@ final class SocialInterpreter
         $loser = $event['target']; $taker = $event['actor'];
         if (!$loser) return [['status'=>'incomplete_roles']];
         $ko = $this->activeKo($event, $loser)[0] ?? null;
-        if (!$ko || ($loser['conscious'] ?? null) === true) return [['status'=>'recorded', 'note'=>'conscious transfers are scored by the property phase']];
+        if (!$ko || ($loser['conscious'] ?? null) === true) {
+            $gift = ($loser['conscious'] ?? null) === true ? $this->foodGift($event) : null;
+            return [$gift ?? ['status'=>'recorded', 'note'=>'conscious transfers are scored by the property phase']];
+        }
         $ko['state']['objective']['transfers'][] = ['taker'=>$taker, 'to_ground'=>($event['facts']['to_ground'] ?? false) === true,
             'items'=>$event['facts']['items'] ?? [], 'game_ts'=>$event['game_ts'], 'sequence'=>$event['sequence']];
         $ko['state']['objective']['transfers'] = array_slice($ko['state']['objective']['transfers'], -64);
@@ -314,6 +324,13 @@ final class SocialInterpreter
                     ['awareness'=>'inferred', 'confidence'=>$knownThief ? 'certain' : 'strongly_inferred', 'conscious'=>true,
                      'note'=>'Woke with belongings missing' . ($knownThief ? '' : ' (blames ' . $believedThief['name'] . ')'), 'kind'=>'theft'],
                     $ko['id']);
+            }
+            // 2b) Caged while unconscious (phase 4): the captor who carried them in is charged on waking.
+            if (!empty($ko['state']['caged_by'])) {
+                $captor = $ko['state']['caged_by']['captor'];
+                $results[] = $this->effect($event, $mode, $observer, $captor, 'imprisonment',
+                    ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>'Woke caged by ' . $captor['name'], 'kind'=>'imprisonment'],
+                    $ko['state']['caged_by']['incident']);
             }
             // 2) Enslaved while unconscious: discovered now, charged to the owner who holds the chains.
             if (!empty($ko['state']['enslaved_by'])) {
