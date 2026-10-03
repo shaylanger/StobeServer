@@ -1095,7 +1095,9 @@ function stobePlaythroughRestoreRelationshipStates(int $cutoffGamets): array
                     npc_id,
                     COALESCE(extended_data, '{}'::jsonb) AS extended_data
                 FROM core_npc_master_history
-                WHERE gamets_last_updated <= $1 OR gamets_last_updated IS NULL
+                WHERE (gamets_last_updated <= $1 OR gamets_last_updated IS NULL)
+                  -- only snapshots that carry relationship data (most snapshots don't)
+                  AND jsonb_typeof(COALESCE(extended_data, '{}'::jsonb) -> 'relationships') = 'object'
                 ORDER BY npc_id,
                          gamets_last_updated DESC NULLS LAST,
                          CASE WHEN snapshot_reason = 'relationship' THEN 1 ELSE 0 END DESC,
@@ -1115,6 +1117,9 @@ function stobePlaythroughRestoreRelationshipStates(int $cutoffGamets): array
                 SET extended_data = " . $stripCurrent . ",
                     updated_at = NOW()
                 WHERE NOT EXISTS (SELECT 1 FROM latest WHERE latest.npc_id = c.id)
+                  -- clear only NPCs first seen after the save (they didn't exist then)
+                  AND NOT EXISTS (SELECT 1 FROM core_npc_master_history h
+                                   WHERE h.npc_id = c.id AND h.gamets_last_updated <= $1 AND h.gamets_last_updated > 0)
                   AND (c.gamets_last_updated > $1 OR c.gamets_last_updated IS NULL)
                   AND COALESCE(c.extended_data, '{}'::jsonb) ?| " . $relationshipKeyArray . "
                 RETURNING c.id, c.name
