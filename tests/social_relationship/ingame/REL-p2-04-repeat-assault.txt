@@ -1,7 +1,7 @@
 # id: REL-p2-04-repeat-assault
 # covers: SR06 (a second distinct assault after the encounter ended counts again, x1.15 max), encounter idle calibration
 # fixture: auto-home
-# reset: keep  (right after REL-p2-01, same load; uses its bandit "Rel Vorn")
+# reset: keep  (run right after REL-p2-01 WITHOUT reloading: it uses p2-01's bandit "Rel Vorn")
 # needs: as REL-p2-01
 # note: game_ts is game seconds (run m4), 15 game minutes = 900 > the 600 s encounter window
 # verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --check-shadow -> "<TNAME>" -> "Shay" lists TWO aggression rows (two combat:<seq> incidents), the second within [-18,-9];

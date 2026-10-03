@@ -26,8 +26,9 @@ speed 1
 speed 0
 @set HNAME where ${H} ~ ^(.+?) #\d+
 @set FNAME where ${F} ~ ^(.+?) #\d+
-# run m4: at 120 he ate the meat the moment it arrived (no transfer seen); 170 = hungry, not starving
-hunger ${H} 170
+# run m4/m5: a hungry NPC eats food the moment it arrives (120 and 170 both), so no transfer is seen.
+# Hand it over while he is full, then make him hungry and let him eat it.
+hunger ${H} 290
 hunger ${F} 280
 transfer Shay ${H} "Dried Meat"
 speed 1
@@ -35,16 +36,12 @@ speed 1
 speed 0
 inv ${H} ~ Dried Meat
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} facts=.*"food_items":\{"
-eat ${H} "Dried Meat"
+# hungry now: he eats it himself within a few seconds (m4/m5 behaviour); that meal is the one scored
+hunger ${H} 150
 speed 1
-@sleep 6
+@sleep 8
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=eat seq=\d+ load=\d+ actor=${H}
-transfer Shay ${H} "Dried Meat"
-speed 1
-@sleep 4
-speed 0
-eat ${H} "Dried Meat"
 transfer Shay ${F} "Dried Meat"
 speed 1
 @sleep 4

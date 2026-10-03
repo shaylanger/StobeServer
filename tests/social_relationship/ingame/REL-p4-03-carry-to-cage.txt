@@ -3,6 +3,8 @@
 # fixture: Crafting base
 # reset: fresh
 # needs: as REL-p4-01
+# BLOCKED (m5): in the Hub the town guards carry KO'd outsiders away before Malzin acts (Cobb 300 m, Kade 1600 m),
+#   and Malzin did not carry. Needs a fixture with a bed/cage and no guards. Kept for reference.
 # run m4: no carry happened at all (no "[EVENT] carry" in stobe.log); the where/screenshot steps show what Malzin did.
 # verify: php tools/social_relationship_inspect.php --pair-effects --incidents 10 --interpret-log 30 --check-shadow --expect-effect "<KNAME>" "Malzin" -40 -20   -> exit 0
 #   (the effect appears only after the "recovered" line); the second NPC <UNAME>, caged by the harness without a carrier, has no effect rows.

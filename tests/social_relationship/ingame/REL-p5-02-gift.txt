@@ -3,16 +3,18 @@
 # fixture: auto-home
 # reset: fresh
 # needs: as REL-p5-01
-# verify: php tools/social_relationship_inspect.php --pair-effects --interpret-log 20 --check-shadow --expect-effect "<GNAME>" "Shay" 1 4   -> exit 0
+# verify: php tools/social_relationship_inspect.php --pair-effects --interpret-log 20 --check-shadow --expect-effect "<GNAME>" "Rel Dona" 1 4   -> exit 0
 #   pair_effects: one gift row for <GNAME> -> Shay (transfer moves the whole stack once).
 #   Game probe 15: the transfer step gives "structured kind=item_transfer" with the giver conscious and no stolen_items.
 @wait-world
 @sleep 8
 speed 0
 @set SHAY where Shay ~ Shay (#\d+)
-# run m4: Shay's inventory was full (3/6 arrived) and the transfer was not seen; show where the plates are
-give Shay "Iron Plates" 1 ~ got 1/1
-inv Shay ~ Iron Plates
+# run m4/m5: Shay's inventory is full, the plate goes where the inventory scan does not look; a fresh NPC gives instead
+spawn "Hungry Bandit" Drifters near Shay dist 8 count 1 ~ spawned 1/1
+@set DONOR chars 40 ~ Hungry Bandit (#\d+)
+setname ${DONOR} "Rel Dona"
+give "Rel Dona" "Iron Plates" 1 ~ got 1/1
 spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
 @set G chars 40 ~ Hungry Bandit (#\d+)
 setname ${G} "Rel Gav"
@@ -21,8 +23,8 @@ speed 1
 @sleep 20
 speed 0
 @set GNAME where ${G} ~ ^(.+?) #\d+
-transfer Shay ${G} "Iron Plates"
+transfer ${DONOR} ${G} "Iron Plates"
 speed 1
 @sleep 4
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${G} target=${SHAY}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${G} target=${DONOR}

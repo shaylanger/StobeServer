@@ -38,6 +38,11 @@ and all checks (`--expect-pair`, `--pair-effects`, ...) use that newest load. st
   follow the loaded save, so reloading the fixture (or Shay loading her own save later) rolls the
   relationship maps back to that save's game time (NEVER_CLEAR_RELATIONSHIP_DATA=false on live).
 
+## Chained files (run with "keep", no fixture reload before them)
+- `REL-p2-04-repeat-assault.txt` right after `REL-p2-01-player-first-strike.txt` (uses its bandit).
+- `REL-p1-04-reload-stale.txt` after `REL-p1-03-shadow-capture.txt` (it reloads by itself).
+Every other file starts from a fresh fixture load. Take the inspect before the next reload: a reload prunes later social rows.
+
 ## Phase 1 smoke gate (one launch with Capture=0, then one launch with Capture=1)
 
 | Order | File | Launch | Server mode before | Check after |

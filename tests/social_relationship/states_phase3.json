@@ -1,6 +1,6 @@
 {
  "SR08": [
-  "offline-pass; game rerun needed (m4 p3-01: the bandit fled, never KO'd; scenario now cripples him)",
+  "offline-pass; game rerun needed (m5: bandit still fled; test NPCs fell out of the 16-character world sweep in the crowd; native focus fix + forced KO)",
   [
    "social_unconscious_regression"
   ],
@@ -8,7 +8,7 @@
    "REL-p3-01-ko-loot-inferred"
   ],
   [
-   "probe 6 LOOT_TARGET still open"
+   "probe 6 LOOT_TARGET"
   ]
  ],
  "SR09": [
@@ -22,7 +22,7 @@
   ]
  ],
  "SR10": [
-  "offline-pass; game rerun needed (m4 p3-02: no blame as expected, but the transfer was not captured: food eaten on arrival; now Iron Plates)",
+  "offline-pass; game: no blame (m5 p3-02 27/0) but the KO itself was not captured (crowd); rerun",
   [
    "social_unconscious_regression"
   ],
@@ -32,7 +32,7 @@
   []
  ],
  "SR11": [
-  "offline-pass; game rerun needed (m4 p3-03: he fled out of event range before the shackle; scenario now brings him back)",
+  "offline-pass; game rerun needed (m5: no KO and no enslaved fact: sweep crowd limit; fixed natively)",
   [
    "social_unconscious_regression"
   ],
@@ -40,7 +40,7 @@
    "REL-p3-03-enslaved-while-ko"
   ],
   [
-   "probe 7 shackle owner still open"
+   "probe 7"
   ]
  ],
  "SR12": [
@@ -78,7 +78,7 @@
   ]
  ],
  "SR38": [
-  "partial: offline-pass; game-pass for reload pruning + stale rejection (m4 p1-04 check-stale pass, load 3)",
+  "partial: offline-pass; game-pass stale/reload (m4+m5 p1-04 25/0)",
   [
    "social_relationship_integration",
    "social_unconscious_regression"
@@ -88,7 +88,7 @@
    "REL-p3-04-reload-mid-ko"
   ],
   [
-   "p3-04 rerun (no KO in m4)"
+   "p3-04 recovered fact missed in m5 (crowd): rerun"
   ]
  ],
  "SR42": [
@@ -126,7 +126,7 @@
   ]
  ],
  "SR15": [
-  "offline-pass after the m4 fix (aid graded by bandaging); game rerun needed",
+  "game-pass (m5: Malzin -> Rel Ona meaningful_aid +11 while she was unconscious and near death; graded by bandaging)",
   [
    "social_care_regression"
   ],
@@ -134,11 +134,11 @@
    "REL-p4-01-first-aid"
   ],
   [
-   "m4: first aid bandages, flesh barely moves (fixed: wound/untreated points); session was not closed before the game paused (scenario fixed)"
+   "lifesaving class not reached in game yet (share bandaged < 50%)"
   ]
  ],
  "SR16": [
-  "offline-pass; game rerun needed",
+  "offline-pass; game: second treatment in the same episode not yet observed (p4-01 rerun on auto-home)",
   [
    "social_care_regression",
    "social_relationship_unit"
@@ -167,7 +167,7 @@
    "REL-p4-02-carry-to-bed"
   ],
   [
-   "m4 probe 11: FIND_BED_AND_PUT_IN produced no carry (no '[EVENT] carry' at all); needs a working carry order or a harness carry command",
+   "m5: Hub guards carry KO'd outsiders away (300-1600 m) and Malzin's FIND_BED_AND_PUT_IN did nothing; needs a fixture with a bed and no guards",
    "carry by the player actor is not captured"
   ]
  ],
@@ -177,15 +177,14 @@
    "social_care_regression"
   ],
   [
-   "REL-p4-02-carry-to-bed",
    "REL-p4-03-carry-to-cage"
   ],
   [
-   "m4 probe 12: LIFT_PERSON + PUT_IN_CAGE produced no carry"
+   "as SR18 (cage)"
   ]
  ],
  "SR21": [
-  "offline-pass; game rerun needed (m4: native facts OK for the full NPC; the hungry one ate the meat on arrival)",
+  "offline-pass; game rerun needed (m5: hungry NPCs eat food on arrival at 120 and 170: hand over while full, then make him hungry)",
   [
    "social_care_regression"
   ],
@@ -216,7 +215,7 @@
   ]
  ],
  "SR22": [
-  "offline-pass; game rerun needed (m4 p5-01: scenario regex picked the wrong trader name)",
+  "offline-pass; game rerun needed (m5 probe 14: seller Keys is a character, paid 146 = value 146, ratio 1.0; native lost both sides: fixed)",
   [
    "social_property_regression"
   ],
@@ -225,7 +224,7 @@
    "REL-p5-02-gift"
   ],
   [
-   "probe 14 price ratio still open; probe 15: Iron Plates Shay->NPC transfer was not seen at all"
+   "gift: Shay's full inventory hides items from the inventory scan (STOBE); scenario now uses an NPC donor"
   ]
  ],
  "SR23": [
@@ -236,9 +235,7 @@
   [
    "REL-p5-01-trade"
   ],
-  [
-   "probe 14"
-  ]
+  []
  ],
  "SR29": [
   "partial: offline-pass (kept promise, honored coercive deal minimal, betrayal after accepted surrender, legacy delta replaced only when enabled); needs-game",
@@ -290,17 +287,18 @@
   ]
  ],
  "SR05": [
-  "game-pass (m4 p2-05: aggression -15, injury -1, KO -15 = -31, one budget)",
+  "game-pass (m4 p2-05 one budget -31); m5 p2-01 KO had no game attribution (native fallback recent_attacker added)",
   [
    "social_combat_regression"
   ],
   [
-   "REL-p2-05-enabled-affinity"
+   "REL-p2-05-enabled-affinity",
+   "REL-p2-01-player-first-strike"
   ],
   []
  ],
  "SR06": [
-  "partial: offline-pass; game rerun needed (m4 p2-04: the fight went on during the wait, one encounter)",
+  "partial: offline-pass; game: rerun p2-04 chained right after p2-01 without a reload (m5 reloaded in between)",
   [
    "social_combat_regression"
   ],

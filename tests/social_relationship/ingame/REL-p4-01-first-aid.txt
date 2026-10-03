@@ -1,6 +1,6 @@
 # id: REL-p4-01-first-aid
 # covers: SR15 (real first aid on a badly hurt, unconscious patient: provider credited once by measured outcome), SR16 (treating the same injury again adds nothing)
-# fixture: Crafting base
+# fixture: auto-home   (m5: Hub guards carried the KO'd patient away)
 # reset: fresh
 # needs: Delivery 4 build (rel-native-phase4.patch) + server at the Delivery 4 commit; Capture=1; mode shadow
 # verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --check-shadow --expect-effect "<ONAME>" "Malzin" 1 35   -> exit 0
@@ -27,7 +27,8 @@ hp ${P} ~ worst=
 give Malzin "Basic First Aid Kit" 3 ~ 3/3
 order Malzin FIRST_AID_ORDER target ${P} ~ FIRST_AID_ORDER
 speed 2
-@until 150 hp ${P} ~ \(bandaged (9\d|1\d\d)
+@until 150 hp ${P} ~ \(bandaged
+@sleep 20
 # run m4: the session closes 4 s after the last treatment frame, and only while the game runs
 teleport Malzin Shay dist 40
 speed 1
