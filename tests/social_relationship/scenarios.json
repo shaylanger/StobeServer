@@ -1214,7 +1214,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: m16 run 3: Malzin picked the lock (chained 1->0, slave_state stays 1), then the game re-created him under a new handle as a different object (no carry-over); native m16c reports freed when the chains come off, on the old handle; escape completion (a day seen free) is not tracked across the new handle",
+   "rel_state": "game-pass (chains_freed): m16 run 4 Malzin picked the lock, freed reported on chains off (native m16c) with liberator; Rel Xan -> Malzin chains_freed +14 (shadow), enslavement by Rel Ober -88; escape completion (a game day seen free) not tracked across the re-created handle",
    "offline_tests": [
     "social_recruitment_regression"
    ],
@@ -1656,7 +1656,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: m13 soaks A (Capture=0) and B (Capture=1, shadow) 30/0, no queue overflow, check-shadow 0; fps window 157 s: avg 54.5 vs 54.8 (99.5%), worst frame 348.5 vs 323.5 ms (107.7%); memory inconclusive (both fell during the run; B fell 137 MB less); a longer measured window is requested",
+   "rel_state": "game-pass (idle capture): m15 10-min windows B-A-B-A, same frame-cap regime: fps 99.6-100.2% of A, worst frame 350-405 ms on both sides, memory B-A -45/+4 MB, no overflow; capture under combat from the m13 soak (99.5%, worst 107.7%)",
    "offline_tests": [
     "social_concurrency_regression",
     "social_combat_regression",
