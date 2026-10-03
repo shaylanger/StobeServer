@@ -929,6 +929,12 @@ check('STOBE 18 m18: a verified STOP_ATTACK is marked intentional_betrayal', sta
 $db->exec("DELETE FROM general_settings WHERE id='NEG_TEST_FORCE_BETRAYAL'");
 $db->exec("DELETE FROM stobe_negotiation_directive");
 
+// Item 108: a template never seen named is generic; recruitables, uniques and players are not.
+check('item 108: "Berserker" (template, never seen named) is generic', stobeIsGenericNpcName('Berserker') === true);
+check('item 108: "Kral\'s Chosen" is generic', stobeIsGenericNpcName("Kral's Chosen") === true);
+check('item 108: unique "Dust King" and recruitable "Ruka" are not generic', stobeIsGenericNpcName('Dust King') === false && stobeIsGenericNpcName('Ruka') === false);
+check('item 108: the player is not generic', stobeIsGenericNpcName($player) === false);
+
 // ---------------------------------------------------------------- Item 107: a fight with any squad member makes a combat deal
 fixtureNpc('NegTestBeaks107', ['money'=>800, 'money_observed_at'=>time()], '', '', '100/100', 'Nameless');
 fixtureNpc('NegTestRaider107', ['money'=>50, 'money_observed_at'=>time()], '', 'A raider.');

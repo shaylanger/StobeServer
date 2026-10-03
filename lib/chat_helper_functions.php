@@ -12051,6 +12051,14 @@ function stobeIsGenericNpcName(string $name): bool {
     static $cache = [];
     $k = strtolower($name);
     if (array_key_exists($k, $cache)) return $cache[$k];
+    // Item 108: non-unique character templates of the load order, also when never seen named.
+    static $templates = null;
+    if ($templates === null) {
+        $raw = @file_get_contents(dirname(__DIR__) . '/data/npc_generic_templates.json');
+        $list = is_string($raw) ? json_decode($raw, true) : null;
+        $templates = is_array($list) ? array_flip(array_map('strval', $list)) : [];
+    }
+    if (isset($templates[preg_replace('/\s+/', ' ', $k)])) return $cache[$k] = true;
     try {
         $row = $GLOBALS['db']->fetchOne("SELECT 1 AS x FROM core_npc_master WHERE LOWER(name) LIKE $1 LIMIT 1", ['% [' . $k . ']']);
         return $cache[$k] = is_array($row);
