@@ -16,11 +16,13 @@ spawn "Hungry Bandit" Drifters near Shay dist 6 count 1 ~ spawned 1/1
 @set X chars 40 ~ Hungry Bandit (#\d+)
 # run m11: Malzin attacked the test Drifters; make their faction friendly to the squad
 relation ${X} 60
-setname ${X} "Rel Xan"
+setname ${X} "Rel Xan" ~ ^Hungry Bandit -> 
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
 @set O chars 40 ~ Hungry Bandit (#\d+)
-setname ${O} "Rel Ober"
-stobe_say "Rel Xan" "Xan, hold still."
+setname ${O} "Rel Ober" ~ ^Hungry Bandit -> 
+# run m15: Stobe renamed him (NAME_ASSIGN) before the chat: talk to his current name
+@set XNAME0 where ${X} ~ ^(.+?) #\d+
+stobe_say "${XNAME0}" "Hello there, hold still."
 speed 1
 @sleep 12
 speed 0
@@ -35,8 +37,10 @@ speed 1
 @sleep 5
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=enslaved seq=\d+ load=\d+ actor=${O} target=${X}
+# run m15: no freed in 80 game s at her own skill: raise lockpicking and wait longer
+setstat Malzin lockpicking 100
 order Malzin PICK_LOCK_ON_SHACKLES target ${X}
 speed 2
-@sleep 40
+@sleep 90
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=${X} witnesses=\d+ facts=.*"liberator"

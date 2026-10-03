@@ -298,7 +298,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: game-pass for the KO part (m13 p3-01: KO by Shay with the inventory baseline, Rel Tam -> Shay -38, waking resolved); loot: probe 6 answered (LOOT_TARGET on a KO'd NPC moves nothing), rerun with a harness transfer",
+   "rel_state": "game-pass (m15 p3-01 39/0: KO by Shay, Malzin took the Iron Plates, on waking Rel Tam -> Shay theft -9 strongly inferred (total -34), no theft toward the real taker Malzin)",
    "offline_tests": [
     "social_unconscious_regression"
    ],
@@ -676,7 +676,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (m11 +9, m13 +8: Rel Cobb -> Malzin safe_rescue after LIFT_PERSON + PUT_SOMEONE_IN_BED); m13: the placed fact had no actor (bed flag seen 5 ms before the drop): native fallback to the current carrier",
+   "rel_state": "game-pass (m11 +9, m13 +8, m15 +9: Rel Cobb -> Malzin safe_rescue); m15 the placed fact names Malzin (m13 native fix)",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -715,7 +715,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "game-pass (m11 -31, m13 -33: Rel Kade -> Malzin imprisonment after LIFT_PERSON + PUT_IN_CAGE)",
+   "rel_state": "game-pass (m11 -31, m13 -33, m15 -31: Rel Kade -> Malzin imprisonment); m15 placed prison names Malzin",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -795,7 +795,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: m13 the food handed to Rel Hask is captured (food_items, recipient_hunger); he did not eat at 1.50 within 8 s, rerun makes him eat at 1.20; full recipient not_hungry (m8, m13 Rel Fenn)",
+   "rel_state": "partial: m15 transfer + eat captured for Rel Hask, but hunger_before was the stale 2.90 (harness hunger and eat in one sweep) -> not_hungry; scenario now lets a sweep see the lowered hunger first; full recipient not_hungry (m8, m13, m15)",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -946,7 +946,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "open: m13 Rel Sorn -9 again; her witness entry said task 290, prone 0 (5 s after the floor-sleep order she was not asleep by our check); native now also reads StateBroadcastData::isSleeping (logged as \"sleeping\"); scenario waits 15 s and checks the entry",
+   "rel_state": "open: m15 run invalid: the spawned \"Rel Vik\" was Outlaw Watch Jamin 4.5 km away (harness #serial matched another character), so Sorn was never beside the fight; native sleeping flag (m13) logs \"sleeping\" (seen as 0 for awake fighters); setname now must rename the spawned bandit",
    "offline_tests": [
     "social_witness_regression"
    ],
@@ -1214,7 +1214,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: m13 Rel Xan again \"first seen already enslaved\": Stobe's world event sweep starts 45 s (real time) after a load and he was shackled ~25 s after; scenario now waits 50 s; liberator (probe 20) still unseen",
+   "rel_state": "partial: m15 enslaved captured with owner (50 s warm-up fix works); no freed: Malzin did not pick the lock in 80 game s; scenario raises her lockpicking to 100 and waits 180 game s; liberator (probe 20) still unseen",
    "offline_tests": [
     "social_recruitment_regression"
    ],
@@ -1614,7 +1614,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (beliefs/notes name only the inferred culprit; witnesses learn only what they saw)",
+   "rel_state": "partial: m15 p3-01 beliefs: the theft belief names only Shay (inferred); Malzin appears only as the injury culprit after Tam woke (real hit)",
    "offline_tests": [
     "social_unconscious_regression",
     "social_witness_regression"

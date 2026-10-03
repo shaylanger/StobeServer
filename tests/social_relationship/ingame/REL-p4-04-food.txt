@@ -46,6 +46,10 @@ inv ${H} ~ Dried Meat
 # hungry now: he eats it himself within a few seconds (m4/m5 behaviour); that meal is the one scored
 # run m13: at 150 he did not eat within 8 s; hungrier, then the harness makes him eat the gift
 hunger ${H} 120
+# run m15: let the sweep record the lowered hunger first (else hunger_before is the old 2.90 -> not_hungry)
+speed 1
+@sleep 5
+speed 0
 eat ${H} "Dried Meat"
 speed 1
 @sleep 6

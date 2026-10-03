@@ -60,7 +60,7 @@ Liberator (probe 20), sleeping witness (SR25), theft caught
 (probe 17), recruitment gate exercised by the LLM, repeat assault with a non-hostile victim, a longer frame-time
 A/B window (Capture 0 vs 1, 10 min), enabled-mode balance review (Shay).
 
-## Final report (draft, 2026-10-03, after run m13)
+## Final report (draft, 2026-10-03, after run m15)
 
 | Row | Class | State | Open |
 |---|---|---|---|
@@ -71,7 +71,7 @@ A/B window (Capture 0 vs 1, 10 min), enabled-mode balance review (Shay).
 | SR05 | pass in game | game-pass (m4, m8, m11: Malzin's KO of Rel Vorn charged as a joined assault, -40) |  |
 | SR06 | partial / rerun pending | partial: offline-pass; game m8: second encounter started by the now-hostile bandit (retaliation, correctly no new row); a clean repeat needs a non-hostile victim | consent/duel and accident signals do not exist |
 | SR07 | blocked / open | offline-pass; game blocked | needs a real limb loss caused in a fight (harness damage/kill have no attacker); probabilistic in game |
-| SR08 | partial / rerun pending | partial: game-pass for the KO part (m13 p3-01: KO by Shay with the inventory baseline, Rel Tam -> Shay -38, waking resolved); loot: probe 6 answered (LOOT_TARGET on a KO'd NPC moves nothing), rerun with a harness transfer |  |
+| SR08 | pass in game | game-pass (m15 p3-01 39/0: KO by Shay, Malzin took the Iron Plates, on waking Rel Tam -> Shay theft -9 strongly inferred (total -34), no theft toward the real taker Malzin) |  |
 | SR09 | blocked / open | offline-pass (evidence adapter); game blocked | no in-game source of better evidence until witnesses/sensing (phase 6) |
 | SR10 | pass in game | game-pass (m8 p3-02: KO without attacker, transfer latent, waking = no_known_culprit, nobody blamed) |  |
 | SR11 | pass in game | game-pass (m13 p3-03: Rel Vash -> Rel Grell enslavement -86 on waking although his KO was not seen; owner = shackle owner, probe 7) |  |
@@ -81,21 +81,21 @@ A/B window (Capture 0 vs 1, 10 min), enabled-mode balance review (Shay).
 | SR15 | pass in game | game-pass (m5 meaningful +11, m8 lifesaving +29 Rel Ona -> Malzin while unconscious) |  |
 | SR16 | partial / rerun pending | offline-pass; game: second treatment in the same episode not yet observed (p4-01 rerun on auto-home) |  |
 | SR17 | offline only / by construction | offline-pass (own harm / ally harm then healing earns nothing) | staged self-harm by the patient: harness damage has no attacker, so it is unattributed; real self-harm path not testable |
-| SR18 | pass in game | game-pass (m11 +9, m13 +8: Rel Cobb -> Malzin safe_rescue after LIFT_PERSON + PUT_SOMEONE_IN_BED); m13: the placed fact had no actor (bed flag seen 5 ms before the drop): native fallback to the current carrier | carry by the player actor (Shay) is not captured |
-| SR19 | pass in game | game-pass (m11 -31, m13 -33: Rel Kade -> Malzin imprisonment after LIFT_PERSON + PUT_IN_CAGE) | ground drop / unknown placer: offline only |
+| SR18 | pass in game | game-pass (m11 +9, m13 +8, m15 +9: Rel Cobb -> Malzin safe_rescue); m15 the placed fact names Malzin (m13 native fix) | carry by the player actor (Shay) is not captured |
+| SR19 | pass in game | game-pass (m11 -31, m13 -33, m15 -31: Rel Kade -> Malzin imprisonment); m15 placed prison names Malzin | ground drop / unknown placer: offline only |
 | SR20 | partial / rerun pending | partial: offline-pass (squad carry/caging/inventory/equipment exempt, critical rescue positive) | in-game squad looting of a conscious mate not scripted |
-| SR21 | partial / rerun pending | partial: m13 the food handed to Rel Hask is captured (food_items, recipient_hunger); he did not eat at 1.50 within 8 s, rerun makes him eat at 1.20; full recipient not_hungry (m8, m13 Rel Fenn) |  |
+| SR21 | partial / rerun pending | partial: m15 transfer + eat captured for Rel Hask, but hunger_before was the stale 2.90 (harness hunger and eat in one sweep) -> not_hungry; scenario now lets a sweep see the lowered hunger first; full recipient not_hungry (m8, m13, m15) |  |
 | SR22 | pass in game | game-pass (m8 fair trade, m11 +3 / m13 +2 gift Rel Gav -> Rel Dona) |  |
 | SR23 | offline only / by construction | offline-pass; game: character seller resolved (m8); shop storage / purse not seen in game |  |
 | SR24 | pass in game | game-pass (m8, m9, m13: Rel Wren -6/-7/-8 of the victim's share) |  |
-| SR25 | blocked / open | open: m13 Rel Sorn -9 again; her witness entry said task 290, prone 0 (5 s after the floor-sleep order she was not asleep by our check); native now also reads StateBroadcastData::isSleeping (logged as "sleeping"); scenario waits 15 s and checks the entry | m13 rerun with the m13 native patch |
+| SR25 | blocked / open | open: m15 run invalid: the spawned "Rel Vik" was Outlaw Watch Jamin 4.5 km away (harness #serial matched another character), so Sorn was never beside the fight; native sleeping flag (m13) logs "sleeping" (seen as 0 for awake fighters); setname now must rename the spawned bandit | rerun p6-01a/b; harness #serial ambiguity |
 | SR26 | offline only / by construction | offline-pass (single hop, pre-event affinity, once per witness/incident) |  |
 | SR27 | partial / rerun pending | partial: offline-pass (dialogue band -8..+3, no re-scoring of a mechanical outcome); insult witnesses not implemented | insult heard by a friend: needs dialogue listener data as witnesses |
 | SR28 | partial / rerun pending | unchanged by REL (surrender trigger has no affinity term; REL does not touch negotiation); needs-game for the -85 case | needs a scenario with a stored -85 affinity + low health (scenarios.sh surrender); no REL code involved |
 | SR29 | partial / rerun pending | partial: offline-pass (kept promise, honored coercive deal minimal, betrayal after accepted surrender, legacy delta replaced only when enabled); needs-game | 'dishonest hated enemy can betray' is the negotiation engine's existing rule (unchanged) |
 | SR30 | partial / rerun pending | game inconclusive (m8 p7-01: no JoinParty attempted by the NPC, not recruited) | LLM-dependent |
 | SR31 | offline only / by construction | offline-pass (chat + director configs, dispatch normalizer; autonomy never offers JoinParty; override) | native ACT_JOIN_PARTY fallback paths not audited in game |
-| SR32 | partial / rerun pending | partial: m13 Rel Xan again "first seen already enslaved": Stobe's world event sweep starts 45 s (real time) after a load and he was shackled ~25 s after; scenario now waits 50 s; liberator (probe 20) still unseen | probe 20 liberator |
+| SR32 | partial / rerun pending | partial: m15 enslaved captured with owner (50 s warm-up fix works); no freed: Malzin did not pick the lock in 80 game s; scenario raises her lockpicking to 100 and waits 180 game s; liberator (probe 20) still unseen | probe 20 liberator |
 | SR33 | offline only / by construction | offline-pass by construction (REL gate only on STOBE's JoinParty path; vanilla recruitment untouched) | vanilla recruit in game not run |
 | SR34 | partial / rerun pending | partial: game-pass for named NPC / Shay / Malzin binding (m4); offline-pass generic name + serial reuse | rename alias and same-name NPCs need game data |
 | SR35 | partial / rerun pending | partial: offline-pass (retry dedup, duplicate KO/limb once, second wake once) | out-of-order delivery beyond the late-event rule not tested |
@@ -105,11 +105,11 @@ A/B window (Capture 0 vs 1, 10 min), enabled-mode balance review (Shay).
 | SR39 | partial / rerun pending | partial: offline-pass (A/B/A switch, old snapshot upgrade, fresh) | export/import not tested |
 | SR40 | partial / rerun pending | partial: offline-pass + game-pass stale check (m4) | NEVER_CLEAR_RELATIONSHIP_DATA=true not tested |
 | SR41 | pass in game | game-pass (m4: p1-01 Capture=0 inert, p1-02 server off stores nothing, every shadow run check-shadow pass; p2-05 enabled applied) | R4 exclusion in enabled mode: --relation check not run in m4 |
-| SR42 | partial / rerun pending | partial: offline-pass (beliefs/notes name only the inferred culprit; witnesses learn only what they saw) | prompt-side belief injection not implemented (notes only) |
+| SR42 | partial / rerun pending | partial: m15 p3-01 beliefs: the theft belief names only Shay (inferred); Malzin appears only as the injury culprit after Tam woke (real hit) | prompt-side belief injection not implemented (notes only) |
 | SR43 | partial / rerun pending | partial: m13 soaks A (Capture=0) and B (Capture=1, shadow) 30/0, no queue overflow, check-shadow 0; fps window 157 s: avg 54.5 vs 54.8 (99.5%), worst frame 348.5 vs 323.5 ms (107.7%); memory inconclusive (both fell during the run; B fell 137 MB less); a longer measured window is requested | longer A/B window (10 min at speed 1, fps reset after warm-up, A-B-A-B) |
 | SR44 | partial / rerun pending | partial: offline runner resumable steps + manifest; game runner resume is the coordinator's harness | phase 8 game runner not REL-owned |
 
-Totals: blocked / open: 4, offline only / by construction: 8, partial / rerun pending: 19, pass in game: 13
+Totals: blocked / open: 4, offline only / by construction: 8, partial / rerun pending: 18, pass in game: 14
 
 Frame-time gate (m13, 157 s windows): fps 99.5% (gate >= 95%) and worst frame 107.7% (gate <= 110%) pass;
 memory is inconclusive (both runs fell, B 137 MB less; start already 111 MB apart). Final sign-off needs a longer window:
