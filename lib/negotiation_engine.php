@@ -307,6 +307,59 @@ function stobeNegCombatEvents(int $sinceUnix, string $involving = '', bool $incl
     return $events;
 }
 
+/**
+ * Item 71: fight events involving this NPC since $sinceUnix, as [ts, attacker, target]:
+ * combat rows under his name (defences included); combat rows under his pre-naming generic
+ * name ("Dust Bandit" for "Torek [Dust Bandit]") when that side's serial in the row's people
+ * list is his; and "took a major hit from X" (X attacked him).
+ */
+function stobeNegFightEventsForNpc(string $name, array|false $npcData, int $sinceUnix): array {
+    $events = stobeNegCombatEvents($sinceUnix, $name, true);
+    $serial = function_exists('stobeNegNpcHandSerial') ? stobeNegNpcHandSerial($name, $npcData) : '';
+    $serials = [];
+    if ($serial !== '') {
+        $serials[] = $serial;
+        $signed = intval($serial) - 4294967296;
+        if ($signed < 0) $serials[] = strval($signed);
+    }
+    $sideSerial = static function (string $people, int $index): string {
+        $list = json_decode($people, true);
+        if (!is_array($list) || !isset($list[$index])) return '';
+        return preg_match('/\|hand_(-?\d+)\s*$/', strval($list[$index]), $m) ? $m[1] : '';
+    };
+    $generic = preg_match('/\[([^\]]+)\]\s*$/', $name, $gm) ? trim($gm[1]) : '';
+    if ($generic !== '' && count($serials) > 0) {
+        $rows = $GLOBALS['db']->fetchAll(
+            "SELECT localts, data, people FROM eventlog WHERE type='combat' AND localts >= $1 AND data LIKE $2 ORDER BY localts DESC LIMIT 400",
+            [$sinceUnix, '%' . $generic . '%']
+        );
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!preg_match('/^(.+?):\s*(?:Initiated attack|Defending against)\s*\(talking to:\s*(.+?)\)\s*$/', trim(strval($row['data'] ?? '')), $m)) continue;
+            $attacker = normalizeParticipantNameToken($m[1]);
+            $target = normalizeParticipantNameToken($m[2]);
+            $people = strval($row['people'] ?? '');
+            if (strcasecmp($attacker, $generic) === 0 && in_array($sideSerial($people, 0), $serials, true)) $attacker = $name;
+            elseif (strcasecmp($target, $generic) === 0 && in_array($sideSerial($people, 1), $serials, true)) $target = $name;
+            else continue;
+            $events[] = ['ts'=>intval($row['localts']), 'attacker'=>$attacker, 'target'=>$target];
+        }
+    }
+    $hitNames = [$name];
+    if ($generic !== '' && count($serials) > 0) $hitNames[] = $generic;
+    foreach ($hitNames as $hitName) {
+        $rows = $GLOBALS['db']->fetchAll(
+            "SELECT localts, data, people FROM eventlog WHERE type='major_damage' AND localts >= $1 AND data LIKE $2 ORDER BY localts DESC LIMIT 100",
+            [$sinceUnix, $hitName . ': took a major hit from %']
+        );
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if ($hitName !== $name && !in_array($sideSerial(strval($row['people'] ?? ''), 0), $serials, true)) continue;
+            if (!preg_match('/:\s*took a major hit from\s+(.+?)(?:\s+using\s+.+)?\s*$/', trim(strval($row['data'] ?? '')), $m)) continue;
+            $events[] = ['ts'=>intval($row['localts']), 'attacker'=>normalizeParticipantNameToken($m[1]), 'target'=>$name];
+        }
+    }
+    return $events;
+}
+
 function stobeNegNpcDied(string $npc, int $sinceUnix): bool {
     $row = $GLOBALS['db']->fetchOne(
         "SELECT 1 AS hit FROM eventlog WHERE type='death' AND localts >= $1 AND data LIKE $2 LIMIT 1",
@@ -1787,7 +1840,7 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 if ($live === null || $eventLive < $live) $live = $eventLive;
             }
             if ($live !== null && $live < $ratio) $ratio = $live;
-            $events = stobeNegCombatEvents($now - 90, $name, true);
+            $events = stobeNegFightEventsForNpc($name, $data, $now - 90); // item 71
             $hostileToPlayer = false;
             $fightingOthers = false;
             foreach ($events as $ev) {
