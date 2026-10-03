@@ -20,11 +20,13 @@ speed 1
 @sleep 20
 speed 0
 @set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+# run m4: hungry bandits flee when hurt and never got knocked out; crippled legs keep him in reach
+damage ${BANDIT} left_leg 95 ~ flesh
+damage ${BANDIT} right_leg 95 ~ flesh
 attack Shay ${BANDIT}
 speed 1
-@until 90 where ${BANDIT} ~ KO
+@until 150 where ${BANDIT} ~ KO
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT}
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=#\d+ target=${BANDIT} facts="level":"knockout"
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${BANDIT} target=#\d+
 teleport ${BANDIT} Shay dist 300

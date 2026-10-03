@@ -11,7 +11,7 @@ function affOf(string $a, string $b): int { return (int)(stobeRelationshipEntryF
 function entryOf(string $a, string $b): ?array { return stobeRelationshipEntryFor(getNpcData($a), $b); }
 
 const P = ['Care Medic'=>[301,'Hub',false], 'Care Brute'=>[302,'Red',false], 'Care Brute Pal'=>[303,'Red',false], 'Care Patient'=>[311,'Blue',false],
-    'Care Patient Two'=>[312,'Blue',false], 'Care Patient Three'=>[313,'Blue',false], 'Care Carrier'=>[321,'Grey',false], 'Care Carried'=>[322,'Blue',false],
+    'Care Patient Two'=>[312,'Blue',false], 'Care Patient Three'=>[313,'Blue',false], 'Care Bandaged'=>[314,'Blue',false], 'Care Carrier'=>[321,'Grey',false], 'Care Carried'=>[322,'Blue',false],
     'Care Carried Two'=>[323,'Blue',false], 'Care Carried Three'=>[324,'Blue',false], 'Care Carried Four'=>[325,'Blue',false],
     'Care Squad A'=>[331,'Nameless',true], 'Care Squad B'=>[332,'Nameless',true], 'Care Squad C'=>[333,'Nameless',true],
     'Care Donor'=>[341,'Hub',false], 'Care Hungry'=>[342,'Blue',false], 'Care Full'=>[343,'Blue',false]];
@@ -61,6 +61,26 @@ ok($routine >= 1 && $routine <= 3, "routine healing band ($routine)");
 aid('Care Medic', 'Care Patient Three', [0.4, 0.9, 0.3], [0.6, 0.9, 0.0], true, 1470);
 $meaningful = affOf('Care Patient Three', 'Care Medic');
 ok($meaningful >= 5 && $meaningful <= 12, "meaningful aid total, not stacked ($meaningful)");
+// Run m4: first aid bandages wounds while flesh barely moves; graded by wound points newly covered.
+attack('Care Brute', 'Care Bandaged', 1480);
+$bv = fn(float $h, float $b, float $w, float $u) => ['health'=>$h, 'blood'=>$b, 'bleed'=>0.0, 'wound'=>$w, 'untreated'=>$u];
+function aidW(array $before, array $after, ?bool $cb, int $ts): array {
+    $f = ['conscious_before'=>$cb, 'seconds'=>30, 'item'=>'Basic First Aid Kit', 'supplier_serial'=>0];
+    foreach (['before_'=>$before, 'after_'=>$after] as $pre => $v) { $f[$pre.'known'] = true; foreach ($v as $k => $x) $f[$pre.$k] = $x; }
+    return send('aid', ent('Care Medic'), ent('Care Bandaged', $cb), $f, $ts);
+}
+aidW($bv(-0.41, 0.30, 230, 230), $bv(-0.42, 0.31, 232, 136), false, 1485);
+$band = affOf('Care Bandaged', 'Care Medic');
+ok($band >= 5 && $band <= 12, "bandaging 40% of a near-fatal wound: meaningful aid ($band)");
+aidW($bv(-0.42, 0.31, 232, 136), $bv(-0.42, 0.33, 232, 20), false, 1490);
+$band2 = affOf('Care Bandaged', 'Care Medic');
+ok($band2 >= 20 && $band2 <= 35, "finishing the bandaging: lifesaving total, not stacked ($band2)");
+$r = aidW($bv(0.844, 1.0, 20, 20), $bv(0.849, 1.0, 19, 18), true, 1495);
+ok(affOf('Care Bandaged', 'Care Medic') === $band2, 'tiny top-up adds nothing (same episode)');
+$r = send('aid', ent('Care Medic'), ent('Care Full'), ['before_known'=>true, 'before_health'=>0.844, 'before_blood'=>1.0, 'before_bleed'=>0.0,
+    'after_known'=>true, 'after_health'=>0.849, 'after_blood'=>1.0, 'after_bleed'=>0.0, 'conscious_before'=>true], 1496);
+ok(($r['effects'][0]['status'] ?? '') === 'no_verified_improvement', 'town noise: +0.5% flesh is no treatment');
+
 // SR17: the attacker patching his own victim, or his ally doing it, earns no trust.
 $before = affOf('Care Patient', 'Care Brute');
 $r = aid('Care Brute', 'Care Patient', [-0.6, 0.3, 0.5], [-0.3, 0.3, 0.0], true, 1500);

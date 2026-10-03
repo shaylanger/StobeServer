@@ -27,11 +27,17 @@ speed 1
 speed 0
 @set TNAME where ${BANDIT} ~ ^(.+?) #\d+
 @set SNAME where ${SLAVER} ~ ^(.+?) #\d+
+# run m4: hungry bandits flee when hurt and never got knocked out; crippled legs keep him in reach
+damage ${BANDIT} left_leg 95 ~ flesh
+damage ${BANDIT} right_leg 95 ~ flesh
 teleport Malzin Shay dist 400
 attack Shay ${BANDIT}
 speed 1
-@until 90 where ${BANDIT} ~ KO
+@until 150 where ${BANDIT} ~ KO
 speed 0
+# run m4: he had fled out of Stobe's event range (about 230 m): bring him back first
+teleport ${BANDIT} Shay dist 5
+teleport ${SLAVER} Shay dist 8
 shackle ${BANDIT} owner ${SLAVER}
 speed 1
 @sleep 6

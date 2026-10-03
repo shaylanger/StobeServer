@@ -122,9 +122,12 @@ final class SocialInterpreter
         $open = $this->openPair($event, $a['entity_key'], $b['entity_key']);
         if ($open) {
             $state = $open['state'];
-            $state['last_ts'] = $event['game_ts'];
-            $state['parties'][$a['entity_key']] = $a; $state['parties'][$b['entity_key']] = $b;
-            $this->store->saveIncident($event, $open['id'], $state);
+            // Keep the encounter alive without a write (and checkpoint) per hit: refresh at most once a game minute.
+            if ($event['game_ts'] - (int)($state['last_ts'] ?? 0) >= (int)($this->combat['refresh_seconds'] ?? 60)) {
+                $state['last_ts'] = $event['game_ts'];
+                $state['parties'][$a['entity_key']] = $a; $state['parties'][$b['entity_key']] = $b;
+                $this->store->saveIncident($event, $open['id'], $state);
+            }
             if ($state['initiator'] !== $a['entity_key']) return [['status'=>'defence', 'basis'=>'retaliation', 'incident'=>$open['id']]];
             // Same encounter: the first strike was already charged (ledger dedup); a victim who was unaware then and aware now learns it now.
             return [$this->effect($event, $mode, $b, $a, 'aggression', self::awareness($b['conscious'] ?? null) + ['note'=>'Attacked by ' . $a['name'], 'kind'=>'aggression'],

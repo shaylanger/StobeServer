@@ -14,20 +14,23 @@ speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
 @set BANDIT chars 60 ~ Hungry Bandit (#\d+)
 setname ${BANDIT} "Rel Wex"
-give "Rel Wex" "Dried Meat" 4 ~ 4/4
+give "Rel Wex" "Iron Plates" 2 ~ got 2/2
 stobe_say "Rel Wex" "Wex, a word."
 speed 1
 @sleep 20
 speed 0
 @set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+# run m4: hungry bandits flee when hurt and never got knocked out; crippled legs keep him in reach
+damage ${BANDIT} left_leg 95 ~ flesh
+damage ${BANDIT} right_leg 95 ~ flesh
 teleport Malzin Shay dist 400
 attack Shay ${BANDIT}
 speed 1
-@until 90 where ${BANDIT} ~ KO
+@until 150 where ${BANDIT} ~ KO
 speed 0
 ko ${BANDIT} 120
 save kah-rel-ko
-transfer ${BANDIT} Shay "Dried Meat"
+transfer ${BANDIT} Malzin "Iron Plates"
 speed 1
 @sleep 5
 speed 0

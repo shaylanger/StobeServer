@@ -3,6 +3,7 @@
 # fixture: Crafting base
 # reset: fresh
 # needs: as REL-p4-01
+# run m4: no carry happened at all (no "[EVENT] carry" in stobe.log); the where/screenshot steps show what Malzin did.
 # verify: php tools/social_relationship_inspect.php --pair-effects --incidents 10 --check-shadow --expect-effect "<CNAME>" "Malzin" 8 35   -> exit 0
 #   incidents: a "carry" incident Malzin -> <CNAME> resolved with outcome bed (in the incident state). No outsider_pickup row.
 #   Game probe 11: FIND_BED_AND_PUT_IN (or LIFT_PERSON + PUT_SOMEONE_IN_BED) puts him in the bed: "structured kind=placed" with "place":"bed"
@@ -28,5 +29,8 @@ order Malzin FIND_BED_AND_PUT_IN target ${C}
 speed 2
 @sleep 40
 speed 0
+where Malzin
+where ${C}
+screenshot rel-p4-02 ~ png
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=carry_start seq=\d+ load=\d+ actor=${MALZIN} target=${C}
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${C} facts="place":"bed"

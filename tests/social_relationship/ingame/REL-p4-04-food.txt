@@ -26,12 +26,14 @@ speed 1
 speed 0
 @set HNAME where ${H} ~ ^(.+?) #\d+
 @set FNAME where ${F} ~ ^(.+?) #\d+
-hunger ${H} 120
+# run m4: at 120 he ate the meat the moment it arrived (no transfer seen); 170 = hungry, not starving
+hunger ${H} 170
 hunger ${F} 280
 transfer Shay ${H} "Dried Meat"
 speed 1
 @sleep 4
 speed 0
+inv ${H} ~ Dried Meat
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} facts=.*"food_items":\{"
 eat ${H} "Dried Meat"
 speed 1

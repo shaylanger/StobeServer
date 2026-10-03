@@ -27,12 +27,19 @@ hp ${P} ~ worst=
 give Malzin "Basic First Aid Kit" 3 ~ 3/3
 order Malzin FIRST_AID_ORDER target ${P} ~ FIRST_AID_ORDER
 speed 2
-@until 90 hp ${P} ~ bandaged
+@until 150 hp ${P} ~ \(bandaged (9\d|1\d\d)
+# run m4: the session closes 4 s after the last treatment frame, and only while the game runs
+teleport Malzin Shay dist 40
+speed 1
 @sleep 8
 speed 0
 hp ${P} ~ worst=
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=aid seq=\d+ load=\d+ actor=${MALZIN} target=${P}
+teleport Malzin ${P} dist 2
 order Malzin FIRST_AID_ORDER target ${P} ~ FIRST_AID_ORDER
 speed 2
 @sleep 12
+teleport Malzin Shay dist 40
+speed 1
+@sleep 8
 speed 0

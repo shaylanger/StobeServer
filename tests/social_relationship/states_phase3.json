@@ -1,6 +1,6 @@
 {
  "SR08": [
-  "offline-pass; needs-game",
+  "offline-pass; game rerun needed (m4 p3-01: the bandit fled, never KO'd; scenario now cripples him)",
   [
    "social_unconscious_regression"
   ],
@@ -8,7 +8,7 @@
    "REL-p3-01-ko-loot-inferred"
   ],
   [
-   "probe 6: LOOT_TARGET order moves items (else harness transfer fallback)"
+   "probe 6 LOOT_TARGET still open"
   ]
  ],
  "SR09": [
@@ -22,19 +22,17 @@
   ]
  ],
  "SR10": [
-  "offline-pass; needs-game",
+  "offline-pass; game rerun needed (m4 p3-02: no blame as expected, but the transfer was not captured: food eaten on arrival; now Iron Plates)",
   [
    "social_unconscious_regression"
   ],
   [
    "REL-p3-02-unknown-ko"
   ],
-  [
-   "own-consumption and restored-item variants are offline only"
-  ]
+  []
  ],
  "SR11": [
-  "offline-pass; needs-game",
+  "offline-pass; game rerun needed (m4 p3-03: he fled out of event range before the shackle; scenario now brings him back)",
   [
    "social_unconscious_regression"
   ],
@@ -42,20 +40,18 @@
    "REL-p3-03-enslaved-while-ko"
   ],
   [
-   "probe 7: shackle owner -> getMySlaveOwner attribution"
+   "probe 7 shackle owner still open"
   ]
  ],
  "SR12": [
-  "offline-pass; needs-game",
+  "offline-pass; game rerun needed (as SR11)",
   [
    "social_unconscious_regression"
   ],
   [
    "REL-p3-03-enslaved-while-ko"
   ],
-  [
-   "actor-vs-later-owner needs two owners in game; chaining actor (setChainedMode owner hand) not captured"
-  ]
+  []
  ],
  "SR20": [
   "partial: offline-pass (squad carry/caging/inventory/equipment exempt, critical rescue positive)",
@@ -82,7 +78,7 @@
   ]
  ],
  "SR38": [
-  "partial: offline-pass (rollback before attack, during KO, after loot before wake)",
+  "partial: offline-pass; game-pass for reload pruning + stale rejection (m4 p1-04 check-stale pass, load 3)",
   [
    "social_relationship_integration",
    "social_unconscious_regression"
@@ -91,7 +87,9 @@
    "REL-p1-04-reload-stale",
    "REL-p3-04-reload-mid-ko"
   ],
-  []
+  [
+   "p3-04 rerun (no KO in m4)"
+  ]
  ],
  "SR42": [
   "partial: offline-pass (belief/note name only the inferred culprit; objective taker diagnostic only)",
@@ -128,7 +126,7 @@
   ]
  ],
  "SR15": [
-  "offline-pass; needs-game",
+  "offline-pass after the m4 fix (aid graded by bandaging); game rerun needed",
   [
    "social_care_regression"
   ],
@@ -136,11 +134,11 @@
    "REL-p4-01-first-aid"
   ],
   [
-   "probe 10: vitals scale/units (health ratio, blood, bleed) to calibrate aid classes"
+   "m4: first aid bandages, flesh barely moves (fixed: wound/untreated points); session was not closed before the game paused (scenario fixed)"
   ]
  ],
  "SR16": [
-  "offline-pass; needs-game",
+  "offline-pass; game rerun needed",
   [
    "social_care_regression",
    "social_relationship_unit"
@@ -148,9 +146,7 @@
   [
    "REL-p4-01-first-aid"
   ],
-  [
-   "ten real lifesaving episodes in game: not scripted (offline only)"
-  ]
+  []
  ],
  "SR17": [
   "offline-pass (own harm / ally harm then healing earns nothing)",
@@ -163,7 +159,7 @@
   ]
  ],
  "SR18": [
-  "offline-pass; needs-game",
+  "offline-pass; game blocked",
   [
    "social_care_regression"
   ],
@@ -171,11 +167,12 @@
    "REL-p4-02-carry-to-bed"
   ],
   [
-   "probe 11: FIND_BED_AND_PUT_IN; carry by the player actor is not captured (poller skips it)"
+   "m4 probe 11: FIND_BED_AND_PUT_IN produced no carry (no '[EVENT] carry' at all); needs a working carry order or a harness carry command",
+   "carry by the player actor is not captured"
   ]
  ],
  "SR19": [
-  "offline-pass; needs-game",
+  "offline-pass; game blocked",
   [
    "social_care_regression"
   ],
@@ -184,20 +181,18 @@
    "REL-p4-03-carry-to-cage"
   ],
   [
-   "probe 12: LIFT_PERSON + PUT_IN_CAGE; carry ending in slavery/death covered by phase 3 events only"
+   "m4 probe 12: LIFT_PERSON + PUT_IN_CAGE produced no carry"
   ]
  ],
  "SR21": [
-  "offline-pass; needs-game",
+  "offline-pass; game rerun needed (m4: native facts OK for the full NPC; the hungry one ate the meat on arrival)",
   [
    "social_care_regression"
   ],
   [
    "REL-p4-04-food"
   ],
-  [
-   "probe 13: transfer/eat facts (food_items, hunger)"
-  ]
+  []
  ],
  "SR13": [
   "offline-pass; game blocked",
@@ -221,7 +216,7 @@
   ]
  ],
  "SR22": [
-  "offline-pass; needs-game",
+  "offline-pass; game rerun needed (m4 p5-01: scenario regex picked the wrong trader name)",
   [
    "social_property_regression"
   ],
@@ -230,11 +225,11 @@
    "REL-p5-02-gift"
   ],
   [
-   "probe 14: price ratio of a normal purchase (calibrate economy thresholds)"
+   "probe 14 price ratio still open; probe 15: Iron Plates Shay->NPC transfer was not seen at all"
   ]
  ],
  "SR23": [
-  "offline-pass; needs-game",
+  "offline-pass; game rerun needed (as SR22)",
   [
    "social_property_regression"
   ],
@@ -242,7 +237,7 @@
    "REL-p5-01-trade"
   ],
   [
-   "probe 14: is the shop seller a character or storage"
+   "probe 14"
   ]
  ],
  "SR29": [
@@ -256,6 +251,117 @@
   ],
   [
    "'dishonest hated enemy can betray' is the negotiation engine's existing rule (unchanged)"
+  ]
+ ],
+ "SR02": [
+  "game-pass (m4: p2-01 Rel Vorn->Shay -14, p2-02 Malzin->Rel Kesh -14, p2-03 Rel Bek->Rel Arn -15, p2-05 enabled -31 applied)",
+  [
+   "social_combat_regression"
+  ],
+  [
+   "REL-p2-01-player-first-strike",
+   "REL-p2-02-npc-attacks-squad",
+   "REL-p2-03-npc-vs-npc",
+   "REL-p2-05-enabled-affinity"
+  ],
+  []
+ ],
+ "SR03": [
+  "game-pass (m4: no row for the retaliating side in p2-02/p2-03)",
+  [
+   "social_combat_regression"
+  ],
+  [
+   "REL-p2-02-npc-attacks-squad",
+   "REL-p2-03-npc-vs-npc"
+  ],
+  []
+ ],
+ "SR04": [
+  "game-pass (m4: Shay joining to defend Malzin not charged; many defending_ally encounters in Hub fights)",
+  [
+   "social_combat_regression"
+  ],
+  [
+   "REL-p2-02-npc-attacks-squad"
+  ],
+  [
+   "ally = same faction or both player faction"
+  ]
+ ],
+ "SR05": [
+  "game-pass (m4 p2-05: aggression -15, injury -1, KO -15 = -31, one budget)",
+  [
+   "social_combat_regression"
+  ],
+  [
+   "REL-p2-05-enabled-affinity"
+  ],
+  []
+ ],
+ "SR06": [
+  "partial: offline-pass; game rerun needed (m4 p2-04: the fight went on during the wait, one encounter)",
+  [
+   "social_combat_regression"
+  ],
+  [
+   "REL-p2-04-repeat-assault"
+  ],
+  [
+   "consent/duel and accident signals do not exist"
+  ]
+ ],
+ "SR34": [
+  "partial: game-pass for named NPC / Shay / Malzin binding (m4); offline-pass generic name + serial reuse",
+  [
+   "social_combat_regression"
+  ],
+  [
+   "REL-p2-01-player-first-strike"
+  ],
+  [
+   "rename alias and same-name NPCs need game data"
+  ]
+ ],
+ "SR40": [
+  "partial: offline-pass + game-pass stale check (m4)",
+  [
+   "social_relationship_integration",
+   "social_http_regression",
+   "social_scope_regression"
+  ],
+  [
+   "REL-p1-04-reload-stale"
+  ],
+  [
+   "NEVER_CLEAR_RELATIONSHIP_DATA=true not tested"
+  ]
+ ],
+ "SR41": [
+  "game-pass (m4: p1-01 Capture=0 inert, p1-02 server off stores nothing, every shadow run check-shadow pass; p2-05 enabled applied)",
+  [
+   "social_relationship_integration",
+   "social_combat_regression"
+  ],
+  [
+   "REL-p1-01-capture-off",
+   "REL-p1-02-capture-on-server-off",
+   "REL-p1-03-shadow-capture",
+   "REL-p2-05-enabled-affinity"
+  ],
+  [
+   "R4 exclusion in enabled mode: --relation check not run in m4"
+  ]
+ ],
+ "SR43": [
+  "partial: offline-pass; m4 volume: ~1500 inbox rows / 850 checkpoints per load in the Hub (encounter refresh now at most once per game minute)",
+  [
+   "social_concurrency_regression",
+   "social_combat_regression"
+  ],
+  [],
+  [
+   "retention for the inbox not implemented"
   ]
  ]
 }

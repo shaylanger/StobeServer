@@ -12,7 +12,7 @@ speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
 @set BANDIT chars 60 ~ Hungry Bandit (#\d+)
 setname ${BANDIT} "Rel Ubo"
-give "Rel Ubo" "Dried Meat" 3 ~ 3/3
+give "Rel Ubo" "Iron Plates" 2 ~ got 2/2
 stobe_say "Rel Ubo" "Ubo, hold on a moment."
 speed 1
 @sleep 20
@@ -22,7 +22,7 @@ ko ${BANDIT} 40
 speed 1
 @sleep 4
 speed 0
-transfer ${BANDIT} Malzin "Dried Meat"
+transfer ${BANDIT} Malzin "Iron Plates"
 speed 1
 @sleep 6
 speed 0

@@ -62,13 +62,15 @@ trait SocialCareInterpreter
     {
         if (($facts[$prefix . 'known'] ?? false) !== true) return null;
         $h = self::num($facts[$prefix . 'health'] ?? null); $b = self::num($facts[$prefix . 'blood'] ?? null); $l = self::num($facts[$prefix . 'bleed'] ?? null);
-        return $h === null || $b === null || $l === null ? null : ['health'=>$h, 'blood'=>$b, 'bleed'=>$l];
+        if ($h === null || $b === null || $l === null) return null;
+        // wound = damage points over all parts, untreated = damage not covered by bandaging (native since run m4).
+        return ['health'=>$h, 'blood'=>$b, 'bleed'=>$l, 'wound'=>self::num($facts[$prefix . 'wound'] ?? null), 'untreated'=>self::num($facts[$prefix . 'untreated'] ?? null)];
     }
 
     private function nearDeath(?array $v): bool
     {
-        return $v !== null && ($v['health'] <= (float)$this->care('near_death_health', -0.5)
-            || ($v['blood'] <= (float)$this->care('near_death_blood', 0.35) && $v['bleed'] > 0));
+        return $v !== null && ($v['health'] <= (float)$this->care('near_death_health', -0.3)
+            || $v['blood'] <= (float)$this->care('near_death_blood', 0.35));
     }
 
     /** routine_healing | meaningful_aid | lifesaving | null (no verified improvement). */
@@ -79,9 +81,18 @@ trait SocialCareInterpreter
         $bleedStopped = $before['bleed'] > 0.0001 && $after['bleed'] <= $before['bleed'] * (float)$this->care('bleed_stop_ratio', 0.25);
         $critical = $before['health'] <= 0 || $before['blood'] <= (float)$this->care('critical_blood', 0.5) || $consciousBefore === false;
         $meaningful = (float)$this->care('meaningful_gain', 0.15);
-        if ($this->nearDeath($before) && ($bleedStopped || $gain >= $meaningful)) return 'lifesaving';
-        if ($bleedStopped || $gain >= $meaningful || ($critical && $gain >= 0.05)) return 'meaningful_aid';
-        if ($gain > 0.005 || ($before['bleed'] > 0 && $after['bleed'] < $before['bleed'])) return 'routine_healing';
+        // First aid mostly bandages (run m4: flesh -41% stayed, bandaging 0 -> 96): treated = wound points newly covered.
+        $treated = 0.0; $treatedShare = 0.0;
+        if ($before['untreated'] !== null && $after['untreated'] !== null) {
+            $treated = max(0.0, $before['untreated'] - $after['untreated']);
+            $treatedShare = $treated / max(1.0, $before['untreated']);
+        }
+        $bigTreatment = $treated >= (float)$this->care('meaningful_treated_points', 30) && $treatedShare >= (float)$this->care('meaningful_treated_share', 0.3);
+        if ($this->nearDeath($before) && ($bleedStopped || $gain >= $meaningful
+            || ($bigTreatment && $treatedShare >= (float)$this->care('lifesaving_treated_share', 0.5)))) return 'lifesaving';
+        if ($bleedStopped || $gain >= $meaningful || $bigTreatment || ($critical && $gain >= 0.05)) return 'meaningful_aid';
+        if ($gain >= (float)$this->care('routine_gain', 0.02) || $treated >= (float)$this->care('routine_treated_points', 5)
+            || ($before['bleed'] > 0 && $after['bleed'] < $before['bleed'] * 0.9)) return 'routine_healing';
         return null;
     }
 

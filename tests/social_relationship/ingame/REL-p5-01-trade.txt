@@ -12,9 +12,9 @@
 speed 0
 @set SHAY where Shay ~ Shay (#\d+)
 money Shay 5000
-@set TRADER traders 300 ~ ^(.+?) #\d+
+@set TRADER traders 300 ~ traders within [0-9.]+: (.+?) #\d+
 shopstock "${TRADER}" ~ .
-@set ITEM shopstock "${TRADER}" ~ \[([^\]]+)\]
+@set ITEM shopstock "${TRADER}" ~ \[([^\]\[]+?) x\d+ \$\d+\]
 trade Shay "${TRADER}" "${ITEM}"
 speed 1
 @sleep 5

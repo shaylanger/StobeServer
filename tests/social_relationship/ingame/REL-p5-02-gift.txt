@@ -10,7 +10,9 @@
 @sleep 8
 speed 0
 @set SHAY where Shay ~ Shay (#\d+)
-give Shay "Iron Plates" 6 ~ 6/6
+# run m4: Shay's inventory was full (3/6 arrived) and the transfer was not seen; show where the plates are
+give Shay "Iron Plates" 1 ~ got 1/1
+inv Shay ~ Iron Plates
 spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
 @set G chars 40 ~ Hungry Bandit (#\d+)
 setname ${G} "Rel Gav"

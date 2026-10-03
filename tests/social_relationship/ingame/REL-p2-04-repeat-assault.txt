@@ -3,16 +3,20 @@
 # fixture: auto-home
 # reset: keep  (right after REL-p2-01, same load; uses its bandit "Rel Vorn")
 # needs: as REL-p2-01
+# note: game_ts is game seconds (run m4), 15 game minutes = 900 > the 600 s encounter window
 # verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --check-shadow -> "<TNAME>" -> "Shay" lists TWO aggression rows (two combat:<seq> incidents), the second within [-18,-9];
 #   report the two time lines (game probe 4: game minutes per real second at speed 10, to calibrate encounter_idle_seconds=600).
 @set BANDIT where "Rel Vorn" ~ (#\d+)
 time ~ game_hours=
 teleport ${BANDIT} Shay dist 15
 health ${BANDIT} 100
+# run m4: he stayed next to Shay during the wait, the fight went on and it stayed one encounter
+teleport ${BANDIT} Shay dist 300
 speed 10
 @wait-game 15 600
 speed 0
 time ~ game_hours=
+teleport ${BANDIT} Shay dist 15
 attack Shay ${BANDIT}
 speed 1
 @sleep 8

@@ -1,5 +1,5 @@
 {
- "version": "phase5-v1",
+ "version": "phase5-v2",
  "ranges": {
   "aggression": [
    -15,
@@ -191,10 +191,11 @@
    "knockout": "serious_assault",
    "maiming": "maiming"
   },
-  "note": "encounter_idle_seconds is game seconds (game_ts); calibrate with the REL-p2 game probe"
+  "note": "game_ts is game seconds (run m4: gamets/3600 = harness game_hours)",
+  "refresh_seconds": 60
  },
  "care": {
-  "near_death_health": -0.5,
+  "near_death_health": -0.3,
   "near_death_blood": 0.35,
   "critical_blood": 0.5,
   "meaningful_gain": 0.15,
@@ -204,7 +205,12 @@
   "food_gift_window_seconds": 86400,
   "survival_hunger_below": 1.0,
   "moderate_hunger_below": 2.0,
-  "note": "health = worst body part flesh/max (can be < 0), blood = blood/max, hunger native 0..3 (UI x100); thresholds need the REL-p4 game probes"
+  "note": "health = worst part flesh/max (can be < 0); blood = blood/max; wound/untreated = damage points (untreated = not bandaged); hunger native 0..3. Calibrated with run m4 (first aid bandages, flesh barely moves).",
+  "routine_gain": 0.02,
+  "routine_treated_points": 5,
+  "meaningful_treated_points": 30,
+  "meaningful_treated_share": 0.3,
+  "lifesaving_treated_share": 0.5
  },
  "economy": {
   "favorable_above": 1.25,

@@ -89,7 +89,7 @@ $out = [
     'loads' => [],
 ];
 foreach ($tables as $t) $out['counts'][$t] = (int)($q("SELECT count(*) AS n FROM $t")[0]['n'] ?? 0);
-$out['loads'] = $q("SELECT campaign_id, timeline_epoch, native_session_id, count(*) AS events,
+$out['loads'] = $q("SELECT campaign_id, timeline_epoch, native_session_id, sum(n) AS events,
         jsonb_object_agg(status, n) AS by_status, min(first_at) AS first_at, max(last_at) AS last_at, max(max_seq) AS max_sequence
     FROM (SELECT campaign_id, timeline_epoch, native_session_id, status, count(*) AS n,
             min(created_at) AS first_at, max(created_at) AS last_at, max(sequence) AS max_seq

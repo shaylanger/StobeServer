@@ -66,18 +66,17 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "game-pass (m4: p2-01 Rel Vorn->Shay -14, p2-02 Malzin->Rel Kesh -14, p2-03 Rel Bek->Rel Arn -15, p2-05 enabled -31 applied)",
    "offline_tests": [
     "social_combat_regression"
    ],
    "ingame_scenarios": [
     "REL-p2-01-player-first-strike",
     "REL-p2-02-npc-attacks-squad",
+    "REL-p2-03-npc-vs-npc",
     "REL-p2-05-enabled-affinity"
    ],
-   "open_blockers": [
-    "probe 3: player/NPC profile binding (storage_id+name)"
-   ]
+   "open_blockers": []
   },
   {
    "id": "SR03",
@@ -107,18 +106,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "game-pass (m4: no row for the retaliating side in p2-02/p2-03)",
    "offline_tests": [
     "social_combat_regression"
    ],
    "ingame_scenarios": [
-    "REL-p2-01-player-first-strike",
     "REL-p2-02-npc-attacks-squad",
     "REL-p2-03-npc-vs-npc"
    ],
-   "open_blockers": [
-    "probe 2: attackingYou fires for NPC/NPC fights"
-   ]
+   "open_blockers": []
   },
   {
    "id": "SR04",
@@ -148,16 +144,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "game-pass (m4: Shay joining to defend Malzin not charged; many defending_ally encounters in Hub fights)",
    "offline_tests": [
     "social_combat_regression"
    ],
    "ingame_scenarios": [
-    "REL-p2-02-npc-attacks-squad",
-    "REL-p2-03-npc-vs-npc"
+    "REL-p2-02-npc-attacks-squad"
    ],
    "open_blockers": [
-    "ally = same faction or both player faction; affinity-based friends not yet used"
+    "ally = same faction or both player faction"
    ]
   },
   {
@@ -188,12 +183,12 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "game-pass (m4 p2-05: aggression -15, injury -1, KO -15 = -31, one budget)",
    "offline_tests": [
     "social_combat_regression"
    ],
    "ingame_scenarios": [
-    "REL-p2-01-player-first-strike"
+    "REL-p2-05-enabled-affinity"
    ],
    "open_blockers": []
   },
@@ -225,7 +220,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass for distinct assault; consent/duel and accident blocked",
+   "rel_state": "partial: offline-pass; game rerun needed (m4 p2-04: the fight went on during the wait, one encounter)",
    "offline_tests": [
     "social_combat_regression"
    ],
@@ -233,9 +228,7 @@
     "REL-p2-04-repeat-assault"
    ],
    "open_blockers": [
-    "no native consent/duel signal",
-    "no native accidental/friendly-fire hit signal (unknown intent is not invented as accident)",
-    "probe 4: encounter idle window calibration"
+    "consent/duel and accident signals do not exist"
    ]
   },
   {
@@ -305,7 +298,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game rerun needed (m4 p3-01: the bandit fled, never KO'd; scenario now cripples him)",
    "offline_tests": [
     "social_unconscious_regression"
    ],
@@ -313,7 +306,7 @@
     "REL-p3-01-ko-loot-inferred"
    ],
    "open_blockers": [
-    "probe 6: LOOT_TARGET order moves items (else harness transfer fallback)"
+    "probe 6 LOOT_TARGET still open"
    ]
   },
   {
@@ -383,16 +376,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game rerun needed (m4 p3-02: no blame as expected, but the transfer was not captured: food eaten on arrival; now Iron Plates)",
    "offline_tests": [
     "social_unconscious_regression"
    ],
    "ingame_scenarios": [
     "REL-p3-02-unknown-ko"
    ],
-   "open_blockers": [
-    "own-consumption and restored-item variants are offline only"
-   ]
+   "open_blockers": []
   },
   {
    "id": "SR11",
@@ -424,7 +415,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game rerun needed (m4 p3-03: he fled out of event range before the shackle; scenario now brings him back)",
    "offline_tests": [
     "social_unconscious_regression"
    ],
@@ -432,7 +423,7 @@
     "REL-p3-03-enslaved-while-ko"
    ],
    "open_blockers": [
-    "probe 7: shackle owner -> getMySlaveOwner attribution"
+    "probe 7 shackle owner still open"
    ]
   },
   {
@@ -463,16 +454,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game rerun needed (as SR11)",
    "offline_tests": [
     "social_unconscious_regression"
    ],
    "ingame_scenarios": [
     "REL-p3-03-enslaved-while-ko"
    ],
-   "open_blockers": [
-    "actor-vs-later-owner needs two owners in game; chaining actor (setChainedMode owner hand) not captured"
-   ]
+   "open_blockers": []
   },
   {
    "id": "SR13",
@@ -577,7 +566,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass after the m4 fix (aid graded by bandaging); game rerun needed",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -585,7 +574,7 @@
     "REL-p4-01-first-aid"
    ],
    "open_blockers": [
-    "probe 10: vitals scale/units (health ratio, blood, bleed) to calibrate aid classes"
+    "m4: first aid bandages, flesh barely moves (fixed: wound/untreated points); session was not closed before the game paused (scenario fixed)"
    ]
   },
   {
@@ -618,7 +607,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game rerun needed",
    "offline_tests": [
     "social_care_regression",
     "social_relationship_unit"
@@ -626,9 +615,7 @@
    "ingame_scenarios": [
     "REL-p4-01-first-aid"
    ],
-   "open_blockers": [
-    "ten real lifesaving episodes in game: not scripted (offline only)"
-   ]
+   "open_blockers": []
   },
   {
    "id": "SR17",
@@ -695,7 +682,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game blocked",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -703,7 +690,8 @@
     "REL-p4-02-carry-to-bed"
    ],
    "open_blockers": [
-    "probe 11: FIND_BED_AND_PUT_IN; carry by the player actor is not captured (poller skips it)"
+    "m4 probe 11: FIND_BED_AND_PUT_IN produced no carry (no '[EVENT] carry' at all); needs a working carry order or a harness carry command",
+    "carry by the player actor is not captured"
    ]
   },
   {
@@ -734,7 +722,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game blocked",
    "offline_tests": [
     "social_care_regression"
    ],
@@ -743,7 +731,7 @@
     "REL-p4-03-carry-to-cage"
    ],
    "open_blockers": [
-    "probe 12: LIFT_PERSON + PUT_IN_CAGE; carry ending in slavery/death covered by phase 3 events only"
+    "m4 probe 12: LIFT_PERSON + PUT_IN_CAGE produced no carry"
    ]
   },
   {
@@ -815,16 +803,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game rerun needed (m4: native facts OK for the full NPC; the hungry one ate the meat on arrival)",
    "offline_tests": [
     "social_care_regression"
    ],
    "ingame_scenarios": [
     "REL-p4-04-food"
    ],
-   "open_blockers": [
-    "probe 13: transfer/eat facts (food_items, hunger)"
-   ]
+   "open_blockers": []
   },
   {
    "id": "SR22",
@@ -856,7 +842,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game rerun needed (m4 p5-01: scenario regex picked the wrong trader name)",
    "offline_tests": [
     "social_property_regression"
    ],
@@ -865,7 +851,7 @@
     "REL-p5-02-gift"
    ],
    "open_blockers": [
-    "probe 14: price ratio of a normal purchase (calibrate economy thresholds)"
+    "probe 14 price ratio still open; probe 15: Iron Plates Shay->NPC transfer was not seen at all"
    ]
   },
   {
@@ -896,7 +882,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "offline-pass; game rerun needed (as SR22)",
    "offline_tests": [
     "social_property_regression"
    ],
@@ -904,7 +890,7 @@
     "REL-p5-01-trade"
    ],
    "open_blockers": [
-    "probe 14: is the shop seller a character or storage"
+    "probe 14"
    ]
   },
   {
@@ -1291,7 +1277,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (generic name, reused serial/storage mismatch)",
+   "rel_state": "partial: game-pass for named NPC / Shay / Malzin binding (m4); offline-pass generic name + serial reuse",
    "offline_tests": [
     "social_combat_regression"
    ],
@@ -1451,7 +1437,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (rollback before attack, during KO, after loot before wake)",
+   "rel_state": "partial: offline-pass; game-pass for reload pruning + stale rejection (m4 p1-04 check-stale pass, load 3)",
    "offline_tests": [
     "social_relationship_integration",
     "social_unconscious_regression"
@@ -1460,7 +1446,9 @@
     "REL-p1-04-reload-stale",
     "REL-p3-04-reload-mid-ko"
    ],
-   "open_blockers": []
+   "open_blockers": [
+    "p3-04 rerun (no KO in m4)"
+   ]
   },
   {
    "id": "SR39",
@@ -1528,16 +1516,17 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (stale epoch, failed write)",
+   "rel_state": "partial: offline-pass + game-pass stale check (m4)",
    "offline_tests": [
     "social_relationship_integration",
-    "social_http_regression"
+    "social_http_regression",
+    "social_scope_regression"
    ],
    "ingame_scenarios": [
     "REL-p1-04-reload-stale"
    ],
    "open_blockers": [
-    "NEVER_CLEAR_RELATIONSHIP_DATA=true path not tested"
+    "NEVER_CLEAR_RELATIONSHIP_DATA=true not tested"
    ]
   },
   {
@@ -1571,7 +1560,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; needs-game",
+   "rel_state": "game-pass (m4: p1-01 Capture=0 inert, p1-02 server off stores nothing, every shadow run check-shadow pass; p2-05 enabled applied)",
    "offline_tests": [
     "social_relationship_integration",
     "social_combat_regression"
@@ -1583,7 +1572,7 @@
     "REL-p2-05-enabled-affinity"
    ],
    "open_blockers": [
-    "old DLL with new server: covered by the HTTP test only"
+    "R4 exclusion in enabled mode: --relation check not run in m4"
    ]
   },
   {
@@ -1656,14 +1645,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (pending cap 256, bounded incident growth per event)",
+   "rel_state": "partial: offline-pass; m4 volume: ~1500 inbox rows / 850 checkpoints per load in the Hub (encounter refresh now at most once per game minute)",
    "offline_tests": [
     "social_concurrency_regression",
     "social_combat_regression"
    ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "large combat flood / retention not measured"
+    "retention for the inbox not implemented"
    ]
   },
   {
