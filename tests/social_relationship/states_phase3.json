@@ -92,15 +92,16 @@
   ]
  ],
  "SR42": [
-  "partial: offline-pass (belief/note name only the inferred culprit; objective taker diagnostic only)",
+  "partial: offline-pass (beliefs/notes name only the inferred culprit; witnesses learn only what they saw)",
   [
-   "social_unconscious_regression"
+   "social_unconscious_regression",
+   "social_witness_regression"
   ],
   [
    "REL-p3-01-ko-loot-inferred"
   ],
   [
-   "prompt integration of beliefs: phase 6"
+   "prompt-side belief injection not implemented (notes only)"
   ]
  ],
  "SR35": [
@@ -194,13 +195,13 @@
   []
  ],
  "SR13": [
-  "offline-pass; game blocked",
+  "offline-pass; needs-game: native now reports caught from the owner's senses (probe 17)",
   [
    "social_property_regression"
   ],
   [],
   [
-   "probe 16: no proven engine 'caught' (theft detection) signal; native sends caught=null so no theft scores in game",
+   "probe 17: owner SensoryData canISeeThisGuy(taker) at the transfer = caught",
    "no steal action driver in the harness"
   ]
  ],
@@ -360,6 +361,96 @@
   [],
   [
    "retention for the inbox not implemented"
+  ]
+ ],
+ "SR24": [
+  "offline-pass; needs-game",
+  [
+   "social_witness_regression"
+  ],
+  [
+   "REL-p6-01a-witness-setup",
+   "REL-p6-01b-witness-attack"
+  ],
+  [
+   "probe 18: SensoryData canISeeThisGuy/canIHearThisGuy give meaningful witness data"
+  ]
+ ],
+ "SR25": [
+  "offline-pass; needs-game (sleeping witness)",
+  [
+   "social_witness_regression"
+  ],
+  [
+   "REL-p6-01b-witness-attack"
+  ],
+  [
+   "probe 5: isUnconcious while sleeping; occluded witness not scripted"
+  ]
+ ],
+ "SR26": [
+  "offline-pass (single hop, pre-event affinity, once per witness/incident)",
+  [
+   "social_witness_regression"
+  ],
+  [
+   "REL-p6-01b-witness-attack"
+  ],
+  []
+ ],
+ "SR27": [
+  "partial: offline-pass (dialogue band -8..+3, no re-scoring of a mechanical outcome); insult witnesses not implemented",
+  [
+   "social_witness_regression"
+  ],
+  [],
+  [
+   "insult heard by a friend: needs dialogue listener data as witnesses"
+  ]
+ ],
+ "SR30": [
+  "offline-pass; needs-game (LLM-dependent)",
+  [
+   "social_recruitment_regression"
+  ],
+  [
+   "REL-p7-01-recruit-gate"
+  ],
+  []
+ ],
+ "SR31": [
+  "offline-pass (chat + director configs, dispatch normalizer; autonomy never offers JoinParty; override)",
+  [
+   "social_recruitment_regression"
+  ],
+  [
+   "REL-p7-01-recruit-gate"
+  ],
+  [
+   "native ACT_JOIN_PARTY fallback paths not audited in game"
+  ]
+ ],
+ "SR32": [
+  "offline-pass; needs-game",
+  [
+   "social_recruitment_regression"
+  ],
+  [
+   "REL-p7-02-slave-escape"
+  ],
+  [
+   "probe 20: liberator from the PICK_LOCK_ON_SHACKLES task subject",
+   "completion needs a game day of the freed slave being seen"
+  ]
+ ],
+ "SR33": [
+  "offline-pass by construction (REL gate only on STOBE's JoinParty path; vanilla recruitment untouched)",
+  [
+   "social_recruitment_regression"
+  ],
+  [],
+  [
+   "vanilla recruit in game not run"
   ]
  ]
 }

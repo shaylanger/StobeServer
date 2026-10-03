@@ -1,0 +1,18 @@
+# id: REL-p7-01-recruit-gate
+# covers: SR30/SR31 (a low-trust NPC asked to join: JoinParty is dropped at dispatch while REL is enabled)
+# fixture: auto-home
+# reset: fresh  (kah-* copy: mode ENABLED for this file only)
+# needs: Delivery 6/7 build; Capture=1; --set-mode enabled before, --set-mode off after
+# verify: grep "REL recruitment gate blocked JoinParty" log/stobeserver.log (if the NPC tried to join), and the where step: still [Drifters].
+#   LLM-dependent: if the NPC simply refuses in words, the gate was not exercised; report the reply line.
+@wait-world
+@sleep 8
+speed 0
+spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
+@set R chars 40 ~ Hungry Bandit (#\d+)
+setname ${R} "Rel Rook"
+stobe_say "Rel Rook" "Rook, join my squad right now. You're one of us from today."
+speed 1
+@sleep 25
+speed 0
+where ${R} ~ \[Drifters\]

@@ -1,0 +1,33 @@
+# id: REL-p7-02-slave-escape
+# covers: SR32 (unchained by Malzin = chains_freed toward her; completed escape needs a game day seen free)
+# fixture: auto-home
+# reset: fresh
+# needs: Delivery 6/7 build; Capture=1; mode shadow
+# verify: php tools/social_relationship_inspect.php --pair-effects --incidents 10 --interpret-log 20 --check-shadow --expect-effect "<XNAME>" "Malzin" 8 18   -> exit 0 (chains_freed);
+#   the escape incident is "freed" (completion needs 24 game hours; optional: speed 50 with the goal watch, then any event with him: slave_escape row)
+#   Game probe 20: PICK_LOCK_ON_SHACKLES gives the freed line a liberator (stobe.log "structured kind=freed ... liberator").
+@wait-world
+@sleep 8
+speed 0
+@set MALZIN where Malzin ~ Malzin (#\d+)
+spawn "Hungry Bandit" Drifters near Malzin dist 6 count 1 ~ spawned 1/1
+@set X chars 40 ~ Hungry Bandit (#\d+)
+setname ${X} "Rel Xan"
+spawn "Hungry Bandit" Drifters near Malzin dist 20 count 1 ~ spawned 1/1
+@set O chars 40 ~ Hungry Bandit (#\d+)
+setname ${O} "Rel Ober"
+stobe_say "Rel Xan" "Xan, hold still."
+speed 1
+@sleep 12
+speed 0
+@set XNAME where ${X} ~ ^(.+?) #\d+
+shackle ${X} owner ${O}
+speed 1
+@sleep 5
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=enslaved seq=\d+ load=\d+ actor=${O} target=${X}
+order Malzin PICK_LOCK_ON_SHACKLES target ${X}
+speed 2
+@sleep 40
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=${X} witnesses=\d+ facts=.*"liberator"

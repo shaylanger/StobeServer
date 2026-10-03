@@ -492,13 +492,13 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game blocked",
+   "rel_state": "offline-pass; needs-game: native now reports caught from the owner's senses (probe 17)",
    "offline_tests": [
     "social_property_regression"
    ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "probe 16: no proven engine 'caught' (theft detection) signal; native sends caught=null so no theft scores in game",
+    "probe 17: owner SensoryData canISeeThisGuy(taker) at the transfer = caught",
     "no steal action driver in the harness"
    ]
   },
@@ -919,11 +919,16 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 6)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_witness_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p6-01a-witness-setup",
+    "REL-p6-01b-witness-attack"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 18: SensoryData canISeeThisGuy/canIHearThisGuy give meaningful witness data"
    ]
   },
   {
@@ -954,11 +959,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 6)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game (sleeping witness)",
+   "offline_tests": [
+    "social_witness_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p6-01b-witness-attack"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 5: isUnconcious while sleeping; occluded witness not scripted"
    ]
   },
   {
@@ -989,12 +998,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 6)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
-   "open_blockers": [
-    "later phase"
-   ]
+   "rel_state": "offline-pass (single hop, pre-event affinity, once per witness/incident)",
+   "offline_tests": [
+    "social_witness_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p6-01b-witness-attack"
+   ],
+   "open_blockers": []
   },
   {
    "id": "SR27",
@@ -1024,11 +1035,13 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 6)",
-   "offline_tests": [],
+   "rel_state": "partial: offline-pass (dialogue band -8..+3, no re-scoring of a mechanical outcome); insult witnesses not implemented",
+   "offline_tests": [
+    "social_witness_regression"
+   ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "later phase"
+    "insult heard by a friend: needs dialogue listener data as witnesses"
    ]
   },
   {
@@ -1136,12 +1149,14 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 7)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
-   "open_blockers": [
-    "later phase"
-   ]
+   "rel_state": "offline-pass; needs-game (LLM-dependent)",
+   "offline_tests": [
+    "social_recruitment_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p7-01-recruit-gate"
+   ],
+   "open_blockers": []
   },
   {
    "id": "SR31",
@@ -1171,11 +1186,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 7)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass (chat + director configs, dispatch normalizer; autonomy never offers JoinParty; override)",
+   "offline_tests": [
+    "social_recruitment_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p7-01-recruit-gate"
+   ],
    "open_blockers": [
-    "later phase"
+    "native ACT_JOIN_PARTY fallback paths not audited in game"
    ]
   },
   {
@@ -1206,11 +1225,16 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 7)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_recruitment_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p7-02-slave-escape"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 20: liberator from the PICK_LOCK_ON_SHACKLES task subject",
+    "completion needs a game day of the freed slave being seen"
    ]
   },
   {
@@ -1240,11 +1264,13 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 7)",
-   "offline_tests": [],
+   "rel_state": "offline-pass by construction (REL gate only on STOBE's JoinParty path; vanilla recruitment untouched)",
+   "offline_tests": [
+    "social_recruitment_regression"
+   ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "later phase"
+    "vanilla recruit in game not run"
    ]
   },
   {
@@ -1602,15 +1628,16 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (belief/note name only the inferred culprit; objective taker diagnostic only)",
+   "rel_state": "partial: offline-pass (beliefs/notes name only the inferred culprit; witnesses learn only what they saw)",
    "offline_tests": [
-    "social_unconscious_regression"
+    "social_unconscious_regression",
+    "social_witness_regression"
    ],
    "ingame_scenarios": [
     "REL-p3-01-ko-loot-inferred"
    ],
    "open_blockers": [
-    "prompt integration of beliefs: phase 6"
+    "prompt-side belief injection not implemented (notes only)"
    ]
   },
   {

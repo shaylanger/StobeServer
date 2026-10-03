@@ -611,6 +611,15 @@ function stobeBuildActionConfigForNpc(string $eventType, array|false $npcData = 
         $config['in_player_faction'] = $isPlayerFaction;
         $config['npc_name'] = normalizeParticipantNameToken(strval($npcData['name'] ?? ''));
         $config['player_affinity'] = stobeNpcPlayerAffinity($npcData);
+        if (!$isPlayerFaction) {
+            // REL phase 7 (enabled only): JoinParty needs >= 76 plus trust evidence and no severe grievance.
+            require_once __DIR__ . '/social_recruitment.php';
+            $recruit = stobeSocialRecruitmentDecision($config['npc_name'], $config['player_name'], intval($config['player_affinity']));
+            if (empty($recruit['allowed'])) {
+                $config['disallow_join_party'] = true;
+                $config['join_party_block_reason'] = strval($recruit['reason'] ?? '');
+            }
+        }
         $config['protected_equipment_text'] = stobeNpcProtectedEquipmentText($npcData);
         if ($isPlayerFaction) {
             $config['disallow_follow_for_player_faction'] = true;
@@ -1671,6 +1680,11 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
         return '';
     }
     if ($command === 'TRAVEL_LOCATION' && !boolval($config['allow_travel_location'] ?? false)) {
+        return '';
+    }
+    if ($command === 'JOIN_PARTY' && boolval($config['disallow_join_party'] ?? false)) {
+        stobeLogInfo('REL recruitment gate blocked JoinParty', ['npc'=>strval($config['npc_name'] ?? ''),
+            'affinity'=>intval($config['player_affinity'] ?? 0), 'reason'=>strval($config['join_party_block_reason'] ?? '')]);
         return '';
     }
 
@@ -12373,6 +12387,9 @@ function stobeEvaluateRelationshipsForTurn(
         return $result;
     }
 
+    // REL phase 6 (enabled only): dialogue deltas stay in the insult band and never re-score a fight/aid/theft.
+    require_once __DIR__ . '/social_dialogue.php';
+    $updates = stobeSocialFilterDialogueUpdates($speaker, $updates);
     $applied = stobeApplyRelationshipUpdatesMap($relationshipMap, $updates, $contextTargets);
     $updatedCount = intval($applied['updated'] ?? 0);
     $appliedRows = is_array($applied['applied'] ?? null) ? $applied['applied'] : [];

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Mutation proof (REL phases 2-5): each mutation must make its regression suite fail; the unmutated tree passes.
+# Mutation proof (REL phases 2-7): each mutation must make its regression suite fail; the unmutated tree passes.
 # Usage: bash tests/social_relationship/mutation_proof.sh   (works on a /tmp copy; needs the stobe_social_phase1_test DB)
 SRC=/root/stobe-work/social-phase1/server
 rm -rf /tmp/mut && rsync -a --exclude .git --exclude log "$SRC/" /tmp/mut/ && mkdir -p /tmp/mut/log
@@ -41,7 +41,12 @@ mutate "M12 property: undetected theft blamed" social_property_regression social
 mutate "M13 property: no economic day budget" social_property_regression social_property.php   "return ['repeat_count'=>(int)(\$rows[0]['n'] ?? 0), 'economic_day_gain'=>max(0, (int)(\$rows[0]['gain'] ?? 0))];" "return [];"
 mutate "M14 property: shared purse credits the seller" social_property_regression social_property.php   "if (\$spent > 0 && \$gained <= 0) return" "if (false) return"
 mutate "M15 agreements: legacy delta kept when enabled" social_property_regression negotiation_engine.php   "if (stobeSocialAgreementOutcome(\$deal, \$player, \$status, is_array(\$state) ? \$state : [])) \$delta = 0;" "stobeSocialAgreementOutcome(\$deal, \$player, \$status, is_array(\$state) ? \$state : []);"
-for t in social_combat_regression social_unconscious_regression social_care_regression social_property_regression; do
+mutate "M16 witnesses: nearby counts as witnessed" social_witness_regression social_interpreter.php   "if (!\$who || (\$w['conscious'] ?? null) !== true || (\$w['perceived'] ?? null) !== true) continue;" "if (!\$who) continue;"
+mutate "M17 witnesses: every witness treated as a close friend" social_witness_regression social_interpreter.php   "if (\$toVictim < \$from) continue;" ""
+mutate "M18 dialogue: evaluator re-scores the fight" social_witness_regression social_dialogue.php   "\$update['aff_delta'] = \$recent ? 0 : max(" "\$update['aff_delta'] = max("
+mutate "M19 recruitment: gate only in the prompt, not the dispatch" social_recruitment_regression chat_helper_functions.php   "if (\$command === 'JOIN_PARTY' && boolval(\$config['disallow_join_party'] ?? false)) {" "if (false) {"
+mutate "M20 escape: completes without the sustain window" social_recruitment_regression social_interpreter.php   "if (\$event['game_ts'] - (int)\$state['freed_ts'] < \$sustain ||" "if ("
+for t in social_combat_regression social_unconscious_regression social_care_regression social_property_regression social_witness_regression social_recruitment_regression; do
   out=$(run $t); echo "unmutated $t: $out"; case "$out" in *passed*) ;; *) BAD=1 ;; esac
 done
 exit ${BAD:-0}

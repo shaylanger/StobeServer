@@ -1,0 +1,26 @@
+# id: REL-p6-01b-witness-attack
+# covers: SR24 (a friend who sees the attack feels a share toward the attacker), SR25 (a sleeping friend does not), SR26 (single hop)
+# fixture: auto-home
+# reset: keep  (right after REL-p6-01a and the two --set-relation commands)
+# needs: as REL-p6-01a
+# verify: php tools/social_relationship_inspect.php --pair-effects --interpret-log 20 --check-shadow --expect-effect "<VNAME>" "Shay" -40 -8 --expect-effect "<WNAME>" "Shay" -28 -1 --expect-none "<SNAME>" "Shay"   -> exit 0
+#   pair_effects: <WNAME> -> Shay has witness_aggression (55-70% of the victim's share, bonded); <SNAME> (asleep) nothing.
+#   Game probes 18/19: the attack line has witnesses>=1 and the interpret-log shows <WNAME> status shadow; if <SNAME> appears as a
+#   witness, report whether isUnconcious() is true while sleeping (probe 5).
+@set V where "Rel Vik" ~ (#\d+)
+@set W where "Rel Wren" ~ (#\d+)
+@set S where "Rel Sorn" ~ (#\d+)
+@set SHAY where Shay ~ Shay (#\d+)
+teleport ${W} ${V} dist 8
+teleport ${S} ${V} dist 8
+sleep ${S}
+speed 1
+@sleep 5
+speed 0
+attack Shay ${V}
+speed 1
+@sleep 6
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY} target=${V} witnesses=[1-9]
+teleport ${V} Shay dist 300
+wake ${S}

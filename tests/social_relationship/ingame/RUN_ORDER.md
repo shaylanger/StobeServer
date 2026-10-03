@@ -101,6 +101,24 @@ Carry events come from the world poller, which skips the player actor (Shay); sq
 Theft (SR13/SR14) has no in-game row: the engine "caught" signal is not proven, so native sends `caught: null`
 and REL scores no theft (by design); see DELIVERY.md probe 16.
 
+## Phase 6/7 witnesses, dialogue, recruitment, escape (Delivery 6/7 build; Capture=1)
+
+| Order | File | Mode | Check after (live tree) |
+|---|---|---|---|
+| 1 | `REL-p6-01a-witness-setup.txt` (auto-home, fresh) | shadow | then `--set-relation "<WNAME>" "<VNAME>" 91` and `--set-relation "<SNAME>" "<VNAME>" 91` |
+| 2 | `REL-p6-01b-witness-attack.txt` (keep) | shadow | `--pair-effects --interpret-log 20 --check-shadow --expect-effect "<VNAME>" "Shay" -40 -8 --expect-effect "<WNAME>" "Shay" -28 -1 --expect-none "<SNAME>" "Shay"` |
+| 3 | `REL-p7-02-slave-escape.txt` (auto-home, fresh) | shadow | `--pair-effects --incidents 10 --interpret-log 20 --check-shadow --expect-effect "<XNAME>" "Malzin" 8 18` |
+| 4 | `REL-p7-01-recruit-gate.txt` (auto-home, fresh kah-* copy) | **enabled**, then off | grep `REL recruitment gate blocked JoinParty` in log/stobeserver.log; `where` still Drifters |
+
+Recruitment gate settings: `SOCIAL_CATEGORY_RECRUITMENT` (default on), `SOCIAL_RECRUITMENT_OVERRIDE=true` = documented forced override.
+Witness echoes: `SOCIAL_CATEGORY_WITNESS` (default on).
+
+### Fixture for SR18/SR19 (carry to bed / cage)
+The Hub (Crafting base) does not work: town guards haul knocked-out outsiders away within seconds (m5). Proposal:
+build one **Bed** and one **Prisoner Cage** at Home in a copy of auto-home (game UI, any cheap version; the harness
+has no build command) and save it as fixture **"Home beds"**. Then p4-02/p4-03 run there unchanged
+(`buildings 200 Bed`, `buildings 400 Cage`). auto-home itself lists no bed or cage.
+
 When a check fails, add `--interpret-log 40 --events 60` to the report: each structured event logs its
 interpretation (`SOCIAL_INTERPRET` in `log/relationship_worker.log`) with statuses such as
 `unresolved_identity`, `no_encounter`, `defence`, `pending_awareness`, `duplicate`.

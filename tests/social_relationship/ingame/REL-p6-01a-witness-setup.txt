@@ -1,0 +1,33 @@
+# id: REL-p6-01a-witness-setup
+# covers: setup for SR24/SR25 (part a; then the coordinator sets a friendship, then part b with keep)
+# fixture: auto-home
+# reset: fresh
+# needs: Delivery 6/7 build (rel-native-p67.patch) + server at the Delivery 6/7 commit; Capture=1; mode shadow
+# verify: after this file run: php tools/social_relationship_inspect.php --set-relation "<WNAME>" "<VNAME>" 91   and   php tools/social_relationship_inspect.php --set-relation "<SNAME>" "<VNAME>" 91   (both exit 0), then run part b with keep
+@wait-world
+@sleep 8
+speed 0
+spawn "Hungry Bandit" Drifters near Shay dist 12 count 1 ~ spawned 1/1
+@set V chars 40 ~ Hungry Bandit (#\d+)
+setname ${V} "Rel Vik"
+spawn "Hungry Bandit" Drifters near Shay dist 16 count 1 ~ spawned 1/1
+@set W chars 40 ~ Hungry Bandit (#\d+)
+setname ${W} "Rel Wren"
+spawn "Hungry Bandit" Drifters near Shay dist 16 count 1 ~ spawned 1/1
+@set S chars 40 ~ Hungry Bandit (#\d+)
+setname ${S} "Rel Sorn"
+stobe_say "Rel Vik" "Vik, hello."
+speed 1
+@sleep 12
+speed 0
+stobe_say "Rel Wren" "Wren, hello."
+speed 1
+@sleep 12
+speed 0
+stobe_say "Rel Sorn" "Sorn, hello."
+speed 1
+@sleep 12
+speed 0
+@set VNAME where ${V} ~ ^(.+?) #\d+
+@set WNAME where ${W} ~ ^(.+?) #\d+
+@set SNAME where ${S} ~ ^(.+?) #\d+

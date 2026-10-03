@@ -16,19 +16,41 @@ final class SocialRules
         }
     }
     public function version(): string { return $this->config['version']; }
-    public function positive(string $component): bool { return (($this->config['ranges'][$component] ?? [0, 0])[1] ?? 0) > 0; }
+    public function positive(string $component): bool
+    {
+        // witness_<component> (phase 6) follows the sign of the effect it echoes.
+        if (str_starts_with($component, 'witness_')) return $this->positive(substr($component, 8));
+        return (($this->config['ranges'][$component] ?? [0, 0])[1] ?? 0) > 0;
+    }
     public function section(string $key): array { $value = $this->config[$key] ?? []; return is_array($value) ? $value : []; }
     public function category(string $component): string
     {
+        if (str_starts_with($component, 'witness_') && isset($this->config['ranges'][substr($component, 8)])) return 'witness';
         $category = $this->config['categories'][$component] ?? null;
         if (!is_string($category)) throw new InvalidArgumentException('Unknown semantic component category');
         return $category;
     }
     public function calculate(string $incident, string $observer, string $component, array $belief, array $context = []): array
     {
+        if (($context['category_enabled'] ?? true) !== true) return ['delta'=>0,'reason'=>'category_disabled'];
+        if (str_starts_with($component, 'witness_')) {
+            // Phase 6: a witness echo. The caller supplies the scaled total (fixed_raw); only perception,
+            // escalation and clamping apply here.
+            if (!isset($this->config['ranges'][substr($component, 8)]) || !isset($context['fixed_raw'])) throw new InvalidArgumentException('Unknown semantic component');
+            $positive = $this->positive($component);
+            if (!SocialPerception::permits($belief, $positive, false)) return ['delta'=>0, 'reason'=>'not_known'];
+            $old = max(-100, min(100, (int)($context['affinity'] ?? 0)));
+            $total = (int)$context['fixed_raw']; $raw = $total;
+            if (array_key_exists('prior_total', $context)) {
+                $prior = (int)$context['prior_total'];
+                $raw = $positive ? max(0, $raw - max(0, $prior)) : min(0, $raw - min(0, $prior));
+            }
+            $new = max(-100, min(100, $old + $raw));
+            return ['delta'=>$new-$old, 'base'=>$total, 'total'=>$total, 'new_affinity'=>$new, 'rules_version'=>$this->version(),
+                'modifiers'=>['weight'=>$context['witness_weight'] ?? null], 'reason'=>'known_outcome'];
+        }
         $range = $this->config['ranges'][$component] ?? null;
         if (!$range) throw new InvalidArgumentException('Unknown semantic component');
-        if (($context['category_enabled'] ?? true) !== true) return ['delta'=>0,'reason'=>'category_disabled'];
         $positive = $range[1] > 0;
         if (!SocialPerception::permits($belief, $positive, ($context['squad_control'] ?? false) === true)) return ['delta'=>0, 'reason'=>'not_known'];
         $seed = hexdec(substr(hash('sha256', implode('|', [$incident, $observer, $component, $this->version()])), 0, 8));

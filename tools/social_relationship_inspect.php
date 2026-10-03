@@ -17,6 +17,7 @@
  *   php tools/social_relationship_inspect.php --beliefs 20         what observers believe (believed culprit only), current campaign
  *   php tools/social_relationship_inspect.php --incidents 20       combat/ko/slavery incidents (phase, remembered attacker, transfers, enslaver)
  *   php tools/social_relationship_inspect.php --interpret-log 30    last 30 SOCIAL_INTERPRET lines from log/relationship_worker.log
+ *   php tools/social_relationship_inspect.php --set-relation "Observer" "Target" 91   TEST SETUP: write a stored affinity (fixture copies only)
  *   php tools/social_relationship_inspect.php --set-mode off|shadow|enabled   prints the previous mode (restore with it)
  *   php tools/social_relationship_inspect.php --purge-all --yes            empties the six social tables (test data only)
  *
@@ -51,6 +52,14 @@ if (($mode = $opt('--set-mode')) !== null) {
     $db->exec("INSERT INTO general_settings(id,value) VALUES('SOCIAL_RELATIONSHIP_MODE',$1) ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value", [$mode]);
     echo json_encode(['previous'=>$previous ?? '(unset = off)','now'=>stobeSocialMode()]), "\n";
     exit(0);
+}
+if (($i = array_search('--set-relation', $args, true)) !== false) {
+    // TEST SETUP ONLY (fixture copies): set observer -> target affinity in the stored relationship map.
+    require_once __DIR__ . '/../lib/relationship_manager.php';
+    $ok = RelationshipManager::setRelationship(strval($args[$i+1] ?? ''), strval($args[$i+2] ?? ''), (int)($args[$i+3] ?? 0));
+    echo json_encode(['set_relation'=>$ok, 'observer'=>$args[$i+1] ?? '', 'target'=>$args[$i+2] ?? '', 'aff'=>(int)($args[$i+3] ?? 0)]), "
+";
+    exit($ok ? 0 : 1);
 }
 if ($has('--purge-all')) {
     if (!$has('--yes')) { fwrite(STDERR, "--purge-all needs --yes\n"); exit(2); }

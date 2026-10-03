@@ -31,13 +31,14 @@ final class SocialInterpreter
 
     public function interpret(array $event, string $mode): array
     {
-        return match ($event['event_kind']) {
+        $escape = $this->escapeProgress($event, $mode);
+        $results = match ($event['event_kind']) {
             'attack' => $this->attack($event, $mode),
             'harm' => $this->harm($event, $mode),
             'recovered' => $this->recovered($event, $mode),
             'item_transfer' => $this->itemTransfer($event, $mode),
             'enslaved' => $this->enslaved($event, $mode),
-            'freed' => $this->freed($event),
+            'freed' => $this->freed($event, $mode),
             'aid' => $this->aid($event, $mode),
             'carry_start' => $this->carryStart($event, $mode),
             'carry_end' => $this->carryEnd($event, $mode),
@@ -46,6 +47,43 @@ final class SocialInterpreter
             'trade' => $this->trade($event, $mode),
             default => [['status'=>'recorded']],
         };
+        return $escape ? array_merge($results, $escape) : $results;
+    }
+
+    // ---------- phase 7: slave escape ----------
+    /**
+     * A freed slave whose liberator is known (native: the character whose current task targets the slave when
+     * the chains come off) gets chains_freed now; if they are then seen alive, conscious and free after the
+     * sustain window (rules escape.sustain_seconds, default one game day), the escape completes: one budget
+     * of +15..+65 (chains included). Re-enslaved or dead before that = no completion. Never a recruit by itself.
+     */
+    private function escapeProgress(array $event, string $mode): array
+    {
+        $who = array_values(array_filter([$event['actor'] ?? null, $event['target'] ?? null]));
+        if (!$who) return [];
+        $out = [];
+        foreach ($who as $person) {
+            $rows = $this->store->fetchRows("SELECT incident_id,state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='escape'
+                  AND state->>'phase'='freed' AND state->'victim'->>'entity_key'=\$3 LIMIT 1", [$event['campaign_id'], $event['timeline_epoch'], $person['entity_key']]);
+            if (!$rows) continue;
+            $state = json_decode($rows[0]['state'], true);
+            $failed = ($event['event_kind'] === 'enslaved' && ($event['target']['entity_key'] ?? '') === $person['entity_key'])
+                || ($event['event_kind'] === 'harm' && ($event['facts']['level'] ?? '') === 'death' && ($event['target']['entity_key'] ?? '') === $person['entity_key']);
+            if ($failed) {
+                $state['phase'] = 'failed';
+                $this->store->saveIncident($event, $rows[0]['incident_id'], $state);
+                $out[] = ['status'=>'escape_failed', 'victim'=>$person['name']];
+                continue;
+            }
+            $sustain = (int)($this->rules->section('escape')['sustain_seconds'] ?? 86400);
+            if ($event['game_ts'] - (int)$state['freed_ts'] < $sustain || ($person['conscious'] ?? null) !== true) continue;
+            $state['phase'] = 'completed'; $state['completed_ts'] = $event['game_ts'];
+            $this->store->saveIncident($event, $rows[0]['incident_id'], $state);
+            $out[] = $this->effect($event, $mode, $person, $state['liberator'], 'slave_escape',
+                ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>'Freed from slavery by ' . $state['liberator']['name'], 'kind'=>'escape'],
+                $rows[0]['incident_id'], ['escalation_group'=>['chains_freed', 'slave_escape']]);
+        }
+        return $out;
     }
 
     // ---------- helpers ----------
@@ -95,7 +133,52 @@ final class SocialInterpreter
             $key === $observer['entity_key'] ? 'observer' : 'culprit');
         $belief += ['responsible_entity'=>$culprit['entity_key'], 'confidence'=>'certain'];
         $result = $this->store->apply($event, $observer['entity_key'], $culprit['entity_key'], $component, $belief, $resolve, $mode, $context, $incident);
-        return ['component'=>$component, 'observer'=>$observer['name'], 'culprit'=>$culprit['name']] + $result;
+        $out = ['component'=>$component, 'observer'=>$observer['name'], 'culprit'=>$culprit['name']] + $result;
+        $witnesses = $this->witnesses($event, $mode, $observer, $culprit, $component, $result, $incident);
+        if ($witnesses) $out['witnesses'] = $witnesses;
+        return $out;
+    }
+
+    /**
+     * Phase 6: friends who actually saw/heard it (native sensing, conscious) feel a share of what happened to
+     * the victim, toward the culprit: once per witness/incident/component, single hop (echoes never echo),
+     * from the witness's feeling toward the victim before the event. Nearby is not witnessed.
+     */
+    private function witnesses(array $event, string $mode, array $victim, array $culprit, string $component, array $result, string $incident): array
+    {
+        if (str_starts_with($component, 'witness_') || !in_array($result['status'] ?? '', ['shadow', 'enabled'], true)) return [];
+        $total = (int)($result['effect']['total'] ?? 0);
+        if ($total === 0 || ($result['effect']['reason'] ?? '') !== 'known_outcome') return [];
+        $bands = $this->rules->section('witness')['bands'] ?? [[11, 0.05, 0.10], [31, 0.15, 0.25], [56, 0.25, 0.40], [76, 0.40, 0.55], [91, 0.55, 0.70]];
+        $positiveRate = (float)($this->rules->section('witness')['positive_rate'] ?? 0.5);
+        $group = in_array($component, self::HARM_GROUP, true) ? array_map(fn($c) => 'witness_' . $c, self::HARM_GROUP) : [];
+        $out = [];
+        foreach (array_slice($event['witnesses'] ?? [], 0, 12) as $w) {
+            $who = $w['entity'] ?? null;
+            if (!$who || ($w['conscious'] ?? null) !== true || ($w['perceived'] ?? null) !== true) continue;
+            if (in_array($who['entity_key'], [$victim['entity_key'], $culprit['entity_key']], true)) continue;
+            $profile = SocialIdentity::resolve($who, 'observer');
+            if (!$profile) continue;
+            $row = getNpcById((int)$profile['id']);
+            $entry = $row ? stobeRelationshipEntryFor($row, $victim['name']) : null;
+            $toVictim = (int)($entry['aff'] ?? 0);
+            $weight = 0.0;
+            foreach ($bands as [$from, $lo, $hi]) {
+                if ($toVictim < $from) continue;
+                $seed = hexdec(substr(hash('sha256', $incident . '|' . $who['entity_key'] . '|' . $component), 0, 6)) / 0xFFFFFF;
+                $weight = $lo + ($hi - $lo) * $seed;
+            }
+            if ($total > 0) $weight *= $positiveRate;
+            $echo = (int)round($total * $weight);
+            if ($echo === 0) { $out[] = ['witness'=>$who['name'], 'status'=>'indifferent', 'to_victim'=>$toVictim]; continue; }
+            $resolve = static fn(string $key) => SocialIdentity::resolve($key === $who['entity_key'] ? $who : $culprit, $key === $who['entity_key'] ? 'observer' : 'culprit');
+            $r = $this->store->apply($event, $who['entity_key'], $culprit['entity_key'], 'witness_' . $component,
+                ['responsible_entity'=>$culprit['entity_key'], 'awareness'=>'witnessed', 'confidence'=>'certain', 'conscious'=>true,
+                 'note'=>($total < 0 ? 'Saw ' . $culprit['name'] . ' hurt ' : 'Saw ' . $culprit['name'] . ' help ') . $victim['name'], 'kind'=>'witnessed'],
+                $resolve, $mode, ['fixed_raw'=>$echo, 'witness_weight'=>round($weight, 3)] + ($group ? ['escalation_group'=>$group] : []), $incident);
+            $out[] = ['witness'=>$who['name'], 'status'=>$r['status'] ?? null, 'delta'=>$r['effect']['delta'] ?? null, 'to_victim'=>$toVictim];
+        }
+        return $out;
     }
 
     /** What the victim knows right now: direct experience needs explicit consciousness. */
@@ -276,16 +359,34 @@ final class SocialInterpreter
         return [['status'=>'latent_enslavement', 'incident'=>$ko['id'] ?? $incident]];
     }
 
-    private function freed(array $event): array
+    private function freed(array $event, string $mode = 'shadow'): array
     {
         $victim = $event['target'];
         if (!$victim) return [['status'=>'incomplete_roles']];
+        $results = [];
+        $liberator = null;
+        try {
+            $liberator = isset($event['facts']['liberator']) ? SocialEventContract::entity($event['facts']['liberator'], 'liberator') : null;
+        } catch (Throwable $e) {
+            $liberator = null;
+        }
+        $owner = $event['actor'];
+        if ($liberator && $liberator['entity_key'] !== $victim['entity_key'] && (!$owner || $owner['entity_key'] !== $liberator['entity_key'])) {
+            $incident = 'escape:' . $event['sequence'] . ':' . substr(hash('sha256', $victim['entity_key']), 0, 16);
+            $this->store->saveIncident($event, $incident, ['kind'=>'escape', 'phase'=>'freed', 'victim'=>$victim, 'liberator'=>$liberator,
+                'owner'=>$owner, 'freed_ts'=>$event['game_ts']]);
+            $results[] = $this->effect($event, $mode, $victim, $liberator, 'chains_freed',
+                ['awareness'=>'verified_aid', 'conscious'=>$victim['conscious'] ?? null, 'note'=>'Unchained by ' . $liberator['name'], 'kind'=>'escape'],
+                $incident, ['escalation_group'=>['chains_freed', 'slave_escape']]);
+        } else {
+            $results[] = ['status'=>'no_liberator', 'note'=>'chains off without a known liberator: nobody credited'];
+        }
         foreach ($this->activeKo($event, $victim, true) as $ko) {
             if (!$ko['state']['enslaved_by']) continue;
             $ko['state']['enslaved_by'] = null; // freed before waking: never learned
             $this->store->saveIncident($event, $ko['id'], $ko['state']);
         }
-        return [['status'=>'recorded', 'note'=>'liberation credit is the recruitment/escape phase']];
+        return $results;
     }
 
     private function recovered(array $event, string $mode): array

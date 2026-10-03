@@ -1,5 +1,5 @@
 {
- "version": "phase5-v2",
+ "version": "phase7-v1",
  "ranges": {
   "aggression": [
    -15,
@@ -220,5 +220,48 @@
   "cheap_generous_below": 0.6,
   "cheap_exceptional_below": 0.4,
   "note": "price paid / the game value of the goods (getValueAll(false)); calibrate with the REL-p5 trade probe"
+ },
+ "witness": {
+  "bands": [
+   [
+    11,
+    0.05,
+    0.1
+   ],
+   [
+    31,
+    0.15,
+    0.25
+   ],
+   [
+    56,
+    0.25,
+    0.4
+   ],
+   [
+    76,
+    0.4,
+    0.55
+   ],
+   [
+    91,
+    0.55,
+    0.7
+   ]
+  ],
+  "positive_rate": 0.5,
+  "note": "band = witness affinity toward the victim BEFORE the event (>= from); share of the victim effect; positive effects at half rate"
+ },
+ "dialogue": {
+  "clamp": [
+   -8,
+   3
+  ],
+  "mechanical_window_seconds": 3600,
+  "note": "enabled mode: dialogue evaluator deltas clamped; dropped for a pair with a mechanical REL effect in the window"
+ },
+ "escape": {
+  "sustain_seconds": 86400,
+  "note": "game seconds a freed slave must be seen alive and free before the escape completes"
  }
 }
