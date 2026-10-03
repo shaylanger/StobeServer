@@ -289,6 +289,24 @@ $dir = $db->fetchOne("SELECT kind, payload FROM stobe_negotiation_directive WHER
 check('betrayal directive re-attacks', is_array($dir) && str_contains($dir['payload'], 'ATTACK@'), $dir);
 putenv('STOBE_NEG_TEST_FORCE_BETRAYAL');
 $db->exec("DELETE FROM stobe_negotiation_directive");
+// STOBE 18: the general_settings test switch forces a betrayal even for an honest, neutral NPC; off = no betrayal.
+$db->exec("DELETE FROM general_settings WHERE id='NEG_TEST_FORCE_BETRAYAL'");
+$db->exec("INSERT INTO general_settings (id, value) VALUES ('NEG_TEST_FORCE_BETRAYAL', 'true')");
+$id = makeDeal('NegTestTrader', [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>40], ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']]);
+stobeNegBeginPerformance($id, ['STOP_ATTACK@' . $player], $player, 1000, '');
+$b = stobeNegDecode(stobeNegFetchDeal($id)['betrayal']);
+check('STOBE 18: test switch forces the betrayal (honest NPC)', !empty($b['planned']) && str_contains(strval($b['reason'] ?? ''), 'test_switch'), $b);
+$db->exec("UPDATE stobe_social_contract SET performance_started_unix = performance_started_unix - 25 WHERE contract_id=$1", [$id]);
+stobeLine("ACTION_EXEC: GIVE_CATS actor=$player recipient=NegTestTrader amount=40", time());
+stobeNegTick();
+check('STOBE 18: forced betrayal -> BREACHED_NPC', status($id) === 'BREACHED_NPC', status($id));
+$db->exec("UPDATE general_settings SET value='false' WHERE id='NEG_TEST_FORCE_BETRAYAL'");
+$id = makeDeal('NegTestTrader', [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>41], ['kind'=>'STOP_ATTACK','by'=>'npc','target'=>'player']]);
+stobeNegBeginPerformance($id, ['STOP_ATTACK@' . $player], $player, 1000, '');
+$b = stobeNegDecode(stobeNegFetchDeal($id)['betrayal']);
+check('STOBE 18: switch off -> honest NPC does not betray', empty($b['planned']), $b);
+$db->exec("DELETE FROM general_settings WHERE id='NEG_TEST_FORCE_BETRAYAL'");
+$db->exec("DELETE FROM stobe_negotiation_directive");
 
 // ---------------------------------------------------------------- 10. counter -> accept same row; rounds exhausted
 $db->exec("UPDATE stobe_social_contract SET status='CANCELLED' WHERE npc_name='NegTestBandit' AND status NOT IN ('COMPLETE','BREACHED_PLAYER','BREACHED_NPC','IMPOSSIBLE')");

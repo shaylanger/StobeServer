@@ -2146,6 +2146,13 @@ function stobeNegDecideBetrayal(array $deal, string $player, array $state): arra
     $playerPays = count(array_filter($state, static fn($t) => ($t['by'] ?? '') === 'player')) > 0;
     if (!$playerPays) return [];
     $npc = strval($deal['npc_name']);
+    // STOBE 18 test switch (general_settings NEG_TEST_FORCE_BETRAYAL, off by default): betray every eligible paid deal.
+    $forceSwitch = false;
+    try { $forceSwitch = getSettingBool('NEG_TEST_FORCE_BETRAYAL', false); } catch (Throwable $e) { $forceSwitch = false; }
+    if ($forceSwitch && ($hasAfterTerms || stobeNegDealKindIsHostile($deal))) {
+        stobeLogWarn('Negotiation: betrayal forced by test switch NEG_TEST_FORCE_BETRAYAL (turn it off after the test)', ['contract_id'=>strval($deal['contract_id'] ?? ''), 'npc'=>$npc]);
+        return ['considered'=>true, 'planned'=>true, 'chance'=>1.0, 'roll'=>0.0, 'reason'=>'test_switch NEG_TEST_FORCE_BETRAYAL'];
+    }
     $row = stobeNegNpcRow($npc);
     $personality = strtolower(strval($row['personality'] ?? ''));
     $hits = preg_match_all('/\b(dishonest|liar|lies|treacher\w*|deceit\w*|manipulat\w*|greedy|ruthless|cruel|untrustworthy|backstab\w*|scheming|thief|opportunist\w*)\b/', $personality);
