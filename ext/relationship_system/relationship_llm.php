@@ -434,9 +434,9 @@ AFFINITY SCALE (-100 to +100, bell curve - extremes are RARE):
 TYPES: romantic, platonic, familial, professional, rival, enemy, neutral, nemesis, estranged, transactional, protective, indebted, fanatical, mentor, student, servant, client, patron, crush, ex, betrayed, suspicious, admirer, jealous, fearful, obsessed, awed, contempt, pitying, grateful, curious, dismissive
 
 INFERENCE RULES:
-1. FACTION: Imperial → add "Stormcloak": -60 enemy. Stormcloak → add "Imperial": -60 enemy.
-2. RACIAL: If NPC shows racial attitudes, add race as target (e.g., "Khajit": -40 contempt)
-3. OCCUPATION: Thieves Guild → "Guard": -40 rival. Companions → "Silver Hand": -70 enemy.
+1. FACTION: Holy Nation -> add "Shek Kingdom": -60 enemy and "Hivers": -50 contempt. United Cities samurai -> "Dust Bandits": -40 enemy.
+2. RACIAL: If the NPC shows racial attitudes, add the race as target (e.g. a Holy Nation paladin: "Shek": -40 contempt).
+3. OCCUPATION: Slaver -> "Anti-Slavers": -60 enemy. Bandit -> "United Cities": -30 rival.
 
 OUTPUT (JSON only):
 {"relationships": {"Target": {"aff": 50, "type": "professional", "note": "works together"}}}
