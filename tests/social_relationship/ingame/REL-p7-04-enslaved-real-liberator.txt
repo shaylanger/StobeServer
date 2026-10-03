@@ -1,0 +1,21 @@
+# id: REL-p7-04-enslaved-real-liberator
+# covers: SR32 real (the free squad member frees the enslaved one with a real lockpick order; the freed fact names her)
+# fixture: kah-enslaved, right after REL-p7-03 (keep), run by rel-enslaved.sh (camp factions set to relation 100 first)
+# verify (wrapper): the freed line's liberator is __FREE__; interpret-log freed for __SLAVE__ has chains_freed with culprit __FREE__
+#   (not no_liberator); check-shadow pass.
+speed 0
+@set SLAVE where "__SLAVE__" ~ (#\d+/\d+)
+@set FREE where "__FREE__" ~ (#\d+/\d+)
+protect ${FREE} on
+setstat ${FREE} lockpicking 100
+teleport ${FREE} ${SLAVE} dist 3
+speed 1
+@sleep 6
+speed 0
+order ${FREE} PICK_LOCK_ON_SHACKLES target ${SLAVE}
+speed 2
+@sleep 60
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator":\{[^}]*"name":"__FREE__"
+protect ${FREE} off

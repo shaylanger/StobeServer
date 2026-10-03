@@ -1,0 +1,16 @@
+# id: REL-p7-06-enslaved-recruit-trusted
+# covers: phase 7 real: the recruitment gate at affinity 80 (set by rel-enslaved.sh) without trust evidence
+# fixture: kah-enslaved, after REL-p7-05 (keep); mode ENABLED
+# verify (wrapper): if he tried to join: "REL recruitment gate blocked JoinParty" with reason no_trust_evidence (chains_freed is
+#   not trust evidence; a completed escape, lifesaving or two major aids are).
+speed 0
+@set FREE where "__FREE__" ~ (#\d+/\d+)
+@set NS2 where "Rel Nima" ~ (#\d+/\d+)
+teleport ${NS2} ${FREE} dist 3
+select ${FREE}
+stobe_say "Rel Nima" "Rel Nima, I got you out of those chains. Will you join us now?"
+speed 1
+@sleep 25
+speed 0
+where ${NS2} ~ .
+protect ${FREE} off

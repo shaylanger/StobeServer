@@ -1,0 +1,28 @@
+# id: REL-p7-05-enslaved-free-recruit
+# covers: phase 7 real: a non-squad slave freed by __FREE__ (liberator named), then the recruitment gate at low trust
+# fixture: kah-enslaved, after REL-p7-04 (keep); mode ENABLED (set by rel-enslaved.sh; kah-* copy only)
+# verify (wrapper): freed line with liberator __FREE__; after the ask, stobeserver.log "REL recruitment gate blocked JoinParty"
+#   for Rel Nima (reason affinity_below_76) if he tried to join; he is not in the squad (where: not [Nameless]).
+speed 0
+@set FREE where "__FREE__" ~ (#\d+/\d+)
+@set NS where "__NS__" ~ (#\d+/\d+)
+setname ${NS} "Rel Nima" ~ -> Rel Nima
+protect ${FREE} on
+teleport ${FREE} ${NS} dist 3
+speed 1
+@sleep 6
+speed 0
+order ${FREE} PICK_LOCK_ON_SHACKLES target ${NS}
+speed 2
+@sleep 60
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator":\{[^}]*"name":"__FREE__"
+# freeing re-creates him under a new handle (m16): look him up again by name
+@set NS2 where "Rel Nima" ~ (#\d+/\d+)
+teleport ${NS2} ${FREE} dist 3
+select ${FREE}
+stobe_say "Rel Nima" "Rel Nima, you're free now. Join my squad and come with me."
+speed 1
+@sleep 25
+speed 0
+where ${NS2} ~ .

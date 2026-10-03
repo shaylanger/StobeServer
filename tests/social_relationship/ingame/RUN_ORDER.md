@@ -129,3 +129,8 @@ interpretation (`SOCIAL_INTERPRET` in `log/relationship_worker.log`) with status
 
 Pass = every step PASS and every check exit 0. A failure becomes a REL bug row (owner REL); save
 stobe.log and `inspect --events 100 --effects 100` output with it.
+
+## Testing-Save-Enslaved (copy kah-enslaved; squad Izumi/Daphnilis, no Shay/Malzin)
+`bash rel-enslaved.sh <outdir> [Izumi] [Daphnilis]` loads kah-enslaved, finds the slave from Stobe's sweep, fills the
+templates REL-p7-03..06 and runs them in order (shadow, shadow, enabled, enabled; mode off at the end). Guards: camp
+factions get `relation 100` before p7-04 (camp-factions.txt / guards.txt); nothing is killed. Results in <outdir>/rel-enslaved.log.

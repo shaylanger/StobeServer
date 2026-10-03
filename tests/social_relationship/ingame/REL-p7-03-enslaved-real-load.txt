@@ -1,0 +1,17 @@
+# id: REL-p7-03-enslaved-real-load
+# covers: SR12 real (an enslavement the game itself reports, owner unknown to REL: recorded, nobody blamed)
+# fixture: kah-enslaved (Testing-Save-Enslaved), run by rel-enslaved.sh (fills __SLAVE__/__FREE__ from stobe.log)
+# verify (wrapper): stobe.log "first seen already enslaved ... name=__SLAVE__" after the load; after a 2-game-hour labour
+#   shift no enslavement effect / belief for __SLAVE__ (inspect pair_effects + interpret-log), check-shadow pass.
+@wait-world
+speed 0
+@set SLAVE where "__SLAVE__" ~ (#\d+/\d+)
+@set FREE where "__FREE__" ~ (#\d+/\d+)
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: first seen already enslaved serial=\d+ name=__SLAVE__ 
+hunger ${SLAVE} 280
+hunger ${FREE} 280
+speed 5
+@wait-game 120 900
+speed 0
+where ${SLAVE} ~ .
+where ${FREE} ~ .
