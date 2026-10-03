@@ -35,7 +35,7 @@ speed 0
 where Malzin
 where ${K}
 screenshot rel-p4-03 ~ png
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${K} facts="place":"prison"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=${MALZIN} target=${K} witnesses=d+ facts="place":"prison"
 speed 5
 @until 300 where ${K} ~ dist=[0-9.]+$
 speed 0

@@ -37,6 +37,7 @@ final class SocialInterpreter
             'harm' => $this->harm($event, $mode),
             'recovered' => $this->recovered($event, $mode),
             'item_transfer' => $this->itemTransfer($event, $mode),
+            'item_gain' => $this->itemGain($event),
             'enslaved' => $this->enslaved($event, $mode),
             'freed' => $this->freed($event, $mode),
             'aid' => $this->aid($event, $mode),
@@ -336,6 +337,28 @@ final class SocialInterpreter
         $ko['state']['objective']['transfers'] = array_slice($ko['state']['objective']['transfers'], -64);
         $this->store->saveIncident($event, $ko['id'], $ko['state']);
         return [['status'=>'latent_property', 'incident'=>$ko['id']]];
+    }
+
+    /**
+     * Run m8: looting a knocked-out body shows only the looter's gain (the body's loss appears on waking).
+     * The gain is attached to a knocked-out owner whose baseline holds those items, only when exactly one
+     * such owner exists in this load (objective diagnostics; the victim still only infers on waking).
+     */
+    private function itemGain(array $event): array
+    {
+        $taker = $event['actor'];
+        $items = is_array($event['facts']['items'] ?? null) ? $event['facts']['items'] : [];
+        if (!$taker || !$items) return [['status'=>'incomplete_roles']];
+        $rows = $this->store->fetchRows("SELECT incident_id,state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='ko' AND state->>'phase'='pending_awareness'
+              AND state->'victim'->>'entity_key'<>\$3 AND state->'baseline' ?| ARRAY(SELECT jsonb_array_elements_text(\$4::jsonb))", [$event['campaign_id'], $event['timeline_epoch'], $taker['entity_key'],
+              json_encode(array_map('strval', array_keys($items)))]);
+        if (count($rows) !== 1) return [['status'=>count($rows) ? 'ambiguous_owner' : 'no_ko_owner']];
+        $state = json_decode($rows[0]['state'], true);
+        $state['objective']['transfers'][] = ['taker'=>$taker, 'to_ground'=>false, 'items'=>$items, 'game_ts'=>$event['game_ts'],
+            'sequence'=>$event['sequence'], 'inferred_from'=>'unmatched_gain'];
+        $state['objective']['transfers'] = array_slice($state['objective']['transfers'], -64);
+        $this->store->saveIncident($event, $rows[0]['incident_id'], $state);
+        return [['status'=>'latent_property', 'incident'=>$rows[0]['incident_id'], 'basis'=>'unmatched_gain']];
     }
 
     private function enslaved(array $event, string $mode): array

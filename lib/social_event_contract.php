@@ -11,7 +11,7 @@ final class SocialEventContract
         'recovered', 'death', 'limb_loss', 'healing', 'slavery', 'imprisonment', 'carry',
         'looting', 'item_pickup', 'trade', 'eat', 'predation', 'dialogue', 'semantic',
         // Structured native facts (facts.source = "structured"), explicit roles: actor did it, target had it done.
-        'attack', 'harm', 'item_transfer', 'enslaved', 'freed', 'aid', 'carry_start', 'carry_end', 'placed', 'eat'];
+        'attack', 'harm', 'item_transfer', 'enslaved', 'freed', 'aid', 'carry_start', 'carry_end', 'placed', 'eat', 'item_gain'];
 
     public static function token(mixed $value, string $field): string
     {

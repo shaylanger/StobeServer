@@ -1,15 +1,13 @@
 {
  "SR08": [
-  "offline-pass; game rerun needed (m5: bandit still fled; test NPCs fell out of the 16-character world sweep in the crowd; native focus fix + forced KO)",
+  "offline-pass; game rerun needed (m8: KO and remembered attacker Shay OK; the loot showed only Malzin's gain: item_gain fix)",
   [
    "social_unconscious_regression"
   ],
   [
    "REL-p3-01-ko-loot-inferred"
   ],
-  [
-   "probe 6 LOOT_TARGET"
-  ]
+  []
  ],
  "SR09": [
   "offline-pass (evidence adapter); game blocked",
@@ -22,7 +20,7 @@
   ]
  ],
  "SR10": [
-  "offline-pass; game: no blame (m5 p3-02 27/0) but the KO itself was not captured (crowd); rerun",
+  "game-pass (m8 p3-02: KO without attacker, transfer latent, waking = no_known_culprit, nobody blamed)",
   [
    "social_unconscious_regression"
   ],
@@ -32,7 +30,7 @@
   []
  ],
  "SR11": [
-  "offline-pass; game rerun needed (m5: no KO and no enslaved fact: sweep crowd limit; fixed natively)",
+  "offline-pass; game blocked/probe (m8: no 'enslaved' fact although shackle reported chained=1 slave_state=1; first-seen-enslaved probe added; also the KO'd bandit fled out of reach)",
   [
    "social_unconscious_regression"
   ],
@@ -40,11 +38,11 @@
    "REL-p3-03-enslaved-while-ko"
   ],
   [
-   "probe 7"
+   "probe 21: does a spawned bandit already count as a slave/chained when first seen?"
   ]
  ],
  "SR12": [
-  "offline-pass; game rerun needed (as SR11)",
+  "offline-pass; game as SR11",
   [
    "social_unconscious_regression"
   ],
@@ -127,16 +125,14 @@
   ]
  ],
  "SR15": [
-  "game-pass (m5: Malzin -> Rel Ona meaningful_aid +11 while she was unconscious and near death; graded by bandaging)",
+  "game-pass (m5 meaningful +11, m8 lifesaving +29 Rel Ona -> Malzin while unconscious)",
   [
    "social_care_regression"
   ],
   [
    "REL-p4-01-first-aid"
   ],
-  [
-   "lifesaving class not reached in game yet (share bandaged < 50%)"
-  ]
+  []
  ],
  "SR16": [
   "offline-pass; game: second treatment in the same episode not yet observed (p4-01 rerun on auto-home)",
@@ -185,7 +181,7 @@
   ]
  ],
  "SR21": [
-  "offline-pass; game rerun needed (m5: hungry NPCs eat food on arrival at 120 and 170: hand over while full, then make him hungry)",
+  "partial: game-pass for the full recipient (m8: food_gift_recorded, eat not_hungry); hungry case rerun (log regex)",
   [
    "social_care_regression"
   ],
@@ -216,7 +212,7 @@
   ]
  ],
  "SR22": [
-  "offline-pass; game rerun needed (m5 probe 14: seller Keys is a character, paid 146 = value 146, ratio 1.0; native lost both sides: fixed)",
+  "game-pass for a normal purchase (m8: Shay buys from Keys = fair_trade, nothing scored); gift rerun",
   [
    "social_property_regression"
   ],
@@ -224,12 +220,10 @@
    "REL-p5-01-trade",
    "REL-p5-02-gift"
   ],
-  [
-   "gift: Shay's full inventory hides items from the inventory scan (STOBE); scenario now uses an NPC donor"
-  ]
+  []
  ],
  "SR23": [
-  "offline-pass; game rerun needed (as SR22)",
+  "offline-pass; game: character seller resolved (m8); shop storage / purse not seen in game",
   [
    "social_property_regression"
   ],
@@ -252,7 +246,7 @@
   ]
  ],
  "SR02": [
-  "game-pass (m4: p2-01 Rel Vorn->Shay -14, p2-02 Malzin->Rel Kesh -14, p2-03 Rel Bek->Rel Arn -15, p2-05 enabled -31 applied)",
+  "game-pass (m4, m5, m8: p2-01 Rel Vorn->Shay aggression -15 + KO -21)",
   [
    "social_combat_regression"
   ],
@@ -288,18 +282,17 @@
   ]
  ],
  "SR05": [
-  "game-pass (m4 p2-05 one budget -31); m5 p2-01 KO had no game attribution (native fallback recent_attacker added)",
+  "game-pass (m4 p2-05, m8 p2-01: aggression -15, KO -21, one budget; KO attributed to Shay)",
   [
    "social_combat_regression"
   ],
   [
-   "REL-p2-05-enabled-affinity",
    "REL-p2-01-player-first-strike"
   ],
   []
  ],
  "SR06": [
-  "partial: offline-pass; game: rerun p2-04 chained right after p2-01 without a reload (m5 reloaded in between)",
+  "partial: offline-pass; game m8: second encounter started by the now-hostile bandit (retaliation, correctly no new row); a clean repeat needs a non-hostile victim",
   [
    "social_combat_regression"
   ],
@@ -364,7 +357,7 @@
   ]
  ],
  "SR24": [
-  "offline-pass; needs-game",
+  "game-pass (m8 p6-01b: Rel Wren (91) -> Shay witness -7 of the victim's -10)",
   [
    "social_witness_regression"
   ],
@@ -372,12 +365,10 @@
    "REL-p6-01a-witness-setup",
    "REL-p6-01b-witness-attack"
   ],
-  [
-   "probe 18: SensoryData canISeeThisGuy/canIHearThisGuy give meaningful witness data"
-  ]
+  []
  ],
  "SR25": [
-  "offline-pass; needs-game (sleeping witness)",
+  "real bug fixed (m8: a floor-sleeping friend was counted, -6; sleeping now = not a witness); game rerun needed",
   [
    "social_witness_regression"
   ],
@@ -385,7 +376,7 @@
    "REL-p6-01b-witness-attack"
   ],
   [
-   "probe 5: isUnconcious while sleeping; occluded witness not scripted"
+   "probe 5 answered: isUnconcious() is false while sleeping"
   ]
  ],
  "SR26": [
@@ -409,14 +400,16 @@
   ]
  ],
  "SR30": [
-  "offline-pass; needs-game (LLM-dependent)",
+  "game inconclusive (m8 p7-01: no JoinParty attempted by the NPC, not recruited)",
   [
    "social_recruitment_regression"
   ],
   [
    "REL-p7-01-recruit-gate"
   ],
-  []
+  [
+   "LLM-dependent"
+  ]
  ],
  "SR31": [
   "offline-pass (chat + director configs, dispatch normalizer; autonomy never offers JoinParty; override)",
@@ -431,7 +424,7 @@
   ]
  ],
  "SR32": [
-  "offline-pass; needs-game",
+  "offline-pass; game blocked like SR11 (no enslaved/freed facts in m8)",
   [
    "social_recruitment_regression"
   ],
@@ -439,8 +432,8 @@
    "REL-p7-02-slave-escape"
   ],
   [
-   "probe 20: liberator from the PICK_LOCK_ON_SHACKLES task subject",
-   "completion needs a game day of the freed slave being seen"
+   "probe 21",
+   "probe 20 liberator"
   ]
  ],
  "SR33": [

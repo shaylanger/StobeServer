@@ -4,6 +4,8 @@
 # reset: keep  (run right after REL-p2-01 WITHOUT reloading: it uses p2-01's bandit "Rel Vorn")
 # needs: as REL-p2-01
 # note: game_ts is game seconds (run m4), 15 game minutes = 900 > the 600 s encounter window
+# run m8: after the first beating the bandit turned hostile and struck first on return, so the second encounter was HIS
+#   (correct: Shay's blows are retaliation, no new aggression row). Check --interpret-log for the second encounter's basis.
 # verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --check-shadow -> "<TNAME>" -> "Shay" lists TWO aggression rows (two combat:<seq> incidents), the second within [-18,-9];
 #   report the two time lines (game probe 4: game minutes per real second at speed 10, to calibrate encounter_idle_seconds=600).
 @set BANDIT where "Rel Vorn" ~ (#\d+)

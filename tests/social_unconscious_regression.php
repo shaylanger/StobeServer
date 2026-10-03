@@ -164,5 +164,15 @@ take('Uncon Looter', 'Uncon Victim Four', ['Katana'=>1], 11010);
 send(ev('harm', null, ent('Uncon Victim Four', false), ['level'=>'death'], 11020));
 ok(one("SELECT state->>'phase' FROM social_incident WHERE state->>'kind'='ko' AND state->'victim'->>'serial'='214' ORDER BY game_ts DESC LIMIT 1") === 'dead', 'death closes the KO incident');
 
+// Run m8: looting a KO'd body shows only the looter's gain; it is tied to the one KO'd owner whose baseline has the items.
+$koAff = koBy('Uncon Attacker', 'Uncon Victim Five', 12000, ['rag shirt'=>1, 'fabrics'=>3]);
+$r = send(ev('item_gain', ent('Uncon Looter'), null, ['items'=>['rag shirt'=>1]], 12010));
+ok(($r['effects'][0]['status'] ?? '') === 'latent_property', 'm8 unmatched gain attached to the KO owner');
+wake('Uncon Victim Five', ['fabrics'=>3], 12100);
+ok(affOf('Uncon Victim Five', 'Uncon Attacker') < $koAff, 'm8 looted (gain only) item blamed on the remembered attacker');
+koBy('Uncon Attacker', 'Uncon Victim Seven', 13000, ['rag shirt'=>1]);
+koBy('Uncon Attacker', 'Uncon Victim Eight', 13100, ['rag shirt'=>1]);
+$r = send(ev('item_gain', ent('Uncon Looter'), null, ['items'=>['rag shirt'=>1]], 13200));
+ok(($r['effects'][0]['status'] ?? '') === 'ambiguous_owner', 'm8 two possible owners: not attributed');
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 echo "$n unconscious-perception regression checks passed\n";

@@ -30,12 +30,13 @@ speed 0
 # Hand it over while he is full, then make him hungry and let him eat it.
 hunger ${H} 290
 hunger ${F} 280
+inv Shay ~ Dried Meat
 transfer Shay ${H} "Dried Meat"
 speed 1
 @sleep 4
 speed 0
 inv ${H} ~ Dried Meat
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} facts=.*"food_items":\{"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${H} target=${SHAY} witnesses=d+ facts=.*"food_items":\{"
 # hungry now: he eats it himself within a few seconds (m4/m5 behaviour); that meal is the one scored
 hunger ${H} 150
 speed 1

@@ -27,9 +27,11 @@ attack Shay ${BANDIT}
 speed 1
 @sleep 6
 # run m5: no reliable KO in a fight; force it right after the attack (KO fact: attribution recent_attacker)
+# run m8: a fled bandit 230 m away is out of reach and teleport cannot move a KO'd body: bring him first
+teleport ${BANDIT} Shay dist 4
 ko ${BANDIT} 60
 @until 20 where ${BANDIT} ~ KO
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT}
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=#\d+ target=${BANDIT} facts="level":"knockout","attribution":"(defeated_by|attacker_list|recent_attacker)"
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=#\d+ target=${BANDIT} witnesses=d+ facts="level":"knockout","attribution":"(defeated_by|attacker_list|recent_attacker)"
 teleport ${BANDIT} Shay dist 300

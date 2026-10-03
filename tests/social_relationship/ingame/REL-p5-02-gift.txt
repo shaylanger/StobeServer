@@ -15,6 +15,11 @@ spawn "Hungry Bandit" Drifters near Shay dist 8 count 1 ~ spawned 1/1
 @set DONOR chars 40 ~ Hungry Bandit (#\d+)
 setname ${DONOR} "Rel Dona"
 give "Rel Dona" "Iron Plates" 1 ~ got 1/1
+# run m8: the donor was never talked to, so the world sweep never looked at her inventory (her loss unseen)
+stobe_say "Rel Dona" "Dona, wait here."
+speed 1
+@sleep 10
+speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
 @set G chars 40 ~ Hungry Bandit (#\d+)
 setname ${G} "Rel Gav"

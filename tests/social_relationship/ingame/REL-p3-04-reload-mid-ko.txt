@@ -28,6 +28,8 @@ attack Shay ${BANDIT}
 speed 1
 @sleep 6
 # run m5: no reliable KO in a fight; force it right after the attack (KO fact: attribution recent_attacker)
+# run m8: a fled bandit 230 m away is out of reach and teleport cannot move a KO'd body: bring him first
+teleport ${BANDIT} Shay dist 4
 ko ${BANDIT} 60
 @until 20 where ${BANDIT} ~ KO
 speed 0
