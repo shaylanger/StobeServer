@@ -26,6 +26,25 @@ check('no entry: no block', stobeBuildRelationshipStanceBlock('Malzin', ['extend
 check('tier edges', stobeRelationshipStanceTier(-91)[0] === 'Hostile' && stobeRelationshipStanceTier(-90)[0] === 'Hateful'
     && stobeRelationshipStanceTier(5)[0] === 'Neutral' && stobeRelationshipStanceTier(6)[0] === 'Acquaintance'
     && stobeRelationshipStanceTier(91)[0] === 'Bonded' && stobeRelationshipStanceTier(90)[0] === 'Devoted');
+// Item 70: maps read back (restored saves, old rows) drop template keys and map legacy types
+$db70 = $GLOBALS['db'];
+$db70->exec("DELETE FROM core_npc_master WHERE name IN ('Kip70 [NegTest70 Bowman]')");
+$db70->exec("INSERT INTO core_npc_master (name, metadata, created_at, updated_at) VALUES ('Kip70 [NegTest70 Bowman]', '{}'::jsonb, NOW(), NOW())");
+$m70 = stobeNormalizeRelationshipMap(['NegTest70 Bowman' => ['aff'=>-20, 'type'=>'rival'], 'Shay' => ['aff'=>30, 'type'=>'distrust'],
+    'Malzin' => ['aff'=>40, 'type'=>'trusting'], 'Kip70 [NegTest70 Bowman]' => ['aff'=>5, 'type'=>'whatever']]);
+check('item 70: a generic template key is dropped on read', !isset($m70['NegTest70 Bowman']) && isset($m70['Kip70 [NegTest70 Bowman]']), array_keys($m70));
+check('item 70: legacy type words map onto the list (distrust -> suspicious, trusting -> platonic, whatever -> keep)',
+    stobeRelationshipLegacyType('distrust') === 'suspicious' && stobeRelationshipLegacyType('trusting') === 'platonic' && stobeRelationshipLegacyType('whatever') === '');
+$db70->exec("DELETE FROM core_npc WHERE name='NegTest70 Holder'");
+$db70->exec("INSERT INTO core_npc (name, extended_data) VALUES ('NegTest70 Holder', $1::jsonb)",
+    [json_encode(['relationships' => ['NegTest70 Bowman' => ['aff'=>-20,'type'=>'rival','updated_at'=>1790952609], 'Shay' => ['aff'=>30,'type'=>'ally','updated_at'=>1790952609]]])]);
+$c70 = stobeRelationshipCleanStoredMaps();
+$row70 = json_decode(strval($db70->fetchOne("SELECT extended_data->'relationships' AS r FROM core_npc WHERE name='NegTest70 Holder'")['r'] ?? ''), true);
+check('item 70: stored maps are cleaned in place (key dropped, ally -> platonic, timestamp kept)',
+    is_array($row70) && !isset($row70['NegTest70 Bowman']) && ($row70['Shay']['type'] ?? '') === 'platonic' && intval($row70['Shay']['updated_at'] ?? 0) === 1790952609, [$c70, $row70]);
+$db70->exec("DELETE FROM core_npc WHERE name='NegTest70 Holder'");
+$db70->exec("DELETE FROM core_npc_master WHERE name='Kip70 [NegTest70 Bowman]'");
+
 // R1: types onto the list
 check('R1: ally -> platonic, annoyed -> wary, distrust -> suspicious', stobeCanonicalRelationshipType('ally') === 'platonic'
     && stobeCanonicalRelationshipType('Annoyed') === 'wary' && stobeCanonicalRelationshipType('distrust') === 'suspicious');

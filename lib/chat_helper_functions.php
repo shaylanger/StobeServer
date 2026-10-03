@@ -11211,6 +11211,9 @@ function stobeNormalizeRelationshipMap(mixed $rawMap): array {
         if (stobeIsIgnoredRelationshipTarget($target)) {
             return;
         }
+        if (function_exists('stobeIsGenericNpcName') && stobeIsGenericNpcName($target)) {
+            return; // item 70: no template-name entries, also not from restored or old maps (R3)
+        }
 
         $affRaw = 0;
         $typeRaw = 'neutral';
@@ -11840,6 +11843,47 @@ function stobeCanonicalRelationshipType(string $raw): string {
         'grudge'=>'betrayed', 'disdain'=>'contempt', 'scorn'=>'contempt', 'thankful'=>'grateful',
     ];
     return $syn[$t] ?? '';
+}
+
+/** Item 70: a stored (legacy) type on the official list: R1's mapping plus old words seen in maps; '' = keep. */
+function stobeRelationshipLegacyType(string $raw): string {
+    $c = stobeCanonicalRelationshipType($raw);
+    if ($c !== '') return $c;
+    $extra = ['trust'=>'platonic', 'trusting'=>'platonic', 'respectful'=>'admirer', 'distant'=>'neutral',
+        'dispute'=>'rival', 'truce'=>'wary', 'negotiation'=>'transactional'];
+    return $extra[strtolower(trim($raw))] ?? '';
+}
+
+/**
+ * Item 70: clean stored relationship maps in place (generic template keys dropped, legacy types
+ * mapped); entries are otherwise kept as they are (aff, note, timestamps). Returns counts.
+ */
+function stobeRelationshipCleanStoredMaps(): array {
+    $db = $GLOBALS['db'];
+    $rows = $db->fetchAll("SELECT id, name, extended_data->'relationships' AS rel FROM core_npc WHERE jsonb_typeof(extended_data->'relationships')='object'");
+    $out = ['npcs'=>0, 'keys_dropped'=>0, 'types_mapped'=>0];
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        $map = json_decode(strval($row['rel'] ?? ''), true);
+        if (!is_array($map)) continue;
+        $changed = false;
+        foreach ($map as $key => $entry) {
+            if (stobeIsGenericNpcName(strval($key))) { unset($map[$key]); $out['keys_dropped']++; $changed = true; continue; }
+            if (is_array($entry) && isset($entry['type'])) {
+                $t = stobeRelationshipLegacyType(strval($entry['type']));
+                if ($t !== '' && $t !== strtolower(trim(strval($entry['type'])))) { $map[$key]['type'] = $t; $out['types_mapped']++; $changed = true; }
+            }
+        }
+        if (!$changed) continue;
+        $json = count($map) > 0 ? json_encode($map) : '{}';
+        $db->exec(
+            "UPDATE core_npc SET extended_data = jsonb_set(COALESCE(extended_data, '{}'::jsonb), '{relationships}', $2::jsonb, true),
+                    relationships = CASE WHEN COALESCE(relationships, '') <> '' THEN $3 ELSE relationships END
+              WHERE id = $1",
+            [intval($row['id']), $json, count($map) > 0 ? $json : '']
+        );
+        $out['npcs']++;
+    }
+    return $out;
 }
 
 /** R3: an unnamed template name ("Hungry Bandit") that named NPCs carry in brackets. */

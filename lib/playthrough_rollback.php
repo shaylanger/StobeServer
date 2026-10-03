@@ -1143,6 +1143,14 @@ function stobePlaythroughRestoreRelationshipStates(int $cutoffGamets): array
             'errors' => 0,
             'sample_names' => trim(strval($result['sample_names'] ?? '')),
         ];
+        // Item 70: restored maps can be older than R1/R3: drop template keys, map old types.
+        if ($counts['restored'] > 0 && function_exists('stobeRelationshipCleanStoredMaps')) {
+            try {
+                $counts['cleaned'] = stobeRelationshipCleanStoredMaps();
+            } catch (Throwable $cleanError) {
+                stobeLogWarn('PLAYTHROUGH: relationship map cleanup failed (item 70)', ['error' => $cleanError->getMessage()]);
+            }
+        }
         stobeLogInfo('PLAYTHROUGH: restored relationship timeline state', [
             'cutoff_gamets' => $cutoff,
             'restored' => $counts['restored'],
