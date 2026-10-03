@@ -3,11 +3,11 @@
 # fixture: auto-home
 # reset: fresh
 # needs: StobeCustom.ini [SocialRelationships] Capture=1 (set before launch; read only at game start); server SOCIAL_RELATIONSHIP_MODE off (php tools/social_relationship_inspect.php --set-mode off)
-# verify: stobe.log has "SOCIAL_CAPTURE: enabled"; inspect -> "mode": "off", every "counts" value 0 (server answered 'disabled' and wrote nothing)
+# verify: grep "SOCIAL_CAPTURE: enabled" in stobe.log (written at game start, before the run, so @log cannot see it);
+#   with Playthrough Saves off also one line "using campaign 'legacy'"; no "SOCIAL_CAPTURE: skipped" lines. inspect -> "mode": "off", every "counts" value 0 (server answered 'disabled' and wrote nothing)
 @wait-world
 @sleep 8
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: enabled
 stobe_ping ~ speaker=Shay
 @set SHAY where Shay ~ Shay (#\d+)
 spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1

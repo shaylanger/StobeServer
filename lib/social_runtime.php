@@ -8,14 +8,43 @@ function stobeSocialMode(): string
     return in_array($mode,['shadow','enabled'],true) ? $mode : 'off';
 }
 
-function stobeSocialScope(object $db): array
+/** Campaign id used when Playthrough Saves (automatic switching) is off: one shared server timeline. */
+const STOBE_SOCIAL_LEGACY_CAMPAIGN = 'legacy';
+
+function stobeSocialPlaythroughSwitching(object $db): bool
+{
+    $row = $db->fetchOne("SELECT value FROM stobe_meta.settings WHERE key='PLAYTHROUGH_AUTO_SWITCH'");
+    return is_array($row) && json_decode(strval($row['value'] ?? 'null'), true) === true;
+}
+
+/**
+ * The scope an event must match. With Playthrough Saves on: the authenticated handshake (campaign,
+ * load id, client). With it off (no handshake, no campaign id; the game then sends campaign "legacy"):
+ * the event's own load id and client, accepted only for campaign "legacy" and never older than the
+ * newest load this client already sent (stale queued events after a reload are refused).
+ * Without an event (server-owned outcomes): the newest load seen in the legacy campaign.
+ */
+function stobeSocialScope(object $db, ?array $event = null): array
 {
     $row = $db->fetchOne("SELECT value FROM stobe_meta.settings WHERE key='PLAYTHROUGH_SESSION'");
     $session = json_decode(strval($row['value'] ?? '{}'),true);
-    if (!is_array($session) || ($session['status'] ?? '') !== 'ready') throw new DomainException('Social capture requires a connected campaign');
-    return ['campaign_id'=>SocialEventContract::token($session['character_id'] ?? null,'campaign'),
-        'timeline_epoch'=>strval(SocialEventContract::number($session['load_id'] ?? null,'load')),
-        'native_session_id'=>SocialEventContract::token($session['client_id'] ?? null,'client')];
+    if (is_array($session) && ($session['status'] ?? '') === 'ready' && stobeSocialPlaythroughSwitching($db)) {
+        return ['campaign_id'=>SocialEventContract::token($session['character_id'] ?? null,'campaign'),
+            'timeline_epoch'=>strval(SocialEventContract::number($session['load_id'] ?? null,'load')),
+            'native_session_id'=>SocialEventContract::token($session['client_id'] ?? null,'client')];
+    }
+    if (stobeSocialPlaythroughSwitching($db)) throw new DomainException('Social capture requires a connected campaign');
+    if ($event === null) {
+        $latest = $db->fetchOne("SELECT timeline_epoch,native_session_id FROM social_event_inbox WHERE campaign_id=$1 AND native_session_id<>'server' ORDER BY created_at DESC LIMIT 1", [STOBE_SOCIAL_LEGACY_CAMPAIGN]);
+        if (!is_array($latest)) throw new DomainException('No legacy social timeline yet');
+        return ['campaign_id'=>STOBE_SOCIAL_LEGACY_CAMPAIGN, 'timeline_epoch'=>strval($latest['timeline_epoch']), 'native_session_id'=>strval($latest['native_session_id'])];
+    }
+    if (($event['campaign_id'] ?? '') !== STOBE_SOCIAL_LEGACY_CAMPAIGN) throw new DomainException('Campaign id without Playthrough Saves');
+    $epoch = strval($event['timeline_epoch'] ?? '');
+    if (!preg_match('/^[0-9]{1,18}$/D', $epoch)) throw new DomainException('Invalid load id');
+    $newest = $db->fetchOne("SELECT MAX(timeline_epoch::bigint) AS n FROM social_event_inbox WHERE campaign_id=$1 AND native_session_id=$2", [STOBE_SOCIAL_LEGACY_CAMPAIGN, strval($event['native_session_id'] ?? '')]);
+    if (is_array($newest) && $newest['n'] !== null && (int)$epoch < (int)$newest['n']) throw new DomainException('Stale load');
+    return ['campaign_id'=>STOBE_SOCIAL_LEGACY_CAMPAIGN, 'timeline_epoch'=>$epoch, 'native_session_id'=>strval($event['native_session_id'])];
 }
 
 function stobeSocialResolveEntity(string $key): ?array

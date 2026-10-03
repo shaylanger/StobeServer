@@ -4,7 +4,8 @@
 # reset: fresh
 # needs: Capture=1 (as REL-p1-02, same launch is fine); server mode shadow: php tools/social_relationship_inspect.php --set-mode shadow
 # verify: BEFORE any reload run in the live server tree: php tools/social_relationship_inspect.php --events 40 --check-shadow --expect-pair <SHAY> <BANDIT> combat   (serials from this run's @set lines)
-#   expected: exit 0; "mode": "shadow"; a "loads" row whose campaign_id/timeline_epoch/native_session_id equal "session".campaign_id/load_id/client_id with by_status mostly "captured" (a few "late" are allowed);
+#   expected: exit 0; "mode": "shadow"; a "loads" row whose campaign_id/timeline_epoch/native_session_id equal "session".campaign_id/load_id/client_id
+#   (with Playthrough Saves off: campaign_id "legacy", "session".status "playthrough_saves_off", load_id = the game's load number) with by_status mostly "captured" (a few "late" are allowed);
 #   kinds include combat (+ knockout, recovered if the KO step ran); "effects": {"applied": 0}; events show actor/target names Shay / Hungry Bandit with the serials from @set.
 @wait-world
 @sleep 8

@@ -17,6 +17,15 @@ Server checks run in the **live tree** (`cd /var/www/html/StobeServer`) after th
 The server mode is global (general_settings is configuration, not saved per playthrough) and is read
 per request: no restart. **Always end a REL batch with `--set-mode off`** and Capture=0.
 
+## Playthrough Saves off (live setup, run m4)
+
+Without Playthrough Saves (`stobe_meta.settings` `PLAYTHROUGH_AUTO_SWITCH` not true) the game gets no campaign id.
+Since the m4 fix the game then sends campaign `legacy`; the server accepts `legacy` only while switching is
+off, takes the load id/client from the event and refuses an older load after a newer one (stale).
+inspect shows `"session": {"status": "playthrough_saves_off", "campaign_id": "legacy", "load_id": <newest load>}`
+and all checks (`--expect-pair`, `--pair-effects`, ...) use that newest load. stobe.log shows once:
+`SOCIAL_CAPTURE: no playthrough campaign id (Playthrough Saves off): using campaign 'legacy'`.
+
 ## Keeping test data out of real data
 
 - Shadow mode never writes affinity (`social_effect.applied` stays false; checked by `--check-shadow`).

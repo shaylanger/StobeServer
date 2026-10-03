@@ -66,6 +66,14 @@ $sinceSql = $since !== null ? ' AND created_at >= $1::timestamptz' : '';
 $sinceParams = $since !== null ? [$since] : [];
 $sessionRow = $db->fetchOne("SELECT value FROM stobe_meta.settings WHERE key='PLAYTHROUGH_SESSION'");
 $session = json_decode(strval($sessionRow['value'] ?? '{}'), true) ?: [];
+try {
+    $sc = stobeSocialScope($db);
+    $scopeOut = ['status'=>stobeSocialPlaythroughSwitching($db) ? ($session['status'] ?? null) : 'playthrough_saves_off',
+        'campaign_id'=>$sc['campaign_id'], 'load_id'=>$sc['timeline_epoch'], 'client_id'=>$sc['native_session_id']];
+} catch (Throwable $e) {
+    $scopeOut = ['status'=>$session['status'] ?? 'none', 'campaign_id'=>$session['character_id'] ?? null, 'load_id'=>$session['load_id'] ?? null,
+        'client_id'=>$session['client_id'] ?? null, 'note'=>$e->getMessage()];
+}
 $out = [
     'db' => getenv('STOBE_DB_NAME') ?: 'stobe',
     'mode' => stobeSocialMode(),
@@ -74,8 +82,9 @@ $out = [
         'RELATIONSHIP_FIGHTS_COUNT' => $setting('RELATIONSHIP_FIGHTS_COUNT'),
         'NEVER_CLEAR_RELATIONSHIP_DATA' => $setting('NEVER_CLEAR_RELATIONSHIP_DATA'),
     ],
-    'session' => ['status'=>$session['status'] ?? null, 'campaign_id'=>$session['character_id'] ?? null,
-        'load_id'=>$session['load_id'] ?? null, 'client_id'=>$session['client_id'] ?? null],
+    // "session" = the scope new events must match: the handshake with Playthrough Saves on, else the
+    // newest load of the shared "legacy" campaign (Playthrough Saves off).
+    'session' => $scopeOut,
     'counts' => [],
     'loads' => [],
 ];
@@ -120,7 +129,7 @@ if ($has('--check-stale')) {
     $out['check_stale'] = $bad ? ['FAIL' => $bad] : 'pass';
     if ($bad) $exit = 1;
 }
-$current = [strval($session['character_id'] ?? ''), strval($session['load_id'] ?? '')];
+$current = [strval($scopeOut['campaign_id'] ?? ''), strval($scopeOut['load_id'] ?? '')];
 $pairSql = "SELECT detail->>'observer_name' AS observer, detail->>'culprit_name' AS culprit, sum(delta) AS delta,
         string_agg(component || ':' || delta, ',' ORDER BY game_ts) AS components, bool_or(applied) AS applied
     FROM social_effect WHERE campaign_id=\$1 AND timeline_epoch=\$2 GROUP BY 1,2 ORDER BY 1,2";
@@ -171,7 +180,7 @@ if (($i = array_search('--expect-pair', $args, true)) !== false) {
     $rows = $q("SELECT payload->>'event_kind' AS kind, status, count(*) AS n FROM social_event_inbox
         WHERE campaign_id=$1 AND timeline_epoch=$2 AND native_session_id=$3
           AND payload->'actor'->>'serial'=$4 AND payload->'target'->>'serial'=$5" . ($kind !== null ? " AND payload->>'event_kind'=\$6" : '') . ' GROUP BY 1,2',
-        array_merge([strval($session['character_id'] ?? ''), strval($session['load_id'] ?? ''), strval($session['client_id'] ?? ''), $actor, $target], $kind !== null ? [$kind] : []));
+        array_merge([strval($scopeOut['campaign_id'] ?? ''), strval($scopeOut['load_id'] ?? ''), strval($scopeOut['client_id'] ?? ''), $actor, $target], $kind !== null ? [$kind] : []));
     $out['expect_pair'] = $rows ? ['pass' => $rows] : 'FAIL: no event for this pair in the current load';
     if (!$rows) $exit = 1;
 }

@@ -113,6 +113,8 @@ ok(entryOf('Prop Trader', 'Prop Buyer') === null, 'SR23 no guessed reward');
 
 // SR29: deal outcomes (server-owned semantic events in the connected campaign).
 $prevSession = one("SELECT value FROM stobe_meta.settings WHERE key='PLAYTHROUGH_SESSION'");
+$prevSwitch = one("SELECT value FROM stobe_meta.settings WHERE key='PLAYTHROUGH_AUTO_SWITCH'");
+sql("INSERT INTO stobe_meta.settings(key,value) VALUES('PLAYTHROUGH_AUTO_SWITCH','true') ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value");
 $prevMode = one("SELECT value FROM general_settings WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 sql("INSERT INTO stobe_meta.settings(key,value) VALUES('PLAYTHROUGH_SESSION',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",
     [json_encode(['status'=>'ready', 'character_id'=>'camp5', 'load_id'=>11, 'client_id'=>'sess5'])]);
@@ -144,6 +146,8 @@ try {
     stobeNegApplyConsequences(['contract_id'=>'reltest-6', 'npc_name'=>'Prop Npc', 'status'=>'COMPLETE', 'kind'=>'trade', 'term_state'=>'[]', 'baseline'=>'{}'], 'Prop Player');
     ok(affOf('Prop Npc', 'Prop Player') - $before === 4, 'negotiation engine: off keeps the legacy +4');
 } finally {
+    if ($prevSwitch === null) sql("DELETE FROM stobe_meta.settings WHERE key='PLAYTHROUGH_AUTO_SWITCH'");
+    else sql("UPDATE stobe_meta.settings SET value=$1 WHERE key='PLAYTHROUGH_AUTO_SWITCH'", [$prevSwitch]);
     if ($prevSession === null) sql("DELETE FROM stobe_meta.settings WHERE key='PLAYTHROUGH_SESSION'");
     else sql("UPDATE stobe_meta.settings SET value=$1 WHERE key='PLAYTHROUGH_SESSION'", [$prevSession]);
     sql("DELETE FROM stobe_social_contract WHERE contract_id LIKE 'reltest%'");

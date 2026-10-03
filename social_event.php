@@ -16,7 +16,7 @@ try {
     $event = SocialEventContract::validate($input);
     // A semantic consequence is server-owned. Clients only send objective raw facts.
     if ($event['event_kind'] === 'semantic') throw new InvalidArgumentException('Client cannot submit semantic effects');
-    $result = (new SocialStore($GLOBALS['db']))->ingest($event,stobeSocialScope($GLOBALS['db']),$mode);
+    $result = (new SocialStore($GLOBALS['db']))->ingest($event,stobeSocialScope($GLOBALS['db'],$event),$mode);
     echo json_encode($result,JSON_THROW_ON_ERROR);
 } catch (DomainException $error) {
     http_response_code(409); stobeLogInfo('SOCIAL_INGRESS rejected',['status'=>'scope_or_replay_conflict','reason'=>$error->getMessage()]);
