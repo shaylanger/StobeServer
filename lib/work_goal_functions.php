@@ -180,6 +180,7 @@ function stobeGoalPersonName(string $requested): string
 {
     $req = trim(preg_replace('/^(?:to|at|back\s+to)\s+/i', '', trim($requested)) ?? $requested);
     if (preg_match('/^(?:me|myself|us|player|the\s+player)$/i', $req)) {
+        if (function_exists('stobePlayerActorName')) return stobePlayerActorName(); // Item 100
         return function_exists('getSetting') ? trim(strval(getSetting('PLAYER_NAME', ''))) : '';
     }
     if (preg_match('/^(?:you|yourself|here|there)$/i', $req)) return '';
@@ -224,6 +225,7 @@ function stobeGoalDestinationFallback(string $requested): string
     if (stobeGoalNameIsContainer($req)) return 'container'; // item 68: a chest/storage is no place to travel to
     $player = function_exists('getSetting') ? strtolower(trim(strval(getSetting('PLAYER_NAME', '')))) : '';
     if ($player !== '' && $req === $player) return 'person';
+    if (function_exists('stobePlayerActorName') && $req === strtolower(stobePlayerActorName())) return 'person'; // Item 100
     if (function_exists('stobeResolveLiveParticipantSerial') && function_exists('normalizeParticipantNameToken')
         && stobeResolveLiveParticipantSerial(normalizeParticipantNameToken($requested), false) > 0) return 'person';
     try { // item 79: any known NPC (also out of sight) is a person, not a base

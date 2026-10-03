@@ -869,6 +869,37 @@ check('phase 6 toggle off disables social offers', stobeNegLooksLikeSocialOffer(
 $db->exec("UPDATE general_settings SET value='true' WHERE id='NEGOTIATION_PHASE_6'");
 check('phase 6 toggle on enables social offers', stobeNegLooksLikeSocialOffer("I'll give you 200 cats for your hat") === true);
 
+// ---------------------------------------------------------------- Item 100: another squad than the PLAYER_NAME persona
+// Speaker "NegTestBeaks" (a player-faction character), persona $player: the item 43 helper must not add a second
+// GIVE_ITEM for the persona; "me" is the speaking character; deal actions target it; the reputation key stays the persona.
+fixtureNpc('NegTestBeaks', ['money'=>800, 'money_observed_at'=>time()], '', '', '100/100', 'Nameless');
+fixtureNpc('NegTestAvarek', ['money'=>10, 'money_observed_at'=>time()], 'Bread x2 value 10', 'Loyal.', '100/100', 'Nameless');
+$GLOBALS['STOBE_PLAYER_ACTOR'] = 'NegTestBeaks';
+$avarek = getNpcData('NegTestAvarek');
+$extra = stobeInferMissingHandovers('NegTestAvarek, give me one of your bread.', $avarek, ['GIVE_ITEM@NegTestBeaks@Bread@1'],
+    'Here you go.', 'NegTestBeaks', true);
+check('item 100: GIVE_ITEM to the speaking character counts (no extra GIVE_ITEM@persona)', $extra === [], $extra);
+$extra2 = stobeInferMissingHandovers('NegTestAvarek, give me one of your bread.', $avarek, ['GIVE_ITEM@' . $player . '@Bread@1'],
+    'Here you go.', 'NegTestBeaks', true);
+check('item 100: GIVE_ITEM to the persona also counts', $extra2 === [], $extra2);
+check('item 100: "me" is the speaking character', stobeGoalPersonName('me') === 'NegTestBeaks', stobeGoalPersonName('me'));
+$chatSrc100 = file_get_contents(__DIR__ . '/../processor/chat.php');
+check('item 100: chat.php makes an inputtext speaker the player', str_contains($chatSrc100, "\$GLOBALS['STOBE_PLAYER_ACTOR'] = \$playerName;")
+    && str_contains($chatSrc100, "['inputtext', 'inputtext_s']"));
+$id = makeDeal('NegTestBandit', [['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>20]], 'social');
+$db->exec("UPDATE stobe_social_contract SET player_name='NegTestBeaks' WHERE contract_id=$1", [$id]);
+stobeNegBeginPerformance($id, ['GIVE_CATS@NegTestBeaks@20'], 'NegTestBeaks', 1000, '');
+check('item 100: the deal payment is dispatched to the speaking character', termStatus($id, 0) === 'DISPATCHED', termStatus($id, 0));
+$repBefore = intval($db->fetchOne("SELECT COALESCE(MAX(npc_kept),0) AS k FROM stobe_negotiation_reputation WHERE player_name=LOWER($1)", [$player])['k'] ?? 0);
+stobeLine("ACTION_EXEC: GIVE_CATS actor=NegTestBandit recipient=NegTestBeaks amount=20", time());
+stobeNegTick();
+check('item 100: deal with the squad character completes', status($id) === 'COMPLETE', [status($id), termStatus($id, 0)]);
+$beaksRep = $db->fetchOne("SELECT 1 AS x FROM stobe_negotiation_reputation WHERE player_name='negtestbeaks'");
+check('item 100: reputation stays on the persona (no row for the character)', !$beaksRep);
+unset($GLOBALS['STOBE_PLAYER_ACTOR']);
+check('item 100: without a speaking character, "me" is the persona (Shay/Malzin unchanged)', strcasecmp(stobeGoalPersonName('me'), $player) === 0, stobeGoalPersonName('me'));
+foreach (['NegTestBeaks', 'NegTestAvarek'] as $n) { $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n]); $db->exec("DELETE FROM core_npc WHERE name=$1", [$n]); }
+
 // ---------------------------------------------------------------- cleanup
 $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");

@@ -1309,7 +1309,9 @@ function stobeNegTick(string $onlyNpc = ''): void {
     $rows = $GLOBALS['db']->fetchAll("SELECT * FROM stobe_social_contract WHERE " . $where . " ORDER BY updated_at LIMIT 20", $params);
     foreach (is_array($rows) ? $rows : [] as $deal) {
         try {
-            stobeNegTickDeal($deal, $player, $now);
+            // Item 100: action targets go to the character the deal was made with (deal player_name)
+            $dealPlayer = normalizeParticipantNameToken(strval($deal['player_name'] ?? ''));
+            stobeNegTickDeal($deal, $dealPlayer !== '' ? $dealPlayer : $player, $now);
         } catch (Throwable $e) {
             stobeLogWarn('Deal tick failed', ['contract_id'=>$deal['contract_id'] ?? '', 'error'=>$e->getMessage()]);
         }
@@ -1636,7 +1638,8 @@ function stobeNegMarkDirectiveDispatched(array $directive, array $finalActions):
     $deal = stobeNegFetchDeal($id);
     if (!$deal || strval($deal['status']) !== 'AWAITING_PERFORMANCE') return;
     $state = stobeNegDecode($deal['term_state'] ?? []);
-    $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+    $player = normalizeParticipantNameToken(strval($deal['player_name'] ?? '')); // Item 100: the deal's character
+    if ($player === '') $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
     $sent = array_map('strtolower', $finalActions);
     $now = time();
     foreach (array_map('intval', $directive['payload']['term_indexes'] ?? []) as $idx) {
@@ -2013,6 +2016,10 @@ function stobeNegApplyConsequences(array $deal, string $player): void {
 
         $state = stobeNegDecode($deal['term_state'] ?? []);
         $summary = stobeNegTermsSummary($state, $npc, $player);
+        // Item 100 (Shay's call (a)): reputation and relationship history stay keyed by the PLAYER_NAME persona.
+        // Only a player-squad character other than the persona is mapped (a deal made as Beaks counts for "shay").
+        $persona = normalizeParticipantNameToken(strval(getSetting('PLAYER_NAME', '')));
+        if ($persona === '' || strcasecmp($persona, $player) === 0 || !stobeNegIsPlayerSide($player, $persona)) $persona = $player;
         [$delta, $memory, $repColumn] = match ($status) {
             'COMPLETE' => [4, $player . ' kept their word on our deal (' . $summary . ').', 'player_kept'],
             'BREACHED_PLAYER' => [-15, $player . ' broke our deal and never delivered (' . $summary . ').', 'player_broken'],
@@ -2028,9 +2035,9 @@ function stobeNegApplyConsequences(array $deal, string $player): void {
             $npcData = getNpcData($npc);
             if (is_array($npcData)) {
                 $applied = stobeApplyRelationshipUpdatesMap(stobeGetNpcRelationshipMap($npcData), [[
-                    'target'=>$player, 'aff_delta'=>$delta, 'type'=>'',
+                    'target'=>$persona, 'aff_delta'=>$delta, 'type'=>'',
                     'note'=>$status === 'COMPLETE' ? 'Kept a deal' : 'Broke a deal',
-                ]], [$player]);
+                ]], [$persona]);
                 // The apply helper returns {map, applied, updated}; persist only the map.
                 if (is_array($applied['map'] ?? null) && intval($applied['updated'] ?? 0) > 0) {
                     stobePersistNpcRelationshipMap($npc, $applied['map'], $npcData);
@@ -2041,7 +2048,7 @@ function stobeNegApplyConsequences(array $deal, string $player): void {
             $GLOBALS['db']->exec(
                 "INSERT INTO stobe_negotiation_reputation (player_name, {$repColumn}) VALUES ($1, 1)
                  ON CONFLICT (player_name) DO UPDATE SET {$repColumn}=stobe_negotiation_reputation.{$repColumn}+1, updated_at=NOW()", // item 50: key is lower-case
-                [strtolower($player)] /* item 50 */
+                [strtolower($persona)] /* item 50; Item 100: persona */
             );
         }
         if ($memory !== '') {

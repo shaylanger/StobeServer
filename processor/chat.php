@@ -319,6 +319,15 @@ if (!function_exists('stobeRefreshNpcDataForTraderInventory')) {
 $parts = explode(": ", $eventData, 2);
 $speaker = $parts[0] ?? getSetting('PLAYER_NAME', 'Drifter');
 $playerName = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+// Item 100: the player types as whichever squad member is selected (Beaks, not the PLAYER_NAME persona "shay").
+// For this request "the player" is that character: actions, goals and deals target it, player-only paths run.
+$stobeSpeakerToken = normalizeParticipantNameToken(strval($speaker));
+if ($stobeSpeakerToken !== '' && strcasecmp($stobeSpeakerToken, $playerName) !== 0
+    && in_array(strtolower(strval($eventType ?? '')), ['inputtext', 'inputtext_s'], true)) {
+    stobeLogInfo('Player speaks as a squad character (item 100)', ['speaker' => $stobeSpeakerToken, 'persona' => $playerName]);
+    $playerName = $stobeSpeakerToken;
+}
+$GLOBALS['STOBE_PLAYER_ACTOR'] = $playerName;
 $message = $parts[1] ?? $eventData;
 $message = trim($message);
 $targetExtract = extractDialogueTarget($message);
@@ -1671,7 +1680,7 @@ if (!$narratorMode && function_exists('stobeInferBuyFromAgreedRequest')
 if (!$narratorMode && function_exists('stobeInferFollowFromOrder')
     && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
     $inferredFollow = stobeInferFollowFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
-        trim(strval(getSetting('PLAYER_NAME', ''))));
+        $playerName); // Item 100: the speaking player character
     if ($inferredFollow !== '') {
         $responseActions[] = $inferredFollow;
         stobeLogInfo('Follow inferred from a direct request (bug 87)', ['npc'=>$targetNpc, 'action'=>$inferredFollow]);

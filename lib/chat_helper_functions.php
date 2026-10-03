@@ -15515,6 +15515,26 @@ function stobeReplyAgreesToHandover(string $reply): bool {
  * Item 67: a squad member who agreed in words but sent no GIVE_ITEM at all: the requested
  * items she carries ($squadMember null = npcIsInPlayerFaction).
  */
+/** Item 100: the PLAYER_NAME persona (reputation/relationship history key, Shay's call (a)). */
+function stobePlayerPersonaName(): string {
+    return function_exists('getSetting') ? normalizeParticipantNameToken(strval(getSetting('PLAYER_NAME', 'Drifter'))) : '';
+}
+
+/** Item 100: the player character speaking in this request (chat.php sets it), else the persona. */
+function stobePlayerActorName(): string {
+    $actor = normalizeParticipantNameToken(strval($GLOBALS['STOBE_PLAYER_ACTOR'] ?? ''));
+    return $actor !== '' ? $actor : stobePlayerPersonaName();
+}
+
+/** Item 100: a name that means the player side: the speaking character, the persona, "player", or a squad member. */
+function stobeIsPlayerSideName(string $name, string $playerName): bool {
+    $n = normalizeParticipantNameToken($name);
+    if ($n === '') return false;
+    if (strcasecmp($n, $playerName) === 0 || strtolower($n) === 'player') return true;
+    if (strcasecmp($n, stobePlayerActorName()) === 0 || strcasecmp($n, stobePlayerPersonaName()) === 0) return true;
+    return function_exists('stobeNegIsPlayerSide') && stobeNegIsPlayerSide($n, $playerName);
+}
+
 function stobeInferMissingHandovers(string $playerLine, array|false $npcData, array $actions, string $reply, string $playerName, ?bool $squadMember = null): array {
     if ($playerName === '' || !is_array($npcData) || !function_exists('stobeNegInventoryCounts')
         || !function_exists('stobeNegItemMatchesTerm')) return [];
@@ -15522,7 +15542,7 @@ function stobeInferMissingHandovers(string $playerLine, array|false $npcData, ar
     foreach ($actions as $a) {
         $parts = explode('@', strval($a));
         if (strtoupper(trim($parts[0])) !== 'GIVE_ITEM' || count($parts) < 3) continue;
-        if (strcasecmp(trim($parts[1]), $playerName) !== 0 && strtolower(trim($parts[1])) !== 'player') continue;
+        if (!stobeIsPlayerSideName(trim($parts[1]), $playerName)) continue; // Item 100: any player-side name
         $given[] = strtolower(trim($parts[2]));
     }
     $wanted = stobeParseHandoverRequest($playerLine);
