@@ -913,6 +913,21 @@ check('item 106: STOP_ATTACK by player becomes SPARE by player', ($fixed2[1]['ki
 $fixed3 = stobeDealFixWrongPerformer([['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>50], ['kind'=>'LOAN_ITEM','by'=>'player','to'=>'npc','item'=>'Katana']], 'NegTestBandit');
 check('item 106: an unclear wrong-side term is dropped, the rest stands', count($fixed3) === 1 && ($fixed3[0]['kind'] ?? '') === 'GIVE_CATS', $fixed3);
 
+// ---------------------------------------------------------------- Item 107: a fight with any squad member makes a combat deal
+fixtureNpc('NegTestBeaks107', ['money'=>800, 'money_observed_at'=>time()], '', '', '100/100', 'Nameless');
+fixtureNpc('NegTestRaider107', ['money'=>50, 'money_observed_at'=>time()], '', 'A raider.');
+$raider107 = getNpcData('NegTestRaider107');
+check('item 107: no fight seen -> social', stobeDealKindFor($raider107) === 'social', stobeDealKindFor($raider107));
+$db->exec("INSERT INTO eventlog (type, ts, gamets, data, sess, localts, people, location) VALUES ('combat',$1,1000,$2,'pending',$1,'','')",
+    [time(), 'NegTestRaider107: Initiated attack (talking to: NegTestBeaks107)']);
+check('item 107: raider attacking a non-persona squad member -> combat deal', stobeDealKindFor($raider107) === 'combat', stobeDealKindFor($raider107));
+$db->exec("DELETE FROM eventlog WHERE data LIKE '%NegTestRaider107%'");
+$db->exec("INSERT INTO eventlog (type, ts, gamets, data, sess, localts, people, location) VALUES ('combat',$1,1000,$2,'pending',$1,'','')",
+    [time(), 'NegTestRaider107: Initiated attack (talking to: NegTestTrader)']);
+check('item 107: attacking an outsider is not a fight with the player', stobeDealKindFor($raider107) === 'social', stobeDealKindFor($raider107));
+$db->exec("DELETE FROM eventlog WHERE data LIKE '%NegTestRaider107%'");
+foreach (['NegTestBeaks107', 'NegTestRaider107'] as $n) { $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n]); $db->exec("DELETE FROM core_npc WHERE name=$1", [$n]); }
+
 // ---------------------------------------------------------------- cleanup
 $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");

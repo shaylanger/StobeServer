@@ -233,11 +233,18 @@ function stobeDealNpcFightingPlayer(array|false $npcData): bool {
         $fight = is_array($fights) ? ($fights[strtolower($name)] ?? null) : null;
         if (is_array($fight) && time() - intval($fight['since'] ?? 0) <= 60) return true;
         $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
-        $row = $GLOBALS['db']->fetchOne(
-            "SELECT 1 AS hit FROM eventlog WHERE type='combat' AND localts >= $1 AND LOWER(data) LIKE LOWER($2) LIMIT 1",
-            [time() - 60, $name . ': Initiated attack (talking to: ' . $player . ')%']
+        // Item 107: any player-side target counts (a squad without the persona, e.g. Beaks).
+        $rows = $GLOBALS['db']->fetchAll(
+            "SELECT data FROM eventlog WHERE type='combat' AND localts >= $1 AND LOWER(data) LIKE LOWER($2) ORDER BY localts DESC LIMIT 10",
+            [time() - 60, $name . ': Initiated attack (talking to: %']
         );
-        return is_array($row) && !empty($row['hit']);
+        foreach (is_array($rows) ? $rows : [] as $r) {
+            if (!preg_match('/\(talking to:\s*(.+?)\)/', strval($r['data'] ?? ''), $m)) continue;
+            $target = normalizeParticipantNameToken($m[1]);
+            if (strcasecmp($target, $player) === 0) return true;
+            if (function_exists('stobeNegIsPlayerSide') && stobeNegIsPlayerSide($target, $player)) return true;
+        }
+        return false;
     } catch (Throwable $e) {
         return false;
     }
@@ -290,7 +297,7 @@ function stobeDealPromptBlock(string $npc, array $npcData, string $playerMessage
             ];
         }
     }
-    $kind = $open !== null ? strval($open['kind'] ?? 'combat') : ((stobeNpcIsInCombat($npcData)) ? 'combat' : 'social');
+    $kind = $open !== null ? strval($open['kind'] ?? 'combat') : (stobeDealNpcFightingPlayer($npcData) ? 'combat' : 'social'); // item 107
     $rules = "An offer is not a completed action. Judge it using live context, your motives, prior history and what each side can really provide."
         . " Set deal_decision to ACCEPT, COUNTER, REJECT, PROPOSE (you make the first offer) or NONE."
         . " For ACCEPT, COUNTER or PROPOSE, put a JSON array of concrete obligations in deal_terms. Example: "
