@@ -13048,6 +13048,51 @@ function stobeRelationshipEntryFor(array|false $npcData, string $target): ?array
     return null;
 }
 
+/** Item 78: a name that marks a trader ("Apothecary Abia", "Barman Hobbs"), or stored trader data. */
+function stobeNpcLooksLikeTrader(string $name, array $row = []): bool {
+    $meta = $row['metadata'] ?? [];
+    if (is_string($meta)) $meta = json_decode($meta, true);
+    if (is_array($meta) && (!empty($meta['is_trader']) || !empty($meta['trader_inventory_items']))) return true;
+    return preg_match('/^(?:apothecary|trader|barman|bartender|shopkeeper|merchant|smith|weapon\s?smith|armou?r\s?smith|robotics\s+trader|doctor|bar\s?keeper|innkeeper)\b|\b(?:trader|merchant|shopkeeper|smith)\b/i', trim($name)) === 1;
+}
+
+/**
+ * Item 78: people the player's line names who are known and seen in the last 30 min but are not in
+ * this prompt (out of sight): a short fact block so she can act on the errand. $rows (tests) =
+ * [['name'=>..,'faction'=>..,'metadata'=>..], ...]; else core_npc_master.
+ */
+function stobeNamedPeopleNotInSightBlock(string $message, string $systemPrompt, string $npcName, ?array $rows = null): string {
+    $message = trim($message);
+    if ($message === '' || mb_strlen($message) > 600) return '';
+    if ($rows === null) {
+        try {
+            $rows = $GLOBALS['db']->fetchAll(
+                "SELECT name, faction, metadata FROM core_npc_master
+                  WHERE length(name) >= 5 AND position(lower(name) in lower($1)) > 0
+                    AND updated_at > NOW() - INTERVAL '30 minutes'
+                  ORDER BY length(name) DESC LIMIT 4", [$message]);
+        } catch (Throwable $e) {
+            return '';
+        }
+    }
+    $lines = [];
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        $name = trim(strval($row['name'] ?? ''));
+        if ($name === '' || strcasecmp($name, trim($npcName)) === 0 || stripos($message, $name) === false) continue;
+        // already in her people lists ("- Name (" / "- Name\n" / "- Name - ")
+        if (preg_match('/^- ' . preg_quote($name, '/') . '(?:\s*\(|\s*$|\s+-\s)/mi', $systemPrompt)) continue;
+        $faction = trim(preg_replace('/\s*\[[^\]]*\]\s*$/', '', strval($row['faction'] ?? '')) ?? '');
+        $isTrader = stobeNpcLooksLikeTrader($name, $row);
+        $lines[] = '  <person name="' . stobePromptXmlEscape($name) . '">'
+            . ($isTrader ? 'A trader' : 'Someone') . ($faction !== '' ? ' (' . stobePromptXmlEscape($faction) . ')' : '')
+            . ' who is around but out of your sight right now. You can walk over to them'
+            . ($isTrader ? '; a BuyItems/SellItems goal with them as target finds and walks to them.' : '.')
+            . '</person>';
+    }
+    if (count($lines) === 0) return '';
+    return "<people_named_not_in_sight>\n" . implode("\n", $lines) . "\n</people_named_not_in_sight>";
+}
+
 /**
  * Item 77: the closing tone directive (the very end of the system message) for a known, clearly
  * felt relationship; '' for none or a neutral one (-5..30).

@@ -1199,6 +1199,14 @@ stobeLogInfo('Latency pre-llm stage compact_history', [
     'unix_ms' => intval(round(microtime(true) * 1000)),
 ]);
 
+// Item 78: people the player names who are around but not in her people list.
+if (!$narratorMode && $dialogueMode !== 'cheat' && function_exists('stobeNamedPeopleNotInSightBlock')) {
+    $namedNotInSight = stobeNamedPeopleNotInSightBlock(strval($message ?? ''), $systemPrompt, $targetNpc);
+    if ($namedNotInSight !== '') {
+        $systemPrompt .= "\n\n" . $namedNotInSight;
+        stobeLogInfo('Named people not in sight added to the prompt (item 78)', ['npc'=>$targetNpc, 'block'=>$namedNotInSight]);
+    }
+}
 // Item 77: the relationship sets the tone; its directive closes the system message (after history and memory).
 if (!$narratorMode && $dialogueMode !== 'cheat' && function_exists('stobeRelationshipReplyToneDirective')) {
     $replyToneDirective = stobeRelationshipReplyToneDirective($targetNpc, is_array($npcData) ? $npcData : false, strval($speaker));

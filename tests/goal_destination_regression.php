@@ -87,6 +87,18 @@ check('item 75: MOVE_TO@Apothecary Abia is dropped next to the inferred BUY goal
     stobeDropMovesCoveredByGoal(['MOVE_TO@Apothecary Abia', 'EQUIP_ITEM@Hat'], 'TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@@0') === ['EQUIP_ITEM@Hat']);
 check('item 75: a move elsewhere stays',
     stobeDropMovesCoveredByGoal(['MOVE_TO@Squin'], 'TASK_GOAL@BUY@Apothecary Abia@Kit@1@@0') === ['MOVE_TO@Squin']);
+// 78: a named trader out of sight gets a fact line (run m3, Crafting base)
+$rows78 = [['name'=>'Apothecary Abia', 'faction'=>'Holy Nation Outlaws [42022-rebirth.mod]', 'metadata'=>'{}']];
+$line78 = 'Malzin, go buy a Standard First Aid Kit from Apothecary Abia.';
+$b78 = stobeNamedPeopleNotInSightBlock($line78, "# Nearby\n- Apothecary Death (Male Hive)\n", 'Malzin', $rows78);
+check('item 78: Apothecary Abia (not in the people list) -> trader fact line',
+    str_contains($b78, 'Apothecary Abia') && str_contains($b78, 'A trader (Holy Nation Outlaws)') && str_contains($b78, 'BuyItems'), $b78);
+check('item 78: already in the nearby list -> nothing',
+    stobeNamedPeopleNotInSightBlock($line78, "- Apothecary Abia (Female Greenlander): Action: idle\n", 'Malzin', $rows78) === '');
+check('item 78: a name not in the line -> nothing',
+    stobeNamedPeopleNotInSightBlock('Malzin, how are you?', '', 'Malzin', $rows78) === '');
+check('item 78: a non-trader is "Someone"',
+    str_contains(stobeNamedPeopleNotInSightBlock('Go find Hobbs Smitty.', '', 'Malzin', [['name'=>'Hobbs Smitty','faction'=>'','metadata'=>'{}']]), 'Someone who is around'));
 check('item 73: a non-faction NPC -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, [], $reply73, false) === '');
 
 echo "\n$pass passed, $fail failed\n";
