@@ -11836,6 +11836,21 @@ function stobeCanonicalRelationshipType(string $raw): string {
     return $syn[$t] ?? '';
 }
 
+/** R3: an unnamed template name ("Hungry Bandit") that named NPCs carry in brackets. */
+function stobeIsGenericNpcName(string $name): bool {
+    $name = trim($name);
+    if ($name === '' || str_contains($name, '[')) return false;
+    static $cache = [];
+    $k = strtolower($name);
+    if (array_key_exists($k, $cache)) return $cache[$k];
+    try {
+        $row = $GLOBALS['db']->fetchOne("SELECT 1 AS x FROM core_npc_master WHERE LOWER(name) LIKE $1 LIMIT 1", ['% [' . $k . ']']);
+        return $cache[$k] = is_array($row);
+    } catch (Throwable $e) {
+        return $cache[$k] = false;
+    }
+}
+
 function stobeApplyRelationshipUpdatesMap(array $relationshipMap, array $updates, array $allowedTargets = []): array {
     $allowedLookup = [];
     foreach ($allowedTargets as $name) {
@@ -11861,6 +11876,9 @@ function stobeApplyRelationshipUpdatesMap(array $relationshipMap, array $updates
         $target = normalizeParticipantNameToken($targetRaw);
         if ($target === '') {
             continue;
+        }
+        if (stobeIsGenericNpcName($target)) {
+            continue; // R3: no entries for unnamed template names
         }
         $targetLower = strtolower($target);
         if (count($allowedLookup) > 0 && !isset($allowedLookup[$targetLower])) {

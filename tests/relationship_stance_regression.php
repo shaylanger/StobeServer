@@ -32,5 +32,11 @@ check('R1: ally -> platonic, annoyed -> wary, distrust -> suspicious', stobeCano
 check('R1: unknown type is empty (keeps the old one)', stobeCanonicalRelationshipType('whatever') === '');
 $r1 = stobeApplyRelationshipUpdatesMap(['Shay' => ['aff' => 60, 'type' => 'romantic']], [['target' => 'Shay', 'aff_delta' => 1, 'type' => 'zzz']]);
 check('R1: an unknown type does not wipe "romantic"', ($r1['map']['Shay']['type'] ?? '') === 'romantic', $r1['map']);
+// R3: no entries for generic names
+$GLOBALS['db']->exec("DELETE FROM core_npc_master WHERE name IN ('Rex3 [Rel3 Bandit]')");
+$GLOBALS['db']->exec("INSERT INTO core_npc_master (name) VALUES ('Rex3 [Rel3 Bandit]')");
+$r3 = stobeApplyRelationshipUpdatesMap([], [['target' => 'Rel3 Bandit', 'aff_delta' => -5], ['target' => 'Rex3 [Rel3 Bandit]', 'aff_delta' => -5]]);
+check('R3: "Rel3 Bandit" (generic) skipped, "Rex3 [Rel3 Bandit]" kept', !isset($r3['map']['Rel3 Bandit']) && isset($r3['map']['Rex3 [Rel3 Bandit]']), $r3['map']);
+$GLOBALS['db']->exec("DELETE FROM core_npc_master WHERE name IN ('Rex3 [Rel3 Bandit]')");
 echo "\n$pass passed, $fail failed\n";
 exit($fail > 0 ? 1 : 0);
