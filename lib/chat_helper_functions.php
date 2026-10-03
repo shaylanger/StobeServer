@@ -13048,6 +13048,41 @@ function stobeRelationshipEntryFor(array|false $npcData, string $target): ?array
     return null;
 }
 
+/**
+ * Item 77: the closing tone directive (the very end of the system message) for a known, clearly
+ * felt relationship; '' for none or a neutral one (-5..30).
+ */
+function stobeRelationshipReplyToneDirective(string $npcName, array|false $npcData, string $speaker): string {
+    if (function_exists('getSettingBool') && !getSettingBool('RELATIONSHIP_STANCE', true)) return '';
+    if (trim($speaker) === '' || strcasecmp(trim($speaker), trim($npcName)) === 0) return '';
+    $entry = stobeRelationshipEntryFor($npcData, $speaker);
+    if ($entry === null) return '';
+    $aff = max(-100, min(100, intval($entry['aff'] ?? ($entry['affinity'] ?? 0))));
+    $type = strtolower(trim(strval($entry['type'] ?? '')));
+    [$tier] = stobeRelationshipStanceTier($aff);
+    $romantic = in_array($type, ['romantic', 'lover', 'crush'], true);
+    if ($aff <= -56) {
+        $how = 'Hostile: curt, cold, resentful. No pleasantries and no "and you?"; tell them what you think of them or to leave you alone.';
+    } elseif ($aff <= -6) {
+        $how = 'Guarded: short, unfriendly or suspicious; no small talk, no warmth.';
+    } elseif ($aff <= 30) {
+        return '';
+    } elseif ($romantic && $aff >= 56) {
+        $how = 'Loving: you are in love with them. Open with affection (glad they are here, you missed them or thought of them, a soft word or pet name); tender and personal; ask about them because you care.';
+    } elseif ($aff >= 56) {
+        $how = 'Warm: you are fond of them. Your first words show you are glad to see them (greet them by name, say it is good to see them, a smile in your voice); friendly, personal, a little teasing.';
+    } else {
+        $how = 'Friendly: warm and easygoing, glad to talk to them.';
+    }
+    $who = function_exists('normalizeParticipantNameToken') ? normalizeParticipantNameToken($speaker) : trim($speaker);
+    return "<reply_tone>\n"
+        . '  <feeling>You feel ' . $tier . ($type !== '' && $type !== 'neutral' ? ' (' . stobePromptXmlEscape($type) . ')' : '')
+        . ', ' . $aff . ' of -100..100, about ' . stobePromptXmlEscape($who) . '.</feeling>' . "\n"
+        . '  <how>' . stobePromptXmlEscape($how) . "</how>\n"
+        . '  <rule>Lead with this feeling in your first words, even to a plain greeting. Your wounds, hunger or surroundings come second, at most a short aside; they never set the tone. Rules for fights, orders and deals still apply.</rule>' . "\n"
+        . '</reply_tone>';
+}
+
 /** Chat turn block: how she feels about the person talking to her. */
 function stobeBuildRelationshipStanceBlock(string $npcName, array|false $npcData, string $speaker, bool $sameSquad): string {
     if (function_exists('getSettingBool') && !getSettingBool('RELATIONSHIP_STANCE', true)) return '';

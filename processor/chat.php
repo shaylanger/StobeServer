@@ -1199,6 +1199,13 @@ stobeLogInfo('Latency pre-llm stage compact_history', [
     'unix_ms' => intval(round(microtime(true) * 1000)),
 ]);
 
+// Item 77: the relationship sets the tone; its directive closes the system message (after history and memory).
+if (!$narratorMode && $dialogueMode !== 'cheat' && function_exists('stobeRelationshipReplyToneDirective')) {
+    $replyToneDirective = stobeRelationshipReplyToneDirective($targetNpc, is_array($npcData) ? $npcData : false, strval($speaker));
+    if ($replyToneDirective !== '') {
+        $systemPrompt .= "\n\n" . $replyToneDirective;
+    }
+}
 $stobeMessageAssemblyStageStartedAt = microtime(true);
 $messages = [
     [

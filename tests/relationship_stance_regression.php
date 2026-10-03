@@ -45,6 +45,21 @@ check('item 70: stored maps are cleaned in place (key dropped, ally -> platonic,
 $db70->exec("DELETE FROM core_npc WHERE name='NegTest70 Holder'");
 $db70->exec("DELETE FROM core_npc_master WHERE name='Kip70 [NegTest70 Bowman]'");
 
+// Item 77: the closing tone directive
+$npc77 = static fn(int $aff, string $type) => ['extended_data' => json_encode(['relationships' => ['Shay' => ['aff' => $aff, 'type' => $type]]])];
+$t77h = stobeRelationshipReplyToneDirective('Malzin', $npc77(-80, 'enemy'), 'Shay');
+check('item 77: -80 Hateful -> hostile directive', str_contains($t77h, '<reply_tone>') && str_contains($t77h, 'Hostile') && str_contains($t77h, 'Hateful'), $t77h);
+$t77f = stobeRelationshipReplyToneDirective('Malzin', $npc77(60, 'platonic'), 'Shay');
+check('item 77: 60 Fond -> warm directive', str_contains($t77f, 'Warm') && str_contains($t77f, 'glad to see them'), $t77f);
+$t77r = stobeRelationshipReplyToneDirective('Malzin', $npc77(96, 'romantic'), 'Shay');
+check('item 77: 96 Bonded romantic -> loving directive, feeling first', str_contains($t77r, 'Loving') && str_contains($t77r, 'Lead with this feeling'), $t77r);
+check('item 77: neutral (0) -> no directive', stobeRelationshipReplyToneDirective('Malzin', $npc77(0, 'neutral'), 'Shay') === '');
+check('item 77: no entry -> no directive', stobeRelationshipReplyToneDirective('Malzin', ['extended_data' => '{}'], 'Shay') === '');
+$chat77 = file_get_contents(__DIR__ . '/../processor/chat.php');
+$pos77 = strpos($chat77, 'stobeRelationshipReplyToneDirective(');
+check('item 77: the directive is added after history/memory, right before the messages are assembled',
+    $pos77 !== false && $pos77 > strpos($chat77, 'stobeApplyCompactChatHistory(') && $pos77 < strpos($chat77, '$stobeMessageAssemblyStageStartedAt = microtime(true);'));
+
 // R1: types onto the list
 check('R1: ally -> platonic, annoyed -> wary, distrust -> suspicious', stobeCanonicalRelationshipType('ally') === 'platonic'
     && stobeCanonicalRelationshipType('Annoyed') === 'wary' && stobeCanonicalRelationshipType('distrust') === 'suspicious');
