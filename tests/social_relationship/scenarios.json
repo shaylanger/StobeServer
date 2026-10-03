@@ -450,7 +450,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game as SR11 (m13 pass)",
+   "rel_state": "game-pass (actor vs later owner): m16 p3-03 Rel Vash woke enslaved: enslavement -73 to the owner Rel Grell only; Shay (the KO attacker) only aggression/serious_assault -37; one enslaved fact; unchaining after waking credited nobody (no_liberator). Repeated chaining: offline only",
    "offline_tests": [
     "social_unconscious_regression"
    ],
@@ -601,7 +601,7 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game: second treatment in the same episode not yet observed (p4-01 rerun on auto-home)",
+   "rel_state": "game-pass: m16 p4-01 Rel Ona -> Malzin lifesaving +31 with the second treatment routine_healing 0 (shadow)",
    "offline_tests": [
     "social_care_regression",
     "social_relationship_unit"

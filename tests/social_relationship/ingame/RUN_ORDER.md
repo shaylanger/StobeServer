@@ -98,6 +98,10 @@ Carry events come from the world poller, which skips the player actor (Shay); sq
 | 3 | Deal kept (auto-home, fresh): `tools/automation/scenarios.sh surrender`, accept with the full name (`stobe-say say "<NAME>" "<NAME>, deal."`), pay as the deal says, wait for COMPLETE (`negotiation_admin.php deals 3`) | `--interpret-log 20 --effects 20`: an `agreement` line with component `kept_coercive_deal`, result `shadow`; the legacy +4 still applied (shadow) |
 | 4 | Deal broken by attacking after acceptance (fresh): as 3, then `stobe-auto attack Shay "<NAME>"` before paying | `--interpret-log 20`: `agreement` lines `broken_promise` and `betrayal` for that contract (BREACHED_PLAYER with player_broke_truce) |
 
+Rows 3-4 and SR28 unattended: `bash rel-surrender.sh kept <outdir> hate` (SR28 + row 3: raider renamed Rel Krag,
+`--set-relation "Rel Krag" "Shay" -85` before his low health, deal kept) and `bash rel-surrender.sh breach <outdir>`
+(row 4: Rel Brak, Shay attacks after acceptance). Mode shadow, Capture=1, Kenshi running. Last log line PASS/FAIL.
+
 Theft (SR13/SR14) has no in-game row: the engine "caught" signal is not proven, so native sends `caught: null`
 and REL scores no theft (by design); see DELIVERY.md probe 16.
 
