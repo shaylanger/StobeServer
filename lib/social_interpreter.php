@@ -401,6 +401,12 @@ final class SocialInterpreter
         }
         // Unconscious (or unknown): discovered on waking.
         $ko = $this->activeKo($event, $victim)[0] ?? null;
+        if (!$ko) {
+            // Run m11: the knockout itself was not seen (Rel Vash): keep the enslavement for his waking anyway,
+            // in a KO holder without a remembered attacker or baseline (no theft can be inferred from it).
+            $this->openKo($event, null, $victim);
+            $ko = $this->activeKo($event, $victim)[0] ?? null;
+        }
         if ($ko) {
             $ko['state']['enslaved_by'] = ['owner'=>$owner, 'incident'=>$incident, 'sequence'=>$event['sequence']];
             $this->store->saveIncident($event, $ko['id'], $ko['state']);
