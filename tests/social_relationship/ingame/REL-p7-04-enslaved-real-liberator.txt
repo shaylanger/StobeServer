@@ -18,4 +18,6 @@ speed 2
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator":\{[^}]*"name":"__FREE__"
-protect ${FREE} off
+# m16: freeing her squad mate re-squads the freer too (new handle): look her up again
+@set FREE2 where "__FREE__" ~ (#\d+/\d+)
+protect ${FREE2} off

@@ -7,7 +7,7 @@
 speed 0
 @set SLAVE where "__SLAVE__" ~ (#\d+/\d+)
 @set FREE where "__FREE__" ~ (#\d+/\d+)
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: first seen already enslaved serial=\d+ name=__SLAVE__ 
+# (the "first seen already enslaved ... name=__SLAVE__" line comes before this run starts: rel-enslaved.sh checks it)
 hunger ${SLAVE} 280
 hunger ${FREE} 280
 speed 5

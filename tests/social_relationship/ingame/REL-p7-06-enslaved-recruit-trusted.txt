@@ -13,4 +13,5 @@ speed 1
 @sleep 25
 speed 0
 where ${NS2} ~ .
-protect ${FREE} off
+@set FREE2 where "__FREE__" ~ (#\d+/\d+)
+protect ${FREE2} off

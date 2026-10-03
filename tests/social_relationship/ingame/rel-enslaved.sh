@@ -37,6 +37,12 @@ stobe-auto chars 150 > "$O/chars-after-load.txt" 2>&1
 run REL-p7-03-enslaved-real-load
 stobe-auto chars 150 | tr '|' '\n' | grep -o '#[0-9]*/[0-9]* \[[^]]*\]' | grep -v '\[Nameless\]' | sort -u -t'[' -k2,2 > "$O/camp-factions.txt"
 while read -r h f; do stobe-auto relation "$h" 100 >> "$O/guards.txt" 2>&1; done < "$O/camp-factions.txt"
+# m16: the escape still turned the slavers on the freer (CAPTURE_ESCAPING_SLAVES); knock the Slave Traders near the
+# squad out for the freeing steps (never kill). Other camp factions (Outlaws) can be slaves themselves.
+stobe-auto chars 150 | tr '|' '
+' | grep '\[Slave Traders\]' | grep -v -e ' KO' -e ' DEAD' | grep -o '#[0-9]*/[0-9]*' > "$O/slavers.txt"
+while read -r h; do stobe-auto ko "$h" 300 >> "$O/guards.txt" 2>&1; done < "$O/slavers.txt"
+log "slavers knocked out for 300 s: $(wc -l < "$O/slavers.txt")"
 log "guards: relation 100 for $(wc -l < "$O/camp-factions.txt") camp factions: $(cut -d' ' -f2- "$O/camp-factions.txt" | tr '\n' ' ')"
 run REL-p7-04-enslaved-real-liberator
 if [ -n "$NS" ]; then
