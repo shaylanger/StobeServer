@@ -198,6 +198,8 @@ function stobeGoalNameIsContainer(string $name): bool
  */
 function stobeTaskGoalNormalizeTargetDestination(string $kind, string $target, string $destination): array
 {
+    // Item 79: the target repeated as destination ("BUY@Apothecary Abia@...@Apothecary Abia") is no destination.
+    if (trim($target) !== '' && strcasecmp(trim($target), trim($destination)) === 0) return [$target, ''];
     if (!in_array(strtoupper($kind), ['FETCH','DELIVER'], true)) return [$target, $destination];
     if (trim($target) === '' || trim($destination) === '') return [$target, $destination];
     if (stobeGoalDestinationFallback($target) === 'person' && stobeGoalNameIsContainer($destination)
@@ -224,6 +226,11 @@ function stobeGoalDestinationFallback(string $requested): string
     if ($player !== '' && $req === $player) return 'person';
     if (function_exists('stobeResolveLiveParticipantSerial') && function_exists('normalizeParticipantNameToken')
         && stobeResolveLiveParticipantSerial(normalizeParticipantNameToken($requested), false) > 0) return 'person';
+    try { // item 79: any known NPC (also out of sight) is a person, not a base
+        $known = $GLOBALS['db']->fetchOne("SELECT 1 AS x FROM core_npc_master WHERE LOWER(name)=LOWER($1) LIMIT 1", [trim($requested)]);
+        if (is_array($known)) return 'person';
+    } catch (Throwable $e) {
+    }
     if (preg_match("/^(?:(?:my|our|your|the|shay'?s|player'?s)\s+)?(?:home|base|home\s+base|camp|outpost|town|hq|headquarters|settlement|compound)$/", $req)) return 'home_word';
     try {
         $row = $GLOBALS['db']->fetchOne(

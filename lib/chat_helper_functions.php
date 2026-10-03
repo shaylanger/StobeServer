@@ -15709,8 +15709,8 @@ function streamResponse(
             $taskKind = strtoupper(trim(strval($taskKind)));
             if (function_exists('stobeTaskGoalNormalizeTargetDestination')) { // item 68: person/container swapped
                 [$fixedTarget, $fixedDestination] = stobeTaskGoalNormalizeTargetDestination($taskKind, strval($taskTarget), strval($taskDestination));
-                if ($fixedTarget !== strval($taskTarget)) {
-                    stobeLogInfo('Task goal target/destination swapped (item 68)', ['actor'=>$actor, 'target'=>$fixedTarget, 'destination'=>$fixedDestination]);
+                if ($fixedTarget !== strval($taskTarget) || $fixedDestination !== strval($taskDestination)) {
+                    stobeLogInfo('Task goal target/destination normalized (items 68/79)', ['actor'=>$actor, 'target'=>$fixedTarget, 'destination'=>$fixedDestination]);
                     $taskTarget = $fixedTarget; $taskDestination = $fixedDestination;
                 }
             }

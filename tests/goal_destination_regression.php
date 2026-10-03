@@ -99,6 +99,14 @@ check('item 78: a name not in the line -> nothing',
     stobeNamedPeopleNotInSightBlock('Malzin, how are you?', '', 'Malzin', $rows78) === '');
 check('item 78: a non-trader is "Someone"',
     str_contains(stobeNamedPeopleNotInSightBlock('Go find Hobbs Smitty.', '', 'Malzin', [['name'=>'Hobbs Smitty','faction'=>'','metadata'=>'{}']]), 'Someone who is around'));
+// 79: run m4 TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@Apothecary Abia@5000
+check('item 79: destination equal to the target is dropped (BUY)',
+    stobeTaskGoalNormalizeTargetDestination('BUY', 'Apothecary Abia', 'Apothecary Abia') === ['Apothecary Abia', '']);
+$db->exec("DELETE FROM core_npc_master WHERE name='GdTest Trader79'");
+$db->exec("INSERT INTO core_npc_master (name, metadata, created_at, updated_at) VALUES ('GdTest Trader79', '{}'::jsonb, NOW(), NOW())");
+check('item 79: a known NPC out of sight as destination is a person -> here, no base lookup',
+    stobeGoalDestinationFallback('GdTest Trader79') === 'person' && $here(stobeWorkGoalResolveDestination('GdTest Trader79')));
+$db->exec("DELETE FROM core_npc_master WHERE name='GdTest Trader79'");
 check('item 73: a non-faction NPC -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, [], $reply73, false) === '');
 
 echo "\n$pass passed, $fail failed\n";
