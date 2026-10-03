@@ -786,6 +786,11 @@ function stobeNegBeginPerformance(string $id, array $finalActions, string $playe
             if (($t['by'] ?? '') === 'player' && in_array($t['kind'] ?? '', ['GIVE_CATS','GIVE_ITEM','RETURN_ITEM'], true)) {
                 $state[$idx]['dispatched_unix'] = $now - $lookback;
             }
+            // Item 96: her hand-over went out with the accepting reply and can land before this start.
+            if (($t['by'] ?? '') === 'npc' && ($t['status'] ?? '') === 'DISPATCHED'
+                && in_array($t['kind'] ?? '', ['GIVE_CATS','GIVE_ITEM','RETURN_ITEM'], true)) {
+                $state[$idx]['evidence_since_unix'] = $now - min(30, $lookback);
+            }
         }
         // STOBE's STOP_ATTACK is a faction ceasefire and refuses personal brawls
         // (reason=faction_not_supported); KenshiFP STOP_FIGHT stops this one NPC.
@@ -852,6 +857,7 @@ function stobeNegEvaluateTerm(array $term, array $deal, string $player, int $now
     $kind = strval($term['kind'] ?? '');
     $by = strval($term['by'] ?? '');
     $since = max(0, intval($term['dispatched_unix'] ?? 0) - 3);
+    if (isset($term['evidence_since_unix'])) $since = min($since, max(0, intval($term['evidence_since_unix']) - 3)); // Item 96
     $baseline = stobeNegDecode($deal['baseline'] ?? []);
     $note = static function (array &$t, string $text, array $extra = []) use ($now): void {
         $t['evidence'][] = ['at'=>$now, 'note'=>$text] + $extra;

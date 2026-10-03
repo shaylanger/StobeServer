@@ -186,6 +186,14 @@ for ($attempt = 0; $attempt < 3; $attempt++) {
     stobeNegAttachPendingForChat('NegTestTrader', []);
 }
 check('bug 126: never executed after 2 reissues -> IMPOSSIBLE', status($id) === 'IMPOSSIBLE', [status($id), termStatus($id, 0)]);
+// Item 96 (m16 Rel Krag): she paid with the accepting reply, 4 s before the performance start was recorded.
+file_put_contents($stobeLog, ''); stobeNegResetLogCache();
+$db->exec("DELETE FROM stobe_social_contract WHERE npc_name='NegTestTrader' AND player_name=$1", [$player]);
+$id = makeDeal('NegTestTrader', [['kind'=>'GIVE_CATS','by'=>'npc','to'=>'player','amount'=>33]], 'social');
+stobeLine("ACTION_EXEC: GIVE_CATS actor=NegTestTrader recipient=$player amount=33", time() - 5);
+stobeNegBeginPerformance($id, ['GIVE_CATS@' . $player . '@33'], $player, 1000, '');
+stobeNegTick();
+check('item 96: payment made just before the performance start is verified', status($id) === 'COMPLETE' && termStatus($id, 0) === 'VERIFIED', [status($id), termStatus($id, 0)]);
 
 // ---------------------------------------------------------------- 6c. bug 127: the squad gets 10 s to stop swinging after sparing
 $id = makeDeal('NegTestBandit', [['kind'=>'SPARE','by'=>'player','target'=>'npc']], 'surrender');
