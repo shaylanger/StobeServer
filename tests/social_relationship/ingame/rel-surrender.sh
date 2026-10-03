@@ -21,6 +21,7 @@ log(){ echo "$(date +%T) $*" | tee -a "$LOG"; }
 insp(){ (cd $S && sudo -u www-data php tools/social_relationship_inspect.php "$@"); }
 deals(){ (cd /tmp && sudo -u www-data php $S/tools/negotiation_admin.php deals "${1:-5}" 2>/dev/null); }
 dealline(){ deals 6 | grep -E "^deal-" | grep -F "$deal" | head -1; }
+dealblock(){ deals 6 | awk -v d="$deal" '/^deal-/{on=($1==d)} on'; }
 finish(){ stobe-auto speed 0 >/dev/null
   [ -n "${r:-}" ] && stobe-auto teleport "$r" Shay dist 300 >/dev/null 2>&1
   stobe-auto teleport Malzin Shay dist 6 >/dev/null 2>&1
@@ -99,14 +100,33 @@ done
 log "after accept: $st"
 case "$st" in ACCEPTED|AWAITING_PERFORMANCE|COMPLETE) ;; *) finish "FAIL not_accepted ($st)";; esac
 if [ "$mode" = breach ] && [ "$st" != COMPLETE ]; then
-  stobe-auto attack Shay "$r" >> "$LOG" 2>&1; log "Shay attacks $NAME after acceptance"
+  # m16: an attack 9 s after the accept was undone by Stobe's personal-truce guard (STOP_ATTACK guard_seconds=20,
+  # "PERSONAL_TRUCE: reapplied ... orders_cleared=1"), so Shay never hit him and SPARE was verified after 120 s.
+  # Wait out the guard, put him next to Shay and attack until a hit lands (the engine needs real harm).
+  stobe-say speed 1 >/dev/null; sleep 25
+  hb=$(grep -a -c "" "$L")
+  for i in $(seq 1 12); do
+    stobe-auto teleport "$r" Shay dist 2 >/dev/null; stobe-auto attack Shay "$r" >> "$LOG" 2>&1
+    sleep 4
+    tail -n +"$hb" "$L" | grep -a -E "\[EVENT\] (major_damage|knockout|death): $NAME .*Shay|\[EVENT\] knockout: $NAME" | head -1 | grep -q . && break
+  done
+  log "Shay attacks $NAME after acceptance: $(tail -n +"$hb" "$L" | grep -a -E "\[EVENT\] (combat|major_damage|knockout): .*$NAME|PERSONAL_TRUCE" | head -4 | cut -c1-160 | tr '
+' ';')"
 elif [ "$mode" = breach ]; then
   finish "FAIL deal already COMPLETE before the attack"
 fi
 [ "$mode" = kept ] && stobe-say speed 2 >/dev/null
+nudged=""
 for i in $(seq 1 100); do # final status, max ~300 s
   st=$(dealline | grep -o -E 'COMPLETE|BREACHED_PLAYER|BREACHED_NPC|IMPOSSIBLE|CANCELLED|EXPIRED' | head -1)
   [ -n "$st" ] && break
+  # m16: the payment ran 3.3 s before the server's dispatch time (accept reply streams GIVE_CATS at once; the
+  # verifier looks from dispatched_unix-3), so it was never verified and a reissue waited for him to speak again
+  # (engine bug, reported). Bug 126 sends the reissue when he next speaks: make him speak once.
+  if [ -z "$nudged" ] && dealblock | grep -E "GIVE_CATS|GIVE_ITEM" | grep -q REISSUE_QUEUED; then
+    nudged=1; log "payment REISSUE_QUEUED: Shay asks for it (reissue path)"
+    stobe-say say "$NAME" "$NAME, the cats. Now." --wait 20 >> "$LOG" 2>&1
+  fi
   stobe-auto where Shay | grep -q " KO" && { log "Shay KO"; break; }
   sleep 3
 done
@@ -121,5 +141,6 @@ for c in $want; do
   grep -a "SOCIAL_INTERPRET" $S/log/relationship_worker.log | grep -F "\"kind\":\"agreement\"" | grep -F "$contract" | grep -q -F "\"component\":\"$c\"" || miss="$miss $c"
 done
 exp=COMPLETE; [ "$mode" = breach ] && exp=BREACHED_PLAYER
-if [ "$st" = "$exp" ] && [ -z "$miss" ]; then finish "PASS final=$st components=$want"; fi
+dealblock > "$O/$tag.dealterms.txt"
+if [ "$st" = "$exp" ] && [ -z "$miss" ]; then finish "PASS final=$st components=$want${nudged:+ (payment needed the reissue)}"; fi
 finish "FAIL final=${st:-none} (want $exp) missing:${miss:- none}"
