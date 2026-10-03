@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Record honest per-row REL states in scenarios.json (offline evidence vs in-game need vs blocker).
-Usage: python3 tests/social_relationship/update_states.py  (edits server/tests/social_relationship/scenarios.json in place)"""
+Usage: python3 tests/social_relationship/update_states.py "$(cat tests/social_relationship/states_phase3.json)"  (edits server/tests/social_relationship/scenarios.json in place)"""
 import json, pathlib
 P = pathlib.Path(__file__).with_name('scenarios.json')
 doc = json.loads(P.read_text())

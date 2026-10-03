@@ -305,11 +305,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 3)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_unconscious_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p3-01-ko-loot-inferred"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 6: LOOT_TARGET order moves items (else harness transfer fallback)"
    ]
   },
   {
@@ -342,11 +346,13 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 3)",
-   "offline_tests": [],
+   "rel_state": "offline-pass (evidence adapter); game blocked",
+   "offline_tests": [
+    "social_unconscious_regression"
+   ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "later phase"
+    "no in-game source of better evidence until witnesses/sensing (phase 6)"
    ]
   },
   {
@@ -377,11 +383,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 3)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_unconscious_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p3-02-unknown-ko"
+   ],
    "open_blockers": [
-    "later phase"
+    "own-consumption and restored-item variants are offline only"
    ]
   },
   {
@@ -414,11 +424,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 3)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_unconscious_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p3-03-enslaved-while-ko"
+   ],
    "open_blockers": [
-    "later phase"
+    "probe 7: shackle owner -> getMySlaveOwner attribution"
    ]
   },
   {
@@ -449,11 +463,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 3)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "offline-pass; needs-game",
+   "offline_tests": [
+    "social_unconscious_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p3-03-enslaved-while-ko"
+   ],
    "open_blockers": [
-    "later phase"
+    "actor-vs-later-owner needs two owners in game; chaining actor (setChainedMode owner hand) not captured"
    ]
   },
   {
@@ -733,11 +751,13 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 4)",
-   "offline_tests": [],
+   "rel_state": "partial: offline-pass for squad inventory exemption on waking",
+   "offline_tests": [
+    "social_unconscious_regression"
+   ],
    "ingame_scenarios": [],
    "open_blockers": [
-    "later phase"
+    "carry/equipment controls: phase 4"
    ]
   },
   {
@@ -1015,11 +1035,11 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 7)",
+   "rel_state": "unchanged by REL (surrender trigger has no affinity term; REL does not touch negotiation); needs-game for the -85 case",
    "offline_tests": [],
    "ingame_scenarios": [],
    "open_blockers": [
-    "later phase"
+    "needs a scenario with a stored -85 affinity + low health (scenarios.sh surrender); no REL code involved"
    ]
   },
   {
@@ -1268,16 +1288,17 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (retry dedup, duplicate KO/limb once)",
+   "rel_state": "partial: offline-pass (retry dedup, duplicate KO/limb once, second wake once)",
    "offline_tests": [
     "social_relationship_integration",
-    "social_combat_regression"
+    "social_combat_regression",
+    "social_unconscious_regression"
    ],
    "ingame_scenarios": [
     "REL-p1-03-shadow-capture"
    ],
    "open_blockers": [
-    "out-of-order KO/theft/wake: phase 3"
+    "out-of-order delivery beyond the late-event rule not tested"
    ]
   },
   {
@@ -1345,11 +1366,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 8)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "partial: offline-pass (restart mid-KO, KO carried across reload)",
+   "offline_tests": [
+    "social_unconscious_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p3-04-reload-mid-ko"
+   ],
    "open_blockers": [
-    "later phase"
+    "crash between writes: atomicity covered by the integration test only; carry/escape: later phases"
    ]
   },
   {
@@ -1381,16 +1406,16 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "partial: offline-pass (rollback of effects/evidence/checkpoints)",
+   "rel_state": "partial: offline-pass (rollback before attack, during KO, after loot before wake)",
    "offline_tests": [
-    "social_relationship_integration"
+    "social_relationship_integration",
+    "social_unconscious_regression"
    ],
    "ingame_scenarios": [
-    "REL-p1-04-reload-stale"
+    "REL-p1-04-reload-stale",
+    "REL-p3-04-reload-mid-ko"
    ],
-   "open_blockers": [
-    "during-KO / after-loot rollback: phase 3"
-   ]
+   "open_blockers": []
   },
   {
    "id": "SR39",
@@ -1545,11 +1570,15 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "not-started (phase 6)",
-   "offline_tests": [],
-   "ingame_scenarios": [],
+   "rel_state": "partial: offline-pass (belief/note name only the inferred culprit; objective taker diagnostic only)",
+   "offline_tests": [
+    "social_unconscious_regression"
+   ],
+   "ingame_scenarios": [
+    "REL-p3-01-ko-loot-inferred"
+   ],
    "open_blockers": [
-    "later phase"
+    "prompt integration of beliefs: phase 6"
    ]
   },
   {

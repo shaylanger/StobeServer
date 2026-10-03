@@ -1,0 +1,34 @@
+# id: REL-p3-02-unknown-ko
+# covers: SR10 (KO by an unknown actor: missing items are blamed on nobody)
+# fixture: auto-home
+# reset: fresh
+# needs: as REL-p3-01
+# verify: php tools/social_relationship_inspect.php --pair-effects --incidents 10 --interpret-log 20 --check-shadow --expect-none "<TNAME>" "Malzin" --expect-none "<TNAME>" "Shay"   -> exit 0;
+#   interpret-log shows the recovered event of <TNAME> with status no_known_culprit (the harness ko has no attacker).
+@wait-world
+@sleep 8
+speed 0
+@set MALZIN where Malzin ~ Malzin (#\d+)
+spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+setname ${BANDIT} "Rel Ubo"
+give "Rel Ubo" "Dried Meat" 3 ~ 3/3
+stobe_say "Rel Ubo" "Ubo, hold on a moment."
+speed 1
+@sleep 20
+speed 0
+@set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+ko ${BANDIT} 40
+speed 1
+@sleep 4
+speed 0
+transfer ${BANDIT} Malzin "Dried Meat"
+speed 1
+@sleep 6
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${MALZIN} target=${BANDIT}
+speed 5
+@until 240 where ${BANDIT} ~ dist=[0-9.]+$
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT}
+teleport ${BANDIT} Shay dist 300

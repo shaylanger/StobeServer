@@ -1,0 +1,43 @@
+# id: REL-p3-01-ko-loot-inferred
+# covers: SR08 (no blame while KO; on waking the remembered KO attacker is blamed, never the real taker), SR42 (beliefs/notes name only the inferred culprit)
+# fixture: auto-home
+# reset: fresh
+# needs: Delivery 3 build (rel-native-phase3.patch) + server at the Delivery 3 commit; Capture=1; mode shadow
+# verify: php tools/social_relationship_inspect.php --pair-effects --beliefs 20 --incidents 10 --check-shadow --expect-effect "<TNAME>" "Shay" -85 -30   -> exit 0;
+#   the "<TNAME>" -> "Malzin" pair_effects row, if any, has NO theft|major_theft|all_property_theft component (aggression only if Malzin joined the fight)
+#   pair_effects for <TNAME> -> Shay lists aggression/injury/serious_assault AND one of theft|major_theft|all_property_theft (reason known_outcome, confidence strongly_inferred);
+#   incidents: the "ko" incident of <TNAME> is resolved, remembered = Shay, transfers >= 1 (the taker Malzin appears only there);
+#   beliefs: none names Malzin's entity key. Game probe 6: the loot step moved items (stobe.log "structured kind=item_transfer").
+#   If LOOT_TARGET does nothing, rerun with the fallback line instead: transfer ${BANDIT} Malzin "Dried Meat" (setup path; note it in the report).
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+)
+@set MALZIN where Malzin ~ Malzin (#\d+)
+spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+setname ${BANDIT} "Rel Tam"
+give "Rel Tam" "Dried Meat" 4 ~ 4/4
+stobe_say "Rel Tam" "Tam, isn't it? Stay a moment."
+speed 1
+@sleep 20
+speed 0
+@set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+teleport Malzin Shay dist 400
+attack Shay ${BANDIT}
+speed 1
+@until 90 where ${BANDIT} ~ KO
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY} target=${BANDIT} facts="level":"knockout".*"inventory"
+teleport Malzin ${BANDIT} dist 2
+order Malzin LOOT_TARGET target ${BANDIT}
+speed 1
+@sleep 20
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_transfer seq=\d+ load=\d+ actor=${MALZIN} target=${BANDIT}
+inv ${BANDIT}
+speed 5
+@until 240 where ${BANDIT} ~ dist=[0-9.]+$
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT}
+teleport ${BANDIT} Shay dist 300

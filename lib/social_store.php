@@ -10,7 +10,7 @@ final class SocialStore
     private function query(string $sql, array $params = []): mixed
     {
         $result = $this->db->exec($sql, $params);
-        if ($result === false) throw new RuntimeException('Social database operation failed');
+        if ($result === false) throw new RuntimeException('Social database operation failed' . (method_exists($this->db, 'GetLastError') ? ': ' . substr($this->db->GetLastError(), 0, 300) : ''));
         return $result;
     }
     private function row(string $sql, array $params = []): ?array
@@ -83,9 +83,11 @@ final class SocialStore
         $params = [$event['campaign_id'],$event['timeline_epoch'],$incident ?? $event['incident_id']];
         $snapshot = [];
         foreach (['social_incident','social_belief'] as $table) {
-            $snapshot[$table] = pg_fetch_all($this->query("SELECT * FROM $table WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND incident_id=\$3", $params)) ?: [];
+            // to_jsonb keeps jsonb columns as objects (a plain SELECT * would snapshot them as strings and the
+            // rollback would restore them as JSON strings).
+            $snapshot[$table] = array_map(static fn($r) => json_decode($r['row'], true), pg_fetch_all($this->query("SELECT to_jsonb(t) AS row FROM $table t WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND incident_id=\$3", $params)) ?: []);
         }
-        $snapshot['social_evidence'] = pg_fetch_all($this->query("SELECT e.* FROM social_evidence e JOIN social_belief b ON e.campaign_id=b.campaign_id AND e.timeline_epoch=b.timeline_epoch AND e.observer_key=b.observer_key AND e.culprit_key=b.belief->>'responsible_entity' WHERE b.campaign_id=\$1 AND b.timeline_epoch=\$2 AND b.incident_id=\$3",$params)) ?: [];
+        $snapshot['social_evidence'] = array_map(static fn($r) => json_decode($r['row'], true), pg_fetch_all($this->query("SELECT to_jsonb(e) AS row FROM social_evidence e JOIN social_belief b ON e.campaign_id=b.campaign_id AND e.timeline_epoch=b.timeline_epoch AND e.observer_key=b.observer_key AND e.culprit_key=b.belief->>'responsible_entity' WHERE b.campaign_id=\$1 AND b.timeline_epoch=\$2 AND b.incident_id=\$3",$params)) ?: []);
         $this->query('INSERT INTO social_checkpoint(campaign_id,timeline_epoch,incident_id,event_id,game_ts,sequence,snapshot) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT(campaign_id,timeline_epoch,event_id) DO UPDATE SET snapshot=EXCLUDED.snapshot',
             array_merge(array_slice($params,0,2),[$params[2],$event['event_id'] . '#' . $params[2],$event['game_ts'],$event['sequence'],self::json($snapshot)]));
     }
@@ -172,9 +174,16 @@ final class SocialStore
     public function fetchRows(string $sql, array $params = []): array { return pg_fetch_all($this->query($sql, $params)) ?: []; }
     public function saveIncident(array $event, string $incident, array $state): void
     {
+        // json_decode(assoc) turns {} into []; keep the pending map an object so jsonb paths work.
+        if (array_key_exists('pending', $state) && $state['pending'] === []) $state['pending'] = (object)[];
         $this->query('INSERT INTO social_incident(campaign_id,timeline_epoch,incident_id,state,game_ts,last_sequence) VALUES($1,$2,$3,$4::jsonb,$5,$6) ON CONFLICT(campaign_id,timeline_epoch,incident_id) DO UPDATE SET state=EXCLUDED.state,game_ts=EXCLUDED.game_ts,last_sequence=EXCLUDED.last_sequence',
             [$event['campaign_id'],$event['timeline_epoch'],$incident,self::json($state),$event['game_ts'],$event['sequence']]);
         $this->checkpoint($event, $incident);
+    }
+    /** A KO incident carried into a newer load is closed in its old load (no double resolution). */
+    public function retireIncident(string $campaign, string $epoch, string $incident): void
+    {
+        $this->query("UPDATE social_incident SET state=jsonb_set(state,'{phase}','\"carried_over\"'::jsonb) WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND incident_id=\$3", [$campaign, $epoch, $incident]);
     }
     public function rollback(int $cutoff): array
     {

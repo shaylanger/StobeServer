@@ -1,0 +1,43 @@
+# id: REL-p3-04-reload-mid-ko
+# covers: SR37/SR38 (save while KO, loot, reload: the loot is undone with the save, the KO is carried into the new load and resolved once, no theft)
+# fixture: auto-home
+# reset: fresh
+# needs: as REL-p3-01; saves only to kah-rel-ko (delete it after the batch)
+# verify: php tools/social_relationship_inspect.php --incidents 10 --pair-effects --check-shadow --interpret-log 20:
+#   the ko incident of <TNAME> is "resolved" in the NEW load id and "carried_over" in the old one (if the old row survived the rollback; if the
+#   rollback pruned it, a new KO incident is not needed: the recovered event must then report "recorded");
+#   no theft/major_theft/all_property_theft row for <TNAME> (the reload put the items back). --expect-none "<TNAME>" "Malzin" -> pass.
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+)
+spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+setname ${BANDIT} "Rel Wex"
+give "Rel Wex" "Dried Meat" 4 ~ 4/4
+stobe_say "Rel Wex" "Wex, a word."
+speed 1
+@sleep 20
+speed 0
+@set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+teleport Malzin Shay dist 400
+attack Shay ${BANDIT}
+speed 1
+@until 90 where ${BANDIT} ~ KO
+speed 0
+ko ${BANDIT} 120
+save kah-rel-ko
+transfer ${BANDIT} Shay "Dried Meat"
+speed 1
+@sleep 5
+speed 0
+load kah-rel-ko
+@wait-world
+@sleep 8
+speed 0
+@set BANDIT2 where "${TNAME}" ~ (#\d+)
+speed 5
+@until 300 where ${BANDIT2} ~ dist=[0-9.]+$
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT2}
+teleport ${BANDIT2} Shay dist 300

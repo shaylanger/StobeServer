@@ -1,0 +1,128 @@
+{
+ "SR08": [
+  "offline-pass; needs-game",
+  [
+   "social_unconscious_regression"
+  ],
+  [
+   "REL-p3-01-ko-loot-inferred"
+  ],
+  [
+   "probe 6: LOOT_TARGET order moves items (else harness transfer fallback)"
+  ]
+ ],
+ "SR09": [
+  "offline-pass (evidence adapter); game blocked",
+  [
+   "social_unconscious_regression"
+  ],
+  [],
+  [
+   "no in-game source of better evidence until witnesses/sensing (phase 6)"
+  ]
+ ],
+ "SR10": [
+  "offline-pass; needs-game",
+  [
+   "social_unconscious_regression"
+  ],
+  [
+   "REL-p3-02-unknown-ko"
+  ],
+  [
+   "own-consumption and restored-item variants are offline only"
+  ]
+ ],
+ "SR11": [
+  "offline-pass; needs-game",
+  [
+   "social_unconscious_regression"
+  ],
+  [
+   "REL-p3-03-enslaved-while-ko"
+  ],
+  [
+   "probe 7: shackle owner -> getMySlaveOwner attribution"
+  ]
+ ],
+ "SR12": [
+  "offline-pass; needs-game",
+  [
+   "social_unconscious_regression"
+  ],
+  [
+   "REL-p3-03-enslaved-while-ko"
+  ],
+  [
+   "actor-vs-later-owner needs two owners in game; chaining actor (setChainedMode owner hand) not captured"
+  ]
+ ],
+ "SR20": [
+  "partial: offline-pass for squad inventory exemption on waking",
+  [
+   "social_unconscious_regression"
+  ],
+  [],
+  [
+   "carry/equipment controls: phase 4"
+  ]
+ ],
+ "SR37": [
+  "partial: offline-pass (restart mid-KO, KO carried across reload)",
+  [
+   "social_unconscious_regression"
+  ],
+  [
+   "REL-p3-04-reload-mid-ko"
+  ],
+  [
+   "crash between writes: atomicity covered by the integration test only; carry/escape: later phases"
+  ]
+ ],
+ "SR38": [
+  "partial: offline-pass (rollback before attack, during KO, after loot before wake)",
+  [
+   "social_relationship_integration",
+   "social_unconscious_regression"
+  ],
+  [
+   "REL-p1-04-reload-stale",
+   "REL-p3-04-reload-mid-ko"
+  ],
+  []
+ ],
+ "SR42": [
+  "partial: offline-pass (belief/note name only the inferred culprit; objective taker diagnostic only)",
+  [
+   "social_unconscious_regression"
+  ],
+  [
+   "REL-p3-01-ko-loot-inferred"
+  ],
+  [
+   "prompt integration of beliefs: phase 6"
+  ]
+ ],
+ "SR35": [
+  "partial: offline-pass (retry dedup, duplicate KO/limb once, second wake once)",
+  [
+   "social_relationship_integration",
+   "social_combat_regression",
+   "social_unconscious_regression"
+  ],
+  [
+   "REL-p1-03-shadow-capture"
+  ],
+  [
+   "out-of-order delivery beyond the late-event rule not tested"
+  ]
+ ],
+ "SR28": [
+  "unchanged by REL (surrender trigger has no affinity term; REL does not touch negotiation); needs-game for the -85 case",
+  [],
+  [],
+  [
+   "needs a scenario with a stored -85 affinity + low health (scenarios.sh surrender); no REL code involved"
+  ]
+ ]
+}

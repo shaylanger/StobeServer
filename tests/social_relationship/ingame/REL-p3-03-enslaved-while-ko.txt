@@ -1,0 +1,46 @@
+# id: REL-p3-03-enslaved-while-ko
+# covers: SR11 (enslaved while unconscious: latent; on waking the owner is charged <= -56; the KO attacker only harm), SR12 (repeated chaining once)
+# fixture: auto-home
+# reset: fresh
+# needs: as REL-p3-01
+# verify: php tools/social_relationship_inspect.php --pair-effects --incidents 10 --check-shadow --expect-effect "<TNAME>" "<SNAME>" -90 -56 --expect-effect "<TNAME>" "Shay" -40 -8   -> exit 0
+#   (shadow: would_be values; the enslavement row's would_be_affinity is <= -56); pair_effects shows NO enslavement row for <TNAME> -> Shay.
+#   Game probe 7: shackle ... owner <npc> gives getMySlaveOwner() = that npc (stobe.log "structured kind=enslaved ... actor=<SLAVER>").
+#   If the enslaved line has actor=#0, the owner is unknown to the game: SR11 stays blocked on owner attribution (report it).
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+)
+spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
+@set BANDIT chars 60 ~ Hungry Bandit (#\d+)
+setname ${BANDIT} "Rel Vash"
+spawn "Hungry Bandit" Drifters near Shay dist 40 count 1 ~ spawned 1/1
+@set SLAVER chars 60 ~ Hungry Bandit (#\d+)
+setname ${SLAVER} "Rel Grell"
+stobe_say "Rel Vash" "Vash, a word."
+speed 1
+@sleep 15
+speed 0
+stobe_say "Rel Grell" "Grell, a word."
+speed 1
+@sleep 15
+speed 0
+@set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+@set SNAME where ${SLAVER} ~ ^(.+?) #\d+
+teleport Malzin Shay dist 400
+attack Shay ${BANDIT}
+speed 1
+@until 90 where ${BANDIT} ~ KO
+speed 0
+shackle ${BANDIT} owner ${SLAVER}
+speed 1
+@sleep 6
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=enslaved seq=\d+ load=\d+ actor=${SLAVER} target=${BANDIT}
+speed 5
+@until 240 where ${BANDIT} ~ dist=[0-9.]+$
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${BANDIT}
+unshackle ${BANDIT}
+teleport ${BANDIT} Shay dist 300
+teleport ${SLAVER} Shay dist 300

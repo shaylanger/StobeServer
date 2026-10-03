@@ -31,6 +31,9 @@ final class SocialInterpreter
             'attack' => $this->attack($event, $mode),
             'harm' => $this->harm($event, $mode),
             'recovered' => $this->recovered($event, $mode),
+            'item_transfer' => $this->itemTransfer($event),
+            'enslaved' => $this->enslaved($event, $mode),
+            'freed' => $this->freed($event),
             default => [['status'=>'recorded']],
         };
     }
@@ -144,7 +147,12 @@ final class SocialInterpreter
     {
         $b = $event['target']; $a = $event['actor']; $level = strval($event['facts']['level'] ?? '');
         if (!$b) return [['status'=>'incomplete_roles']];
+        if ($level === 'knockout') $this->openKo($event, $a, $b);
         if ($level === 'death') {
+            foreach ($this->activeKo($event, $b, true) as $ko) {
+                $ko['state']['phase'] = 'dead'; // a dead victim never wakes to latent penalties
+                $this->store->saveIncident($event, $ko['id'], $ko['state']);
+            }
             // The dead hold no grudges; witnesses are a later phase. Close every open encounter of the victim.
             foreach ($this->store->fetchRows("SELECT incident_id,state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='combat' AND state->>'phase'='active' AND state->'parties' ? \$3",
                 [$event['campaign_id'], $event['timeline_epoch'], $b['entity_key']]) as $row) {
@@ -181,9 +189,172 @@ final class SocialInterpreter
         return [['status'=>'defence', 'basis'=>'harm_by_defender', 'incident'=>$open['id']]];
     }
 
-    // ---------- phase 3 entry point (filled in by the unconscious-perception phase) ----------
+    // ---------- phase 3: unconscious perception ----------
+    /**
+     * Knockout opens a per-victim incident: the remembered attacker (only if an encounter with them was
+     * observed or the game says they defeated the victim), the inventory baseline, and later objective
+     * facts (who took what, who enslaved). Objective facts stay diagnostic; on waking the victim infers.
+     */
+    private function openKo(array $event, ?array $a, array $b): void
+    {
+        if ($this->activeKo($event, $b)) return; // duplicate KO poll/hook: keep the first baseline
+        $remembered = null; $encounter = null;
+        if ($a && $a['entity_key'] !== $b['entity_key']) {
+            $open = $this->openPair($event, $a['entity_key'], $b['entity_key']);
+            if ($open || ($event['facts']['attribution'] ?? '') === 'defeated_by') {
+                $remembered = $a; $encounter = $open['id'] ?? null;
+            }
+        }
+        $incident = 'ko:' . $event['sequence'] . ':' . substr(hash('sha256', $b['entity_key']), 0, 16);
+        $this->store->saveIncident($event, $incident, ['kind'=>'ko', 'phase'=>'pending_awareness', 'victim'=>$b,
+            'remembered'=>$remembered, 'encounter'=>$encounter, 'baseline'=>$event['facts']['inventory'] ?? null,
+            'baseline_total'=>$event['facts']['inventory_total'] ?? null, 'money'=>$event['facts']['money'] ?? null,
+            'opened_ts'=>$event['game_ts'], 'objective'=>['transfers'=>[]], 'enslaved_by'=>null, 'known_thief'=>null]);
+    }
+
+    /** Latest unresolved KO incident of this victim in the campaign (a reload may carry it into a new load). */
+    private function activeKo(array $event, array $victim, bool $all = false): array
+    {
+        $rows = $this->store->fetchRows("SELECT timeline_epoch,incident_id,state FROM social_incident WHERE campaign_id=\$1 AND state->>'kind'='ko' AND state->>'phase'='pending_awareness'
+              AND (state->'victim'->>'entity_key'=\$2 OR (timeline_epoch<>\$3 AND state->'victim'->>'serial'=\$4 AND lower(state->'victim'->>'name')=lower(\$5)))
+              AND game_ts<=\$6 ORDER BY game_ts DESC, last_sequence DESC" . ($all ? '' : ' LIMIT 1'),
+            [$event['campaign_id'], $victim['entity_key'], $event['timeline_epoch'], strval($victim['serial']), strval($victim['name']), $event['game_ts']]);
+        $out = [];
+        foreach ($rows as $row) {
+            $state = json_decode($row['state'], true);
+            if ($row['timeline_epoch'] !== $event['timeline_epoch']) $state['carried_from_load'] = $row['timeline_epoch'];
+            $out[] = ['id'=>$row['incident_id'], 'state'=>$state];
+        }
+        return $out;
+    }
+
+    private function itemTransfer(array $event): array
+    {
+        $loser = $event['target']; $taker = $event['actor'];
+        if (!$loser) return [['status'=>'incomplete_roles']];
+        $ko = $this->activeKo($event, $loser)[0] ?? null;
+        if (!$ko || ($loser['conscious'] ?? null) === true) return [['status'=>'recorded', 'note'=>'conscious transfers are scored by the property phase']];
+        $ko['state']['objective']['transfers'][] = ['taker'=>$taker, 'to_ground'=>($event['facts']['to_ground'] ?? false) === true,
+            'items'=>$event['facts']['items'] ?? [], 'game_ts'=>$event['game_ts'], 'sequence'=>$event['sequence']];
+        $ko['state']['objective']['transfers'] = array_slice($ko['state']['objective']['transfers'], -64);
+        $this->store->saveIncident($event, $ko['id'], $ko['state']);
+        return [['status'=>'latent_property', 'incident'=>$ko['id']]];
+    }
+
+    private function enslaved(array $event, string $mode): array
+    {
+        $victim = $event['target']; $owner = $event['actor'];
+        if (!$victim) return [['status'=>'incomplete_roles']];
+        if (!$owner || $owner['entity_key'] === $victim['entity_key']) return [['status'=>'unknown_owner', 'note'=>'no invented enslaver']];
+        $incident = 'slave:' . substr(hash('sha256', $victim['entity_key'] . '|' . $owner['entity_key']), 0, 24);
+        $this->store->saveIncident($event, $incident, ['kind'=>'slavery', 'phase'=>'active', 'victim'=>$victim, 'owner'=>$owner, 'opened_ts'=>$event['game_ts']]);
+        if (($victim['conscious'] ?? null) === true) {
+            return [$this->effect($event, $mode, $victim, $owner, 'enslavement',
+                ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>'Enslaved by ' . $owner['name'], 'kind'=>'enslavement'],
+                $incident, ['cap_max'=>-56])];
+        }
+        // Unconscious (or unknown): discovered on waking.
+        $ko = $this->activeKo($event, $victim)[0] ?? null;
+        if ($ko) {
+            $ko['state']['enslaved_by'] = ['owner'=>$owner, 'incident'=>$incident, 'sequence'=>$event['sequence']];
+            $this->store->saveIncident($event, $ko['id'], $ko['state']);
+        }
+        return [['status'=>'latent_enslavement', 'incident'=>$ko['id'] ?? $incident]];
+    }
+
+    private function freed(array $event): array
+    {
+        $victim = $event['target'];
+        if (!$victim) return [['status'=>'incomplete_roles']];
+        foreach ($this->activeKo($event, $victim, true) as $ko) {
+            if (!$ko['state']['enslaved_by']) continue;
+            $ko['state']['enslaved_by'] = null; // freed before waking: never learned
+            $this->store->saveIncident($event, $ko['id'], $ko['state']);
+        }
+        return [['status'=>'recorded', 'note'=>'liberation credit is the recruitment/escape phase']];
+    }
+
     private function recovered(array $event, string $mode): array
     {
-        return [['status'=>'recorded']];
+        $b = $event['target'];
+        if (!$b) return [['status'=>'incomplete_roles']];
+        $observer = ['conscious'=>true] + $b;
+        $observer['conscious'] = true;
+        $results = [];
+        $ko = $this->activeKo($event, $b)[0] ?? null;
+        $remembered = $ko['state']['remembered'] ?? null;
+        $knownThief = $ko['state']['known_thief'] ?? null;
+        $believedThief = $knownThief ?? $remembered;
+        if ($ko) {
+            // 1) Missing belongings: only items that objectively left while unconscious (used-up items are
+            //    not theft), bounded by what is really missing now. The thief the victim blames is the known
+            //    one (better evidence) or the remembered attacker; the objective taker is never revealed.
+            $baseline = is_array($ko['state']['baseline'] ?? null) ? $ko['state']['baseline'] : [];
+            $current = is_array($event['facts']['inventory'] ?? null) ? $event['facts']['inventory'] : null;
+            $moved = []; $takers = [];
+            foreach ($ko['state']['objective']['transfers'] ?? [] as $t) {
+                foreach ($t['items'] ?? [] as $key => $qty) $moved[$key] = ($moved[$key] ?? 0) + (int)$qty;
+                $takers[] = $t['taker'];
+            }
+            $missing = 0;
+            if ($current !== null) {
+                foreach ($moved as $key => $qty) $missing += max(0, min($qty, (int)($baseline[$key] ?? $qty) - (int)($current[$key] ?? 0)));
+            }
+            $squadOnly = ($b['in_player_faction'] ?? null) === true && $takers
+                && !array_filter($takers, fn($t) => !$t || ($t['in_player_faction'] ?? null) !== true);
+            $total = max(1, (int)($ko['state']['baseline_total'] ?? array_sum(array_map('intval', $baseline))));
+            if ($missing > 0 && $squadOnly) {
+                $results[] = ['status'=>'squad_inventory', 'note'=>'routine squad inventory management'];
+            } elseif ($missing > 0 && !$believedThief) {
+                $results[] = ['status'=>'no_known_culprit', 'note'=>'missing belongings, unknown attacker'];
+            } elseif ($missing > 0) {
+                $share = $missing / $total;
+                $component = $share >= 0.8 ? 'all_property_theft' : ($share >= 0.4 ? 'major_theft' : 'theft');
+                $results[] = $this->effect($event, $mode, $observer, $believedThief, $component,
+                    ['awareness'=>'inferred', 'confidence'=>$knownThief ? 'certain' : 'strongly_inferred', 'conscious'=>true,
+                     'note'=>'Woke with belongings missing' . ($knownThief ? '' : ' (blames ' . $believedThief['name'] . ')'), 'kind'=>'theft'],
+                    $ko['id']);
+            }
+            // 2) Enslaved while unconscious: discovered now, charged to the owner who holds the chains.
+            if (!empty($ko['state']['enslaved_by'])) {
+                $owner = $ko['state']['enslaved_by']['owner'];
+                $results[] = $this->effect($event, $mode, $observer, $owner, 'enslavement',
+                    ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>'Woke enslaved by ' . $owner['name'], 'kind'=>'enslavement'],
+                    $ko['state']['enslaved_by']['incident'], ['cap_max'=>-56]);
+            }
+        }
+        // 3) Harm suffered while unconscious: inferred to the remembered attacker only, inside that encounter's budget.
+        $pendingRows = $this->store->fetchRows("SELECT incident_id,state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='combat' AND state->'pending' ? \$3",
+            [$event['campaign_id'], $event['timeline_epoch'], $b['entity_key']]);
+        foreach ($pendingRows as $row) {
+            $state = json_decode($row['state'], true);
+            foreach ($state['pending'][$b['entity_key']] ?? [] as $fact) {
+                if (!$remembered) { $results[] = ['status'=>'no_known_culprit', 'component'=>$fact['component'] ?? null]; continue; }
+                $same = ($fact['culprit']['entity_key'] ?? '') === $remembered['entity_key'];
+                $results[] = $this->effect($event, $mode, $observer, $remembered, $fact['component'],
+                    ['awareness'=>'inferred', 'confidence'=>$same ? 'certain' : 'strongly_inferred', 'conscious'=>true,
+                     'note'=>'Woke hurt (blames ' . $remembered['name'] . ')', 'kind'=>'harm'],
+                    $same ? $row['incident_id'] : ($ko['state']['encounter'] ?? $row['incident_id']), ['escalation_group'=>self::HARM_GROUP]);
+            }
+            unset($state['pending'][$b['entity_key']]);
+            if (!$state['pending']) $state['pending'] = (object)[];
+            $this->store->saveIncident($event, $row['incident_id'], $state);
+        }
+        if ($ko) {
+            $ko['state']['phase'] = 'resolved'; $ko['state']['resolved_ts'] = $event['game_ts'];
+            $this->store->saveIncident($event, $ko['id'], $ko['state']);
+            if (isset($ko['state']['carried_from_load'])) $this->store->retireIncident($event['campaign_id'], $ko['state']['carried_from_load'], $ko['id']);
+        }
+        return $results ?: [['status'=>'recorded']];
+    }
+
+    /** Internal adapter: verified better evidence (e.g. a witnessed theft, phase 6) names the thief of a KO incident. */
+    public function recordKnownThief(array $event, array $victim, array $thief): bool
+    {
+        $ko = $this->activeKo($event, $victim)[0] ?? null;
+        if (!$ko) return false;
+        $ko['state']['known_thief'] = $thief;
+        $this->store->saveIncident($event, $ko['id'], $ko['state']);
+        return true;
     }
 }

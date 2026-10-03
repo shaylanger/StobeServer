@@ -14,6 +14,8 @@
  *   php tools/social_relationship_inspect.php --expect-effect "Observer" "Culprit" -40 -8   exit 1 unless that summed delta (current load) is in range
  *   php tools/social_relationship_inspect.php --expect-none "Observer" "Culprit"   exit 1 if any non-zero effect exists for that pair (current load)
  *   php tools/social_relationship_inspect.php --relation "Observer" "Target"   the stored affinity (relationship map) of observer toward target
+ *   php tools/social_relationship_inspect.php --beliefs 20         what observers believe (believed culprit only), current campaign
+ *   php tools/social_relationship_inspect.php --incidents 20       combat/ko/slavery incidents (phase, remembered attacker, transfers, enslaver)
  *   php tools/social_relationship_inspect.php --interpret-log 30    last 30 SOCIAL_INTERPRET lines from log/relationship_worker.log
  *   php tools/social_relationship_inspect.php --set-mode off|shadow|enabled   prints the previous mode (restore with it)
  *   php tools/social_relationship_inspect.php --purge-all --yes            empties the six social tables (test data only)
@@ -144,6 +146,19 @@ if (($i = array_search('--expect-none', $args, true)) !== false) {
 if (($i = array_search('--relation', $args, true)) !== false) {
     $npc = getNpcData(strval($args[$i+1] ?? ''));
     $out['relation'] = ['observer'=>$args[$i+1] ?? '', 'target'=>$args[$i+2] ?? '', 'entry'=>$npc ? stobeRelationshipEntryFor($npc, strval($args[$i+2] ?? '')) : 'observer not found'];
+}
+if (($n = $opt('--beliefs')) !== null) {
+    // What each observer believes (the prompt-visible side); objective culprits never appear here.
+    $out['beliefs'] = $q("SELECT b.incident_id, b.observer_key, b.belief->>'responsible_entity' AS believed, b.belief->>'kind' AS kind,
+            b.belief->>'awareness' AS awareness, b.belief->>'confidence' AS confidence, b.belief->>'note' AS note, b.game_ts
+        FROM social_belief b WHERE b.campaign_id=\$1 ORDER BY b.game_ts DESC LIMIT " . max(1, min(500, intval($n))), [$current[0]]);
+}
+if (($n = $opt('--incidents')) !== null) {
+    $out['incidents'] = $q("SELECT timeline_epoch, incident_id, state->>'kind' AS kind, state->>'phase' AS phase,
+            COALESCE(state->'victim'->>'name', state->>'pair') AS subject, state->'remembered'->>'name' AS remembered,
+            state->>'initiator' AS initiator, state->>'basis' AS basis, jsonb_array_length(COALESCE(state->'objective'->'transfers','[]'::jsonb)) AS transfers,
+            state->'enslaved_by'->'owner'->>'name' AS enslaved_by, game_ts
+        FROM social_incident WHERE campaign_id=\$1 ORDER BY game_ts DESC LIMIT " . max(1, min(500, intval($n))), [$current[0]]);
 }
 if (($n = $opt('--interpret-log')) !== null) {
     $file = dirname(__DIR__) . '/log/relationship_worker.log';

@@ -54,6 +54,16 @@ a profile; `@set TNAME`/`ANAME`/`BNAME` print the final names for the checks.
 | 5 | `REL-p2-05-enabled-affinity.txt` (fresh, kah-* copy) | `--set-mode enabled` | `--relation "<TNAME>" "Malzin"` aff in [-40,-8]; `--relation "Malzin" "<TNAME>"` none/0 (R4 off); then `--set-mode off` and reload the fixture |
 | end | - | `--set-mode off`, `--purge-all --yes`, Capture=0 | - |
 
+## Phase 3 unconscious perception (Delivery 3 build; one launch with Capture=1, mode shadow)
+
+| Order | File | Check after (live tree) |
+|---|---|---|
+| 1 | `REL-p3-01-ko-loot-inferred.txt` (fresh) | `--pair-effects --beliefs 20 --incidents 10 --check-shadow --expect-effect "<TNAME>" "Shay" -85 -30`; `<TNAME>` -> Malzin has no theft-class component |
+| 2 | `REL-p3-02-unknown-ko.txt` (fresh) | `--pair-effects --incidents 10 --interpret-log 20 --check-shadow --expect-none "<TNAME>" "Malzin" --expect-none "<TNAME>" "Shay"` |
+| 3 | `REL-p3-03-enslaved-while-ko.txt` (fresh) | `--pair-effects --incidents 10 --check-shadow --expect-effect "<TNAME>" "<SNAME>" -90 -56 --expect-effect "<TNAME>" "Shay" -40 -8` |
+| 4 | `REL-p3-04-reload-mid-ko.txt` (fresh; saves `kah-rel-ko`) | `--incidents 10 --pair-effects --check-shadow --interpret-log 20 --expect-none "<TNAME>" "Malzin"`; no theft row for `<TNAME>`; delete the `kah-rel-ko` save afterwards |
+| end | - | `--set-mode off`, `--purge-all --yes`, Capture=0 |
+
 When a check fails, add `--interpret-log 40 --events 60` to the report: each structured event logs its
 interpretation (`SOCIAL_INTERPRET` in `log/relationship_worker.log`) with statuses such as
 `unresolved_identity`, `no_encounter`, `defence`, `pending_awareness`, `duplicate`.
