@@ -15,9 +15,9 @@ speed 0
 @set MALZIN where Malzin ~ Malzin (#\d+/\d+)
 @set MALZIN_S where ${MALZIN} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
-@set K chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set K chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 @set K_S where ${K} ~ (#\d+)/\d+
-setname ${K} "Rel Kade"
+setname ${K} "Rel Kade" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 stobe_say "Rel Kade" "Kade, stop there."
 speed 1
 @sleep 20
@@ -44,8 +44,8 @@ speed 5
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${K_S}
 spawn "Hungry Bandit" Drifters near Shay dist 15 count 1 ~ spawned 1/1
-@set U chars 60 ~ Hungry Bandit (#\d+/\d+)
-setname ${U} "Rel Ulf"
+@set U chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
+setname ${U} "Rel Ulf" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 @set UNAME where ${U} ~ ^(.+?) #\d+
 cage ${U}
 speed 1

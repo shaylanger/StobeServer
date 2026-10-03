@@ -12,11 +12,11 @@ speed 0
 @set SHAY where Shay ~ Shay (#\d+/\d+)
 # run m4/m5: Shay's inventory is full, the plate goes where the inventory scan does not look; a fresh NPC gives instead
 spawn "Hungry Bandit" Drifters near Shay dist 8 count 1 ~ spawned 1/1
-@set DONOR chars 40 ~ Hungry Bandit (#\d+/\d+)
+@set DONOR chars 40 ~ Hungry Bandit\]? (#\d+/\d+)
 @set DONOR_S where ${DONOR} ~ (#\d+)/\d+
 # run m11: Malzin attacked the test Drifters; make their faction friendly to the squad
 relation ${DONOR} 60
-setname ${DONOR} "Rel Dona"
+setname ${DONOR} "Rel Dona" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 give "Rel Dona" "Iron Plates" 1 ~ got 1/1
 # run m8: the donor was never talked to, so the world sweep never looked at her inventory (her loss unseen)
 stobe_say "Rel Dona" "Dona, wait here."
@@ -24,9 +24,9 @@ speed 1
 @sleep 10
 speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
-@set G chars 40 ~ Hungry Bandit (#\d+/\d+)
+@set G chars 40 ~ Hungry Bandit\]? (#\d+/\d+)
 @set G_S where ${G} ~ (#\d+)/\d+
-setname ${G} "Rel Gav"
+setname ${G} "Rel Gav" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 stobe_say "Rel Gav" "Gav, I have something for you."
 speed 1
 @sleep 20

@@ -14,9 +14,9 @@ speed 0
 @set MALZIN where Malzin ~ Malzin (#\d+/\d+)
 @set MALZIN_S where ${MALZIN} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1
-@set P chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set P chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 @set P_S where ${P} ~ (#\d+)/\d+
-setname ${P} "Rel Ona"
+setname ${P} "Rel Ona" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 stobe_say "Rel Ona" "Ona, are you hurt?"
 speed 1
 @sleep 20

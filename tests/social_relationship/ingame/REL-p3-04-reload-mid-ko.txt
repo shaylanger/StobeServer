@@ -12,8 +12,8 @@
 speed 0
 @set SHAY where Shay ~ Shay (#\d+/\d+)
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
-setname ${BANDIT} "Rel Wex"
+@set BANDIT chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
+setname ${BANDIT} "Rel Wex" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 give "Rel Wex" "Iron Plates" 2 ~ got 2/2
 stobe_say "Rel Wex" "Wex, a word."
 speed 1

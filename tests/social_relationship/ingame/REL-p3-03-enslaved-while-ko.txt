@@ -12,13 +12,13 @@
 speed 0
 @set SHAY where Shay ~ Shay (#\d+/\d+)
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 @set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
-setname ${BANDIT} "Rel Vash"
+setname ${BANDIT} "Rel Vash" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 spawn "Hungry Bandit" Drifters near Shay dist 40 count 1 ~ spawned 1/1
-@set SLAVER chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set SLAVER chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 @set SLAVER_S where ${SLAVER} ~ (#\d+)/\d+
-setname ${SLAVER} "Rel Grell"
+setname ${SLAVER} "Rel Grell" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 stobe_say "Rel Vash" "Vash, a word."
 speed 1
 @sleep 15

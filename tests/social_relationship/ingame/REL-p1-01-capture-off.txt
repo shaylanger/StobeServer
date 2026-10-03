@@ -10,7 +10,7 @@ speed 0
 stobe_ping ~ speaker=Shay
 @set SHAY where Shay ~ Shay (#\d+/\d+)
 spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 attack Shay ${BANDIT}
 speed 1
 @sleep 10

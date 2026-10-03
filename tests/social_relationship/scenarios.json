@@ -259,11 +259,11 @@
    "timeout_seconds": 120,
    "cleanup": "restore_paired_fixture",
    "on_lost_ack": "archive_and_reset_paired_fixture; never blindly repeat mutation",
-   "rel_state": "offline-pass; game blocked",
+   "rel_state": "offline-pass; game: REL-p3-05 (m16) severs the arm of an attacker in the fight with harness damage (protect on Shay); was blocked on a real limb loss",
    "offline_tests": [
     "social_combat_regression"
    ],
-   "ingame_scenarios": [],
+   "ingame_scenarios": ["REL-p3-05-defensive-limb-loss"],
    "open_blockers": [
     "needs a real limb loss caused in a fight (harness damage/kill have no attacker); probabilistic in game"
    ]

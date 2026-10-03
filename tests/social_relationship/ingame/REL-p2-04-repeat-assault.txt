@@ -10,6 +10,8 @@
 #   report the two time lines (game probe 4: game minutes per real second at speed 10, to calibrate encounter_idle_seconds=600).
 @set BANDIT where "Rel Vorn" ~ (#\d+/\d+)
 @set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 time ~ game_hours=
 teleport ${BANDIT} Shay dist 15
 health ${BANDIT} 100
@@ -19,11 +21,13 @@ speed 10
 @wait-game 15 600
 speed 0
 time ~ game_hours=
-teleport ${BANDIT} Shay dist 15
+# run m16: in m8 he came back hostile from 15 m and struck first (his encounter). Now, while paused: put him 2 m from
+# Shay and give her attack order first, so the new encounter's first strike is hers.
+teleport ${BANDIT} Shay dist 2
 attack Shay ${BANDIT}
 speed 1
 @sleep 8
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=#\d+ target=${BANDIT_S}
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY_S} target=${BANDIT_S} witnesses=\d+ facts="victim_targeting_actor":false
 ko ${BANDIT} 30
 teleport ${BANDIT} Shay dist 300

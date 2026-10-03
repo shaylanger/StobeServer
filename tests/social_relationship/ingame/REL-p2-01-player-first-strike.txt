@@ -14,9 +14,9 @@ stobe_ping ~ speaker=Shay
 @set SHAY where Shay ~ Shay (#\d+/\d+)
 @set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 @set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
-setname ${BANDIT} "Rel Vorn"
+setname ${BANDIT} "Rel Vorn" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 stobe_say "Rel Vorn" "Hello there. Who are you?"
 speed 1
 @sleep 20

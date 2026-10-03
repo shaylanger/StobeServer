@@ -8,7 +8,7 @@
 #   (the reload's playthrough rollback prunes social rows later than the fixture's game time). Optional: grep "SOCIAL_INGRESS rejected" log/stobeserver.log (0 or more, all scope_or_replay_conflict).
 @set SAVE status ~ save=(\S+)
 spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
-@set BANDIT chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 attack Shay ${BANDIT}
 speed 3
 @sleep 3
@@ -20,7 +20,7 @@ stobe_ping ~ speaker=Shay
 @set SHAY2 where Shay ~ Shay (#\d+/\d+)
 @set SHAY2_S where ${SHAY2} ~ (#\d+)/\d+
 spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
-@set BANDIT2 chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set BANDIT2 chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 @set BANDIT2_S where ${BANDIT2} ~ (#\d+)/\d+
 attack Shay ${BANDIT2}
 speed 1

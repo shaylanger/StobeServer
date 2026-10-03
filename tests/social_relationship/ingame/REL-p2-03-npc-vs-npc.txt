@@ -9,13 +9,13 @@
 @sleep 8
 speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
-@set A chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set A chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 @set A_S where ${A} ~ (#\d+)/\d+
-setname ${A} "Rel Arn"
+setname ${A} "Rel Arn" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 spawn "Hungry Bandit" Drifters near Shay dist 25 count 1 ~ spawned 1/1
-@set B chars 60 ~ Hungry Bandit (#\d+/\d+)
+@set B chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
 @set B_S where ${B} ~ (#\d+)/\d+
-setname ${B} "Rel Bek"
+setname ${B} "Rel Bek" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 faction ${B} "Traders Guild"
 @set B chars 60 ~ Rel Bek (#\d+/\d+)
 @set B_S where ${B} ~ (#\d+)/\d+
