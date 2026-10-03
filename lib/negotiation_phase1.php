@@ -1299,6 +1299,8 @@ function stobeTakeOffOrderGuard(array $actions, string $playerMessage, string $r
  */
 function stobeFalseGearClaim(string $sentence, array|false $npcData, string $playerMessage = ''): string {
     if (!is_array($npcData) || !function_exists('stobeNegInventoryDisplayNames')) return '';
+    $empty = function_exists('stobeFalseEmptyClaim') ? stobeFalseEmptyClaim($sentence, $npcData, $playerMessage) : '';
+    if ($empty !== '') return $empty; // item 69
     $s = strtolower($sentence);
     $spans = [];
     if (preg_match_all("/\b(?:you(?:'ve| have)?\s+(?:got|taken|took|have|own|kept|keep)\s+(?:both\s+|all\s+)?(?:of\s+)?my|(?:gave|given|handed|passed)\s+(?:you|over)\s+(?:both\s+|all\s+)?my|you\s+(?:hold|holding)\s+my)\s+([a-z' -]{2,80})/", $s, $m)) {
@@ -1326,6 +1328,53 @@ function stobeFalseGearClaim(string $sentence, array|false $npcData, string $pla
                 || ($isWeapon && preg_match('/\b(weapon|blade|sword)s?\b/', $asked));
             if ($askedFor) continue;
             return $display;
+        }
+    }
+    return '';
+}
+
+/**
+ * Item 69: a sentence saying she has none / nothing left / already handed over all of an item the
+ * player's line asks for, while her inventory holds it: that item's display name, or ''.
+ * A denial naming no requested item ("nothing left in my pack but dry bread") counts for them all.
+ * Hits are remembered for this request (item 67 treats them as agreeing to hand it over).
+ */
+function stobeFalseEmptyClaim(string $sentence, array|false $npcData, string $playerMessage = ''): string {
+    if (!is_array($npcData) || trim($playerMessage) === '' || !function_exists('stobeParseHandoverRequest')
+        || !function_exists('stobeNegInventoryCounts') || !function_exists('stobeNegItemMatchesTerm')) return '';
+    $s = strtolower(str_replace(["\u{2019}", "\u{2018}"], "'", $sentence));
+    if (!preg_match("/\b(?:nothing\s+(?:left|more)|none\s+left|no\s+more|(?:all|clean)\s+out\s+of|(?:i'?m|i\s+am)\s+out\s+of|all\s+gone|(?:don'?t|do\s+not)\s+have\s+any|(?:haven'?t|have\s+not)\s+got\s+any|not\s+carrying\s+any|ran\s+out|already\s+(?:handed|gave|given|passed)\s+(?:you\s+|it\s+|them\s+)?(?:all|every|everything|the\s+last))/", $s)) return '';
+    $wanted = stobeParseHandoverRequest($playerMessage);
+    if (count($wanted) === 0) return '';
+    $counts = stobeNegInventoryCounts(strval($npcData['inventory'] ?? ''));
+    $display = function_exists('stobeItemListDisplayNames') ? stobeItemListDisplayNames(strval($npcData['inventory'] ?? '')) : [];
+    $held = [];
+    $namedAny = false;
+    foreach ($wanted as $w) {
+        $part = $w['part'];
+        $head = strval(array_slice(preg_split('/\s+/', rtrim($part, 's')) ?: [''], -1)[0]);
+        $named = $head !== '' && strlen($head) >= 3 && preg_match('/\b' . preg_quote($head, '/') . '/', $s) === 1;
+        if ($named) $namedAny = true;
+        foreach ($counts as $name => $qty) {
+            if ($qty < 1) continue;
+            if (stobeNegItemMatchesTerm($name, $part) || stobeNegItemMatchesTerm($name, rtrim($part, 's'))) {
+                $held[] = ['name'=>$display[$name] ?? ucwords($name), 'named'=>$named];
+                break;
+            }
+        }
+    }
+    if (!$namedAny) {
+        // About another item she names ("No more bread."), unless it's the exception ("nothing left but bread").
+        foreach (array_keys($counts) as $name) {
+            $oh = strval(array_slice(preg_split('/\s+/', strval($name)) ?: [''], -1)[0]);
+            if (strlen($oh) < 3 || !preg_match('/\b' . preg_quote($oh, '/') . '/', $s)) continue;
+            if (!preg_match('/\b(?:but|except|besides|other\s+than|apart\s+from)\s+(?:[a-z\'-]+\s+){0,3}' . preg_quote($oh, '/') . '/', $s)) return '';
+        }
+    }
+    foreach ($held as $h) {
+        if ($h['named'] || !$namedAny) {
+            $GLOBALS['STOBE_FALSE_EMPTY_CLAIM_ITEMS'][] = $h['name'];
+            return $h['name'];
         }
     }
     return '';

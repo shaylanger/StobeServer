@@ -15126,7 +15126,7 @@ function stobeParseHandoverRequest(string $playerLine): array {
     if (!preg_match("/\b(?:give|hand|pass|toss|throw|bring)\s+(?:me|over)\s+(.+?)(?:[.?!;]|$)/", $m, $mm)) return [];
     $out = [];
     foreach (preg_split('/\s*(?:,\s*and\s+|,\s*|\s+and\s+|\s*&\s*)/', $mm[1]) ?: [] as $raw) {
-        $p = trim(preg_replace("/\b(please|now|too|as well|then)\b/", '', $raw) ?? $raw);
+        $p = trim(preg_replace("/\b(please|now|too|as well|then|again|for me)\b/", '', $raw) ?? $raw); // item 69: "again"
         $qty = 1;
         if (preg_match('/^(?:all|every|each)\b(?:\s+of)?/', $p)) $qty = null;
         elseif (preg_match('/^both\b(?:\s+of)?/', $p)) $qty = 2;
@@ -15176,7 +15176,12 @@ function stobeInferMissingHandovers(string $playerLine, array|false $npcData, ar
     if (count($given) === 0) {
         // Item 67: only a squad member who clearly agreed; others go through deals/gifts.
         if ($squadMember === null) $squadMember = function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData);
-        if (!$squadMember || count($wanted) < 1 || !stobeReplyAgreesToHandover($reply)) return [];
+        // Item 69: "nothing left" while she carries it (sentence dropped) = she meant to hand it over.
+        $falseEmpty = !empty($GLOBALS['STOBE_FALSE_EMPTY_CLAIM_ITEMS']);
+        foreach (preg_split('/(?<=[.!?])\s+/', trim($reply)) ?: [] as $replySentence) {
+            if (!$falseEmpty && function_exists('stobeFalseEmptyClaim') && stobeFalseEmptyClaim($replySentence, $npcData, $playerLine) !== '') $falseEmpty = true;
+        }
+        if (!$squadMember || count($wanted) < 1 || (!$falseEmpty && !stobeReplyAgreesToHandover($reply))) return [];
     } elseif (count($wanted) < 2) {
         return [];
     }
@@ -15201,6 +15206,7 @@ function stobeInferMissingHandovers(string $playerLine, array|false $npcData, ar
         $head = strval(array_slice(preg_split('/\s+/', rtrim($part, 's')) ?: [''], -1)[0]);
         $refused = false;
         foreach ($sentences as $sentence) {
+            if (function_exists('stobeFalseEmptyClaim') && stobeFalseEmptyClaim($sentence, $npcData, $playerLine) !== '') continue; // item 69
             if ($head !== '' && str_contains($sentence, $head)
                 && preg_match("/\b(no|not|won'?t|stays|keep|keeping|mine|never|can'?t)\b/", $sentence)) { $refused = true; break; }
         }

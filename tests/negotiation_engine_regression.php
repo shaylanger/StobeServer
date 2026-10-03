@@ -495,6 +495,23 @@ check('item 67: a non-faction NPC agreeing in words -> nothing added (deal/gift 
 check('item 67: something she does not carry -> nothing added',
     stobeInferMissingHandovers('Give me your katana.', $npc43, [], 'Here you go.', 'Shay', true) === []);
 
+// ---------------------------------------------------------------- 12h3c. item 69: "nothing left" while she carries it
+$npc69 = ['inventory'=>'Dried Meat x5 value 40, Bread x1 value 10', 'equipment'=>''];
+$line69 = 'Malzin, give me all your dried meat again.';
+$reply69 = "I already handed you all five strips, remember? There's nothing left in my pack but dry bread.";
+$fix69 = stobeDropFalseGearClaims($reply69, $npc69, $line69);
+check('item 69: the run m1 denial sentences are dropped', count($fix69['dropped']) === 2, $fix69);
+check('item 69: "no dried meat left" while she has 5 is false', stobeFalseEmptyClaim('No more dried meat, sorry.', $npc69, $line69) === 'Dried Meat');
+check('item 69: a denial about something not asked for is fine', stobeFalseEmptyClaim('No more bread.', $npc69, $line69) === '');
+check('item 69: true when she really has none', stobeFalseEmptyClaim("There's nothing left.", ['inventory'=>'Bread x1 value 10'], $line69) === '');
+check('item 69: no check without a hand-over request', stobeFalseEmptyClaim("There's nothing left.", $npc69, 'How are you?') === '');
+unset($GLOBALS['STOBE_FALSE_EMPTY_CLAIM_ITEMS']);
+check('item 69: for a squad member the false denial still hands the items over (item 67 path)',
+    stobeInferMissingHandovers($line69, $npc69, [], $reply69, 'Shay', true) === ['GIVE_ITEM@Shay@Dried Meat@5'],
+    stobeInferMissingHandovers($line69, $npc69, [], $reply69, 'Shay', true));
+check('item 69: a non-faction NPC: nothing added', stobeInferMissingHandovers($line69, $npc69, [], $reply69, 'Shay', false) === []);
+unset($GLOBALS['STOBE_FALSE_EMPTY_CLAIM_ITEMS']);
+
 // ---------------------------------------------------------------- 12h4. item 48: knocked out or dead NPCs don't negotiate
 $koEvent = static function (string $type, string $data, string $people, int $at) use ($db): void {
     $db->exec("INSERT INTO eventlog (type, ts, gamets, data, sess, localts, people, location) VALUES ($1,$2,1000,$3,'pending',$2,$4,'')",
