@@ -15101,6 +15101,43 @@ function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, a
     return 'WORK_GOAL@' . $item . '@' . $qty;
 }
 
+/** Item 73: her reply takes the job on ("I'll go dig it out", "on it", "right") and refuses nothing. */
+function stobeReplyAgreesToErrand(string $reply): bool {
+    $agree = false;
+    foreach (preg_split('/(?<=[.!?])\s+/', strtolower(trim(str_replace(["\u{2019}", "\u{2018}"], "'", $reply)))) ?: [] as $sentence) {
+        $sentence = trim($sentence);
+        if ($sentence === '') continue;
+        if (preg_match("/\b(no|nope|won'?t|will\s+not|can'?t|cannot|not\s+going|refuse|get\s+it\s+yourself|do\s+it\s+yourself|later|busy)\b/", $sentence)) return false;
+        if (str_ends_with($sentence, '?')) continue;
+        if (preg_match("/\b(i'?ll|i\s+will|let\s+me|i'?m\s+on\s+it|on\s+it|on\s+my\s+way|right\s+away|will\s+do|got\s+it|sure|fine|right|alright|all\s+right|okay|ok|be\s+right\s+back|going\s+(?:now|to\s+get|to\s+fetch))\b/", $sentence)) $agree = true;
+    }
+    return $agree;
+}
+
+/**
+ * Item 73: "fetch/get/bring (me) [N] X from (the) <container>" to a squad member who agreed in
+ * words but sent no goal action -> TASK_GOAL@FETCH@<Container>@<item>@<N>@@0 ('' destination =
+ * she brings it to the walk-back target). Only when the source is a container name.
+ */
+function stobeInferFetchFromAgreedRequest(string $playerLine, array|false $npcData, array $actions, string $reply, ?bool $squadMember = null): string {
+    if (!is_array($npcData)) return '';
+    if ($squadMember === null) $squadMember = function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData);
+    if (!$squadMember) return '';
+    foreach ($actions as $a) {
+        if (preg_match('/^(TASK_GOAL|WORK_GOAL|TASK_CONTROL|GIVE_ITEM|LOOT_TARGET|TAKE_ITEM)@/i', trim(strval($a)))) return '';
+    }
+    $line = trim(function_exists('stobeNegWordsToNumbers') ? stobeNegWordsToNumbers($playerLine) : $playerLine);
+    if ($line === '' || preg_match("/\b(don'?t|do\s+not|never|stop|cancel)\b/i", $line)) return '';
+    if (!preg_match("/\b(?:fetch|get|grab|bring|fetch\s+me|get\s+me|bring\s+me|grab\s+me)\s+(?:me\s+)?(?:(\d{1,4})\s+)?(?:(?:the|some|a|an|all\s+the|all|my|our)\s+)?([a-z][a-z' -]{1,40}?)\s+(?:from|out\s+of)\s+(?:the\s+|our\s+|my\s+)?([a-z][a-z' -]{2,60}?)(?=\s*(?:\band\b|[,.!?;]|$))/i", $line, $m)) return '';
+    $item = trim(preg_replace('/\s+/', ' ', $m[2]) ?? '');
+    $container = ucwords(strtolower(trim(preg_replace('/\s+/', ' ', $m[3]) ?? '')));
+    if ($item === '' || preg_match('/^(it|them|that|this|those|these|something|stuff)$/i', $item)) return '';
+    if (!function_exists('stobeGoalNameIsContainer') || !stobeGoalNameIsContainer($container)) return '';
+    if (!stobeReplyAgreesToErrand($reply)) return '';
+    $qty = ($m[1] ?? '') !== '' ? max(1, min(1000, intval($m[1]))) : 1;
+    return 'TASK_GOAL@FETCH@' . $container . '@' . $item . '@' . $qty . '@@0';
+}
+
 /**
  * Bug 87: "follow me" / "guard me" to a squad member answered without a
  * movement action -> BODYGUARD@<player>.

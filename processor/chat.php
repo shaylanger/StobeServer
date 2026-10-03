@@ -1623,6 +1623,15 @@ if (!$narratorMode && function_exists('stobeInferWorkGoalFromOrder')
         stobeLogInfo('Work goal inferred from a direct order (bug 76)', ['npc'=>$targetNpc, 'action'=>$inferredGoal]);
     }
 }
+if (!$narratorMode && function_exists('stobeInferFetchFromAgreedRequest')
+    && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+    $inferredFetch = stobeInferFetchFromAgreedRequest(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
+        strval($responseText ?? ''));
+    if ($inferredFetch !== '') {
+        $responseActions[] = $inferredFetch;
+        stobeLogInfo('Agreed fetch without action: TASK_GOAL added (item 73)', ['npc'=>$targetNpc, 'action'=>$inferredFetch]);
+    }
+}
 if (!$narratorMode && function_exists('stobeInferFollowFromOrder')
     && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
     $inferredFollow = stobeInferFollowFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
