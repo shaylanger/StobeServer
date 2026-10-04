@@ -9597,6 +9597,8 @@ function stobeBuildNearbyActorsPromptBlock(array $npcData, string $speakerName =
     $speakerFactionIdentity = getNpcFactionIdentityFromProfile($npcData);
     $seen = [];
     $seenFactionLabels = [];
+    // C30 (bug 38): squad label per line; "squadmate" only when the listener is in the player's squad too.
+    $speakerInPlayerSquad = npcIsInPlayerFaction($npcData);
     $animalGroups = [];
     $orderedEntries = [];
     $lines = [
@@ -9694,6 +9696,9 @@ function stobeBuildNearbyActorsPromptBlock(array $npcData, string $speakerName =
                 $detailParts[] = 'Faction: ' . $formattedFaction;
                 $seenFactionLabels[$factionKey] = true;
             }
+        }
+        if (nearbyEntryIsInPlayerFaction($entry)) {
+            array_unshift($detailParts, $speakerInPlayerSquad ? 'squadmate' : "player's squad");
         }
         $bountyText = stobeBuildNearbyEntryBountyText($entry);
         if ($bountyText !== '') {
