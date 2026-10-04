@@ -68,27 +68,39 @@ function stobePlaythroughShouldSkipSparseNpcRestore(array $currentRow, array $hi
         && stobePlaythroughNpcSnapshotIsSparse($historyRow);
 }
 
+// Item 110: own key. 937463 is the memory-summary / auto-diary lock, held during LLM calls.
 function stobePlaythroughRollbackLockKey(): int
 {
-    return 937463;
+    return 937464;
 }
 
-function stobePlaythroughAcquireRollbackLock(): bool
+/** How long a request waits for another request's rollback before it skips its own (ms). */
+function stobePlaythroughRollbackLockWaitMs(): int
+{
+    return max(0, min(60000, getSettingInt('PLAYTHROUGH_ROLLBACK_LOCK_WAIT_MS', 15000)));
+}
+
+function stobePlaythroughAcquireRollbackLock(int $waitMs = 0): bool
 {
     $db = $GLOBALS['db'] ?? null;
     if (!$db) {
         return false;
     }
 
-    $row = $db->fetchOne(
-        'SELECT pg_try_advisory_lock($1) AS locked',
-        [stobePlaythroughRollbackLockKey()]
-    );
-    if (!$row) {
-        return false;
+    $deadline = microtime(true) + max(0, $waitMs) / 1000.0;
+    while (true) {
+        $row = $db->fetchOne(
+            'SELECT pg_try_advisory_lock($1) AS locked',
+            [stobePlaythroughRollbackLockKey()]
+        );
+        if ($row && stobePlaythroughToBool($row['locked'] ?? false)) {
+            return true;
+        }
+        if (!$row || microtime(true) >= $deadline) {
+            return false;
+        }
+        usleep(100000);
     }
-
-    return stobePlaythroughToBool($row['locked'] ?? false);
 }
 
 function stobePlaythroughReleaseRollbackLock(): void
@@ -1730,12 +1742,28 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
         return ['triggered' => false, 'reason' => 'late_event_not_rollback'];
     }
 
-    $lockAcquired = stobePlaythroughAcquireRollbackLock();
+    // Item 110: never roll back unlocked. The load sends several authoritative requests at
+    // once; one rolls back, the others wait and then see the new clock (forward_or_same_after_lock).
+    $lockWaitStarted = microtime(true);
+    $lockAcquired = stobePlaythroughAcquireRollbackLock(stobePlaythroughRollbackLockWaitMs());
+    $lockWaitedMs = intval(round((microtime(true) - $lockWaitStarted) * 1000));
     if (!$lockAcquired) {
-        stobeLogWarn('PLAYTHROUGH: rollback lock busy, continuing without lock', [
+        stobeLogWarn('PLAYTHROUGH: rollback lock busy, rollback skipped', [
             'incoming_gamets' => $incoming,
             'last_seen_gamets' => $lastSeen,
             'event_type' => $event,
+            'waited_ms' => $lockWaitedMs,
+        ]);
+        if (!empty($GLOBALS['pgr_operation']) && function_exists('pgr_fail')) {
+            pgr_fail('Another request held the rollback lock.');
+        }
+        return ['triggered' => false, 'reason' => 'rollback_lock_busy'];
+    }
+    if ($lockWaitedMs >= 200) {
+        stobeLogInfo('PLAYTHROUGH: waited for rollback lock', [
+            'incoming_gamets' => $incoming,
+            'event_type' => $event,
+            'waited_ms' => $lockWaitedMs,
         ]);
     }
 
