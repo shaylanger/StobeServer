@@ -15726,6 +15726,38 @@ function stobePlayerOrderGate(string $actor, array|false $npcData, string $norma
     return "Why would I do that for you? Make it worth my while first.";
 }
 
+/**
+ * C49: the live name of a participant that was just renamed from $name ("<new> [<name>]"), or '' when $name itself is
+ * live or the match is not unique.
+ */
+function stobeResolveLiveRenamedTarget(string $name): string {
+    $safeName = normalizeParticipantNameToken($name);
+    if ($safeName === '' || strpos($safeName, '[') !== false) {
+        return '';
+    }
+    $peopleRaw = strval($GLOBALS['CACHE_PEOPLE'] ?? ($_GET['people'] ?? ($_POST['people'] ?? '')));
+    if ($peopleRaw === '') {
+        return '';
+    }
+    $found = [];
+    foreach (extractParticipantIdentities(['people' => $peopleRaw]) as $identity) {
+        if (!is_array($identity)) {
+            continue;
+        }
+        $live = normalizeParticipantNameToken(strval($identity['name'] ?? ''));
+        if ($live === '' || stobeParseLiveStorageSerial(strval($identity['storage_id'] ?? '')) <= 0) {
+            continue;
+        }
+        if (strcasecmp($live, $safeName) === 0) {
+            return '';
+        }
+        if (preg_match('/\[\s*(.+?)\s*\]$/', $live, $m) && strcasecmp(trim($m[1]), $safeName) === 0) {
+            $found[strtolower($live)] = $live;
+        }
+    }
+    return count($found) === 1 ? reset($found) : '';
+}
+
 function stobeResolveLiveParticipantSerial(string $name, bool $allowStoredFallback = false): int {
     $safeName = normalizeParticipantNameToken($name);
     if ($safeName === '') {

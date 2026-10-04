@@ -694,6 +694,15 @@ if ($narratorMode) {
     $npcData = stobeBuildNarratorNpcData();
     $targetNpc = $narratorName;
 } else {
+    // C49: the NPC was auto-named ("Zeth 2 [Dust Bandit Bowman]") as the player addressed his old name.
+    $renamedLiveTarget = function_exists('stobeResolveLiveRenamedTarget') ? stobeResolveLiveRenamedTarget($targetNpc) : '';
+    if ($renamedLiveTarget !== '') {
+        stobeLogInfo('Chat target remapped to live renamed participant', [
+            'requested_target_npc' => $targetNpc,
+            'resolved_target_npc' => $renamedLiveTarget,
+        ]);
+        $targetNpc = $renamedLiveTarget;
+    }
     // Bug 117: the live serial keeps a generic name from mapping to another load's NPC.
     $targetLiveSerial = function_exists('stobeResolveLiveParticipantSerial') ? stobeResolveLiveParticipantSerial($targetNpc) : 0;
     $npcData = getNpcData($targetNpc, $targetLiveSerial);
