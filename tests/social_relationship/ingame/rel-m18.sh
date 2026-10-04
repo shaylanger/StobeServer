@@ -9,8 +9,14 @@ S=/var/www/html/StobeServer
 L=/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe.log
 SL=$S/log/stobeserver.log
 mkdir -p "$O"
+# M22_F7_READY: stobe_ready / stobe_log_lines (bounded poll for the Stobe NPC event sweep after a load)
+source /mnt/c/KenshiModding/tests/ingame/stobe/stobe-ready.sh || { echo "VERDICT rel-m18: SETUP FAIL no stobe-ready.sh"; exit 4; }
 insp(){ (cd $S && sudo -u www-data php tools/social_relationship_inspect.php "$@"); }
-fresh(){ stobe-auto load auto-home >/dev/null; sleep 12; stobe-auto wait-world 240 >/dev/null; sleep 8; }
+# fresh <row>: load auto-home, wait for the world, then for Stobe's NPC event sweep (it starts 45 s after the last
+# world transition: events before that are only baselined, m22). Not ready in 150 s = SETUP FAIL for <row>.
+fresh(){ local b; b=$(stobe_log_lines)
+  stobe-auto load auto-home >/dev/null; sleep 12; stobe-auto wait-world 240 >/dev/null
+  stobe_ready 150 "$b" || { v "$1: SETUP FAIL $STOBE_READY_WHY"; exit 4; }; }
 run(){ # run <file> -> $O/<base>.out/.csv, prints the runner's last line
   local b; b=$(basename "$1" .txt)
   stobe-auto run "$I/$1" --csv "$O/$b.csv" > "$O/$b.out" 2>&1
@@ -29,7 +35,7 @@ want(){ case " $BLOCKS " in *" $1 "*) return 0;; esac; return 1; }
 
 # --- SR13/SR14 seen (shadow) ---
 if want sr13; then
-insp --set-mode shadow >/dev/null; fresh
+insp --set-mode shadow >/dev/null; fresh "SR13 seen"
 run REL-p5-03-theft-owned-seen.txt
 T=$(val TNAME REL-p5-03-theft-owned-seen); [ -z "$T" ] && T="Rel Tess"
 insp --pair-effects --interpret-log 60 --log-filter "$T" --check-shadow > "$O/p5-03.inspect.txt" 2>&1
@@ -40,7 +46,7 @@ fi
 
 # --- SR13 unseen (shadow) ---
 if want sr13u; then
-insp --set-mode shadow >/dev/null; fresh
+insp --set-mode shadow >/dev/null; fresh "SR13 unseen"
 run REL-p5-04-theft-owned-unseen.txt
 T=$(val TNAME REL-p5-04-theft-owned-unseen); [ -z "$T" ] && T="Rel Tess"
 insp --pair-effects --interpret-log 40 --log-filter "$T" --expect-none "$T" "Shay" > "$O/p5-04.inspect.txt" 2>&1 && v "SR13 unseen: PASS no blame" || v "SR13 unseen: FAIL $T blames Shay"
@@ -49,7 +55,7 @@ fi
 
 # --- SR09 KO loot witnessed (shadow) ---
 if want sr09; then
-insp --set-mode shadow >/dev/null; fresh
+insp --set-mode shadow >/dev/null; fresh SR09
 run REL-p3-06-ko-loot-witnessed.txt
 V=$(val VNAME REL-p3-06-ko-loot-witnessed); [ -z "$V" ] && V="Rel Vale"
 insp --pair-effects --incidents 10 --interpret-log 60 --log-filter "$V" --check-shadow > "$O/p3-06.inspect.txt" 2>&1
@@ -58,7 +64,7 @@ fi
 
 # --- SR07 sever (shadow) ---
 if want sr07; then
-insp --set-mode shadow >/dev/null; fresh
+insp --set-mode shadow >/dev/null; fresh SR07
 run REL-p3-05b-defensive-limb-loss-sever.txt
 insp --pair-effects --effects 20 --interpret-log 40 --check-shadow > "$O/p3-05b.inspect.txt" 2>&1
 grep -q "defensive_maiming" "$O/p3-05b.inspect.txt" && v "SR07: PASS defensive_maiming" || v "SR07: FAIL no defensive_maiming"
@@ -66,7 +72,7 @@ fi
 
 # --- SR06 forced first strike (shadow): p2-01 then p2-04b on the same bandit ---
 if want sr06; then
-insp --set-mode shadow >/dev/null; fresh
+insp --set-mode shadow >/dev/null; fresh SR06
 run REL-p2-01-player-first-strike.txt
 insp --set-switch SOCIAL_TEST_FORCE_FIRST_STRIKE Shay > "$O/p2-04b.switch.txt"
 run REL-p2-04b-repeat-assault-forced.txt
@@ -79,7 +85,7 @@ fi
 
 # --- SR30 forced join attempt (ENABLED) ---
 if want sr30; then
-insp --set-mode enabled >/dev/null; fresh
+insp --set-mode enabled >/dev/null; fresh SR30
 insp --set-switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT true > "$O/p7-01.switch.txt"
 run REL-p7-01b-recruit-forced-low.txt
 grep -a "SOCIAL_TEST_FORCE_JOIN_ATTEMPT\|REL recruitment gate blocked JoinParty" $SL | tail -4 > "$O/p7-01b.log.txt"
