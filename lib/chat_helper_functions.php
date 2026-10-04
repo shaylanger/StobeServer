@@ -15358,10 +15358,15 @@ function stobeTaskStorePronounItems(string $actor, string $item): array {
  * that the model answered without a goal action -> WORK_GOAL@Item@N.
  * The planner reports BLOCKED itself when nothing can make it.
  */
-function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, array $actions): string {
+function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, array $actions, string $reply = ''): string {
     if (!is_array($npcData) || !function_exists('npcIsInPlayerFaction') || !npcIsInPlayerFaction($npcData)) return '';
     foreach ($actions as $a) {
         if (preg_match('/^(WORK_GOAL|TASK_GOAL|TASK_CONTROL)@/i', strval($a))) return '';
+    }
+    if ($reply !== '' && stobeReplyRefusesOrder($reply)) {
+        // Item 90: "Bread's a no-go" with no goal action: her words stand, no goal behind her back.
+        if (function_exists('stobeLogInfo')) stobeLogInfo('Work goal not inferred: her reply turns the order down (item 90)', ['order'=>$playerLine, 'reply'=>$reply]);
+        return '';
     }
     $line = trim($playerLine);
     if ($line === '' || str_contains($line, '?')) return '';
@@ -15379,6 +15384,23 @@ function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, a
     $item = ucwords(strtolower(implode(' ', $parts)));
     if ($item === '' || preg_match('/^(it|them|that|this|some|more|sure)$/i', $item)) return '';
     return 'WORK_GOAL@' . $item . '@' . $qty;
+}
+
+/**
+ * Item 90: her reply turns an order down ("Bread's a no-go", "I can't", "not going to") and takes
+ * nothing on ("I'll make them", "on it"). A refusal next to a clear yes is not a refusal.
+ */
+function stobeReplyRefusesOrder(string $reply): bool {
+    $refuse = false;
+    $agree = false;
+    foreach (preg_split('/(?<=[.!?])\s+/', strtolower(trim(str_replace(["\u{2019}", "\u{2018}"], "'", $reply)))) ?: [] as $sentence) {
+        $sentence = trim($sentence);
+        if ($sentence === '') continue;
+        if (preg_match("/\b(no[- ]go|can'?t|cannot|won'?t|will\s+not|not\s+going\s+to|refuse|no\s+way|not\s+happening|impossible|out\s+of\s+the\s+question|forget\s+it|do\s+it\s+yourself)\b/", $sentence)) $refuse = true;
+        if (str_ends_with($sentence, '?')) continue;
+        if (preg_match("/\b(i'?ll\s+(?:make|get|start|bake|cook|craft|brew|smelt|do|see\s+to|head|work|get\s+on)|i\s+will\s+(?:make|get|start|do)|on\s+it|will\s+do|right\s+away|consider\s+it\s+done|coming\s+up|got\s+it|getting\s+(?:on\s+it|started)|let\s+me\s+(?:make|get|start|bake|cook))\b/", $sentence)) $agree = true;
+    }
+    return $refuse && !$agree;
 }
 
 /** Item 73: her reply takes the job on ("I'll go dig it out", "on it", "right") and refuses nothing. */

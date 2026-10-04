@@ -950,6 +950,17 @@ check('item 107: attacking an outsider is not a fight with the player', stobeDea
 $db->exec("DELETE FROM eventlog WHERE data LIKE '%NegTestRaider107%'");
 foreach (['NegTestBeaks107', 'NegTestRaider107'] as $n) { $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n]); $db->exec("DELETE FROM core_npc WHERE name=$1", [$n]); }
 
+// ---------------------------------------------------------------- item 90: no inferred work goal when her reply refuses
+fixtureNpc('NegTestMalzin90', ['money'=>20, 'money_observed_at'=>time()], '', 'Calm.', '100/100', 'Nameless');
+$malzin90 = getNpcData('NegTestMalzin90') ?: [];
+check('item 90: fixture is a squad member', npcIsInPlayerFaction($malzin90));
+check('item 90: "no-go" reply -> no inferred goal', stobeInferWorkGoalFromOrder('Malzin, make 2 bread.', $malzin90, [],
+    "Bread's a no-go, Shay. Last time I tried, the grain silo had no power and the whole thing stalled out - unless you've got that sorted, I can't promise anything. I can try again if you want.") === '');
+check('item 90: an agreeing reply still gets the goal', stobeInferWorkGoalFromOrder('Malzin, make 2 bread.', $malzin90, [],
+    "Right, I'll make them. Can't promise it'll be quick.") === 'WORK_GOAL@Bread@2');
+check('item 90: no reply text -> goal as before (bug 76)', stobeInferWorkGoalFromOrder('Malzin, make 2 bread.', $malzin90, []) === 'WORK_GOAL@Bread@2');
+$db->exec("DELETE FROM core_npc_master WHERE name='NegTestMalzin90'");
+
 // ---------------------------------------------------------------- cleanup
 $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");

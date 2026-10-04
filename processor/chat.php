@@ -1652,7 +1652,8 @@ if (!$narratorMode && function_exists('stobeInferClothingAction')
 }
 if (!$narratorMode && function_exists('stobeInferWorkGoalFromOrder')
     && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
-    $inferredGoal = stobeInferWorkGoalFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions);
+    $inferredGoal = stobeInferWorkGoalFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
+        strval($responseText ?? '')); // item 90: not when her reply turns it down
     if ($inferredGoal !== '') {
         $responseActions[] = $inferredGoal;
         stobeLogInfo('Work goal inferred from a direct order (bug 76)', ['npc'=>$targetNpc, 'action'=>$inferredGoal]);
