@@ -3,7 +3,7 @@
 # Needs: Kenshi running on a kah-* copy of auto-home with the harness on (stobe-say on before launch);
 #        StobeCustom.ini [SocialRelationships] Capture=1; server with B 55 (mode off = "fights", the live default).
 #        Block "bleed" also needs Stobe built with pending-fixes/b55_recovered_vitals_native.py (vitals on waking).
-# Blocks (default: all, in this order): mode squad wild spar close treat fade chat bleed deal
+# Blocks (default: all, in this order): mode squad wild spar close treat fade chat bleed accident deal
 #   mode   inspect says ingest_mode=fights, fight_rules=b55
 #   squad  Shay attacks + KOs a named bandit: his entry for Shay drops in the KO band (-40..-50 once, x1.0), Shay's
 #          entry for him unchanged, no R4 line ("a fight counts (R4)")                                   (items 7, R4 retired)
@@ -16,11 +16,13 @@
 #   chat   KO a bandit, let him wake, talk kindly: "SOCIAL_DIALOGUE filtered ... fight_cooldown" (if the evaluator
 #          proposed a gain) and the <memory> line in his prompt                                           (items 4, 6)
 #   bleed  KO + blood 25 % + deep wound, wake: critical_harm row (-55..-65 band)                         (item 7)
+#   accident  (harness b3ae609+ `hit`) Shay's hit KOs Malzin, no combat event: Malzin -> Shay drops 0.25 x KO x closeness,
+#          unchanged after a 90 game-min fade window; then an injury hit inside a real fight vs a bandit (item 7)
 #   deal   rel-surrender.sh kept with SOCIAL_TEST_FORCE_FIRST_STRIKE=Shay: deal_forgiveness row               (item 2)
 # Output: <outdir>/verdicts.txt (one VERDICT line per block) + per-block inspect/log files. Leaves switches off,
 # reloads auto-home at the end.
 O=${1:-/mnt/c/KenshiTestRuns/rel-b55}; shift
-BLOCKS=${*:-mode squad wild spar close treat fade chat bleed deal}
+BLOCKS=${*:-mode squad wild spar close treat fade chat bleed accident deal}
 I=$(cd "$(dirname "$0")" && pwd)
 S=/var/www/html/StobeServer
 L=/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe.log
@@ -196,6 +198,54 @@ deal)
   if grep -q '"component":"deal_forgiveness"' "$O/deal.log.txt" && grep -q '"result":"fights"' "$O/deal.log.txt"; then v "deal: PASS deal_forgiveness applied ($last)"
   elif grep -q "nothing_to_forgive" "$O/deal.log.txt"; then v "deal: INCONCLUSIVE kept deal but no fight penalty of Rel Krag toward Shay ($last)"
   else v "deal: FAIL no deal_forgiveness ($last; deal.log.txt)"; fi ;;
+accident)
+  # Squad friendly fire without an attack (harness `hit`, b3ae609+): Shay's hit KOs Malzin -> knockout harm credited
+  # to Shay, no combat event -> server: accident = 0.25 x KO range (-40..-50) x Malzin's closeness to Shay, never fades.
+  # Then an injury inside a real fight against a bandit (Malzin is in that fight too, so Stobe emits the injury)
+  # Shay is the hitter: the player has no NPC profile (core_npc row), so she can't hold a REL grudge; Malzin can..
+  fresh
+  insp --set-switch SOCIAL_GRUDGE_FADE_DAYS 0.05 > "$O/accident.setup.txt" 2>&1
+  stobe-auto teleport Malzin Shay dist 2 >/dev/null
+  p0=$(aff Malzin Shay); p0=${p0:-0}
+  m=$(awk -v a="$p0" 'BEGIN{m=1.0; if(a>=31)m=1.3; if(a>=56)m=2.0; if(a>=76)m=2.5; if(a>=91)m=3.0; print m}')
+  w0=$(lines $WL); l0=$(lines $L)
+  stobe-say speed 1 >/dev/null
+  stobe-auto hit Shay Malzin head 80 > "$O/accident.hit.txt" 2>&1
+  sleep 8; stobe-auto speed 0 >/dev/null
+  p1=$(aff Malzin Shay); p1=${p1:-0}; d=$((p1 - p0))
+  lo=$(awk -v m="$m" 'BEGIN{x=-13*m; print (x<-100)?-100:int(x-0.5)}'); hi=$(awk -v m="$m" 'BEGIN{print int(-10*m+0.5)}')
+  since $L $l0 | grep -a -e "structured kind=harm" -e "\[EVENT\] combat" | head -6 > "$O/accident.stobe.txt"
+  since $WL $w0 | grep -a "SOCIAL_INTERPRET" | grep -a "Malzin" > "$O/accident.log.txt"
+  ko=$(grep -o 'ko=[a-z]*' "$O/accident.hit.txt" | head -1)
+  combat=$(grep -a -c "\[EVENT\] combat: Shay" "$O/accident.stobe.txt")
+  # wake Shay, then fade check: 90 game min (> 0.05 game days) + a fight as ingest tick: the accidental KO must stay
+  for i in $(seq 1 60); do stobe-auto where Malzin | grep -q ' KO' || break; stobe-say speed 1 >/dev/null; sleep 2; done
+  stobe-auto speed 0 >/dev/null
+  stobe-auto wait-game 90 > "$O/accident.wait.txt" 2>&1
+  t=$(bandit "Rel Tock") && fightlight "$t" 3
+  sleep 8
+  p2=$(aff Malzin Shay); p2=${p2:-0}
+  insp --set-switch SOCIAL_GRUDGE_FADE_DAYS off >> "$O/accident.setup.txt" 2>&1
+  if [ "$ko" != "ko=yes" ]; then v "accident KO: INCONCLUSIVE hit did not KO Malzin ($ko; accident.hit.txt)"
+  elif grep -q '"component":"accident"' "$O/accident.log.txt" && [ "$d" -le "$hi" ] && [ "$d" -ge "$lo" ] && [ "$p2" = "$p1" ] && [ "$combat" = 0 ]; then
+    v "accident KO: PASS Malzin -> Shay $p0 -> $p1 (d=$d in $lo..$hi = 0.25 x KO x$m), no combat event, unchanged after fade window ($p2)"
+  else v "accident KO: FAIL d=$d (want $lo..$hi, x$m) after-fade=$p2 (want $p1) combat_events=$combat (accident.log.txt, accident.stobe.txt)"; fi
+  # injury inside a real fight against a third party
+  b=$(bandit "Rel Brawl") || { v "accident injury: FAIL no bandit"; continue; }
+  stobe-auto teleport "$b" Shay dist 3 >/dev/null
+  stobe-auto attack Shay "$b" >/dev/null; stobe-auto attack Malzin "$b" >/dev/null; stobe-auto attack "$b" Malzin >/dev/null
+  stobe-say speed 1 >/dev/null; sleep 5
+  q0=$(aff Malzin Shay); q0=${q0:-0}; w0=$(lines $WL)
+  stobe-auto teleport Malzin Shay dist 2 >/dev/null
+  stobe-auto hit Shay Malzin left_arm 30 > "$O/accident.hit2.txt" 2>&1
+  sleep 6; stobe-auto speed 0 >/dev/null; away "$b"
+  q1=$(aff Malzin Shay); q1=${q1:-0}; d2=$((q1 - q0))
+  lo2=$(awk -v m="$m" 'BEGIN{print int(-8*m-0.5)}')
+  since $WL $w0 | grep -a "SOCIAL_INTERPRET" | grep -a "Malzin" > "$O/accident.log2.txt"
+  if grep -q '"component":"accident"' "$O/accident.log2.txt" && [ "$d2" -lt 0 ] && [ "$d2" -ge "$lo2" ]; then
+    v "accident injury: PASS in a real fight, Malzin -> Shay $q0 -> $q1 (d=$d2 in $lo2..-1: 0.25 x injury x$m)"
+  elif [ ! -s "$O/accident.log2.txt" ]; then v "accident injury: INCONCLUSIVE no harm event for the hit (Stobe emits injury only with combat evidence; accident.hit2.txt)"
+  else v "accident injury: FAIL d=$d2 (want $lo2..-1) (accident.log2.txt)"; fi ;;
 *) v "$B: unknown block" ;;
 esac; done
 
