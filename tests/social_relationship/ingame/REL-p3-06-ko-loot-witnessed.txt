@@ -44,11 +44,17 @@ teleport Shay ${V} dist 40
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY_S} target=${V_S} witnesses=\d+ facts="level":"knockout".*"inventory"
 # W = his friend (same faction), conscious, next to the body
-spawn "Hungry Bandit" Drifters near ${V} dist 6 count 1 ~ spawned 1/1
-@set W chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
+# m22: Stobe's sweep only watches NPCs it has met (run m8): W spawns next to Shay and is greeted first
+spawn "Hungry Bandit" Drifters near Shay dist 6 count 1 ~ spawned 1/1
+@set W chars 20 ~ Hungry Bandit\]? (#\d+/\d+)
 setname ${W} "Rel Wren" ~ ^([^ ].* \[)?Hungry Bandit\]? ->
 @set WNAME where ${W} ~ ^(.+?) #\d+
 protect ${W} on
+relation ${W} 60
+stobe_say "Rel Wren" "Wren, your friend over there needs you. Watch him."
+speed 1
+@sleep 10
+speed 0
 teleport ${W} ${V} dist 4
 # C = Malzin takes the plate from the body in W's view
 teleport Malzin ${V} dist 2

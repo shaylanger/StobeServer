@@ -3,7 +3,7 @@
 #   handing it back = a small compensation, never a theft by the owner)
 # fixture: auto-home
 # reset: fresh
-# needs: Stobe with pending-fixes/rel_theft_caught_native.py; server cb3bc44 + 2fbd947; harness e8b4688+ (drop ... owned);
+# needs: Stobe with pending-fixes/rel_theft_caught_native.py; server cb3bc44 + 2fbd947; harness e8b4688+ (drop ... owned) and a68f72d+ (KAH 23 crime ... commit);
 #   StobeCustom.ini [SocialRelationships] Capture=1; mode shadow
 # verify: php tools/social_relationship_inspect.php --pair-effects --interpret-log 40 --log-filter "Rel Tess" --check-shadow -> exit 0
 #   pair_effects: "<TNAME>" -> "Shay" petty_theft in [-8,-3] (shadow, not applied) and property_returned (+3..+9);
@@ -39,6 +39,13 @@ pickup Shay "Iron Plates" near ${O} radius 15 ~ picked up .*item_stolen=
 @sleep 15
 speed 0
 crime Shay ~ hunters=
+# m22: the game's sight check raised no alarm (hunters=0, Tess 4 m away): raise the game's own crime state
+# against her faction (harness KAH 23); her own AI must start HUNT_MY_THIEF, which Stobe logs as "theft hunt".
+crime Shay commit stealing against ${O} witnessed ~ set=1
+speed 1
+@sleep 10
+speed 0
+crime Shay ~ hunters=[1-9]
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_gain seq=\d+ load=\d+ actor=${SHAY_S} target=#0 witnesses=\d+ facts="items":\{[^}]*\},"stolen_items":\{"[^"]+":1\}
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: theft hunt hunter=.* thief=Shay
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=theft_caught seq=\d+ load=\d+ actor=${SHAY_S} target=${O_S}
