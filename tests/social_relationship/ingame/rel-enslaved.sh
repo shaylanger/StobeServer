@@ -54,8 +54,14 @@ if grep -q "name=$A " "$O/first-seen-enslaved.txt"; then SLAVE="$A"; FREE="$B"
 elif grep -q "name=$B " "$O/first-seen-enslaved.txt"; then SLAVE="$B"; FREE="$A"
 else log "FAIL SR12: neither $A nor $B was seen enslaved after the load (see first-seen-enslaved.txt)"
   echo "RESULT REL-p7-03-enslaved-real-load FAIL neither $A nor $B first seen enslaved log=$O/first-seen-enslaved.txt"; insp --set-mode off >/dev/null; exit 1; fi
-NS=$(grep -v -E "name=($A|$B) " "$O/first-seen-enslaved.txt" | head -1 | grep -o 'serial=[0-9]*' | sed 's/serial=/#/')
-log "slave=$SLAVE free=$FREE non-squad slave=${NS:-none} ($(grep -c . "$O/first-seen-enslaved.txt") first-seen slaves)"
+# The non-squad slave must wear a pickable lock (shackles): a caged prisoner can't be freed by PICK_LOCK_ON_SHACKLES
+# (batch O: the first one was in a prison cage). Harness: "lockpick_chance=" vs "<name> wears nothing locked".
+NS=""; : > "$O/ns-candidates.txt"
+for c in $(grep -v -E "name=($A|$B) " "$O/first-seen-enslaved.txt" | grep -o 'serial=[0-9]*' | sed 's/serial=/#/' | awk '!seen[$0]++' | head -20); do
+  r=$(stobe-auto chance "$FREE" lockpick "$c" 2>&1 | tr -s '[:space:]' ' ' | cut -c1-160); echo "$c $r" >> "$O/ns-candidates.txt"
+  case "$r" in *lockpick_chance=*) NS="$c"; break ;; esac
+done
+log "slave=$SLAVE free=$FREE non-squad shackled slave=${NS:-none} ($(grep -c . "$O/first-seen-enslaved.txt") first-seen slaves, $(grep -c . "$O/ns-candidates.txt") checked: ns-candidates.txt)"
 stobe-auto chars 150 > "$O/chars-after-load.txt" 2>&1
 
 run REL-p7-03-enslaved-real-load
@@ -76,7 +82,9 @@ if [ -n "$NS" ]; then
   run REL-p7-06-enslaved-recruit-trusted
   gate > "$O/gate-80.txt"; log "gate at 80: $(tail -1 "$O/gate-80.txt" | cut -c1-200)"
 else
-  log "no non-squad slave seen: p7-05/06 skipped"
+  log "FAIL setup: no shackled (lockpickable) non-squad slave among the first-seen slaves: p7-05/06 not run (see ns-candidates.txt)"
+  echo "RESULT REL-p7-05-enslaved-free-recruit FAIL setup: no shackled non-squad slave log=$O/ns-candidates.txt"
+  echo "RESULT REL-p7-06-enslaved-recruit-trusted FAIL setup: no shackled non-squad slave log=$O/ns-candidates.txt"
 fi
 insp --set-mode off >/dev/null
 grep -a -E "slave state|SOCIAL_CAPTURE: structured kind=(freed|enslaved)" "$L" | tail -n 20 > "$O/slavery-lines.txt"
