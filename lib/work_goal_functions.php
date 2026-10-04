@@ -421,7 +421,8 @@ function stobeBuildWorkGoalStateBlock(string $npcName): string
         stobeWorkGoalSyncStatusFile();
         $rows = $GLOBALS['db']->fetchAll(
             "SELECT goal_id, item_name, quantity, destination_name,
-                    status, completed, current_step, reason
+                    status, completed, current_step, reason,
+                    GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (NOW() - updated_at)) / 60))::int AS age_min
              FROM stobe_work_goal
              WHERE LOWER(actor_name)=LOWER($1)
              ORDER BY CASE WHEN status='ACTIVE' THEN 0 ELSE 1 END,
@@ -438,13 +439,24 @@ function stobeBuildWorkGoalStateBlock(string $npcName): string
 
     $lines = ['<work_goals>'];
     $lines[] = '  <rule>These are real persistent Kenshi work goals owned by this NPC.</rule>';
-    $lines[] = '  <rule>Do not claim a blocked or incomplete goal succeeded. If a goal is blocked, explain its recorded reason naturally when relevant.</rule>';
+    $lines[] = '  <rule>Do not claim a blocked or incomplete goal succeeded. If a current goal is blocked, explain its recorded reason naturally when relevant.</rule>';
+    foreach (stobeEndedGoalRules() as $rule) {
+        $lines[] = '  <rule>' . $rule . '</rule>';
+    }
+    $seenOutputs = [];
     foreach ($rows as $row) {
         if (!is_array($row)) {
             continue;
         }
         $status = strtoupper(trim(strval($row['status'] ?? 'ACTIVE')));
         $item = trim(strval($row['item_name'] ?? ''));
+        // Item 121: an ended goal is history; a newer goal for the same output supersedes it.
+        $ended = stobeGoalStatusEnded($status);
+        $outputKey = strtolower($item);
+        if ($ended && isset($seenOutputs[$outputKey])) {
+            continue;
+        }
+        $seenOutputs[$outputKey] = true;
         $qty = max(1, intval($row['quantity'] ?? 1));
         $done = max(0, intval($row['completed'] ?? 0));
         $dest = trim(strval($row['destination_name'] ?? ''));
@@ -455,6 +467,16 @@ function stobeBuildWorkGoalStateBlock(string $npcName): string
             . ' requested="' . $qty . '" completed="' . $done . '"';
         if ($dest !== '') {
             $attrs .= ' destination="' . stobePromptXmlEscape($dest) . '"';
+        }
+        if ($ended) {
+            $ageMin = max(0, intval($row['age_min'] ?? 0));
+            $lines[] = '  <goal' . $attrs . ' ended_minutes_ago="' . $ageMin . '">';
+            $history = stobeEndedGoalHistoryNote($status, $ageMin, $reason);
+            if ($history !== '') {
+                $lines[] = '    <history>' . stobePromptXmlEscape($history) . '</history>';
+            }
+            $lines[] = '  </goal>';
+            continue;
         }
         $lines[] = '  <goal' . $attrs . '>';
         if ($step !== '') {
@@ -467,4 +489,33 @@ function stobeBuildWorkGoalStateBlock(string $npcName): string
     }
     $lines[] = '</work_goals>';
     return implode("\n", $lines);
+}
+
+/** Item 121: COMPLETE / CANCELLED / BLOCKED goals have ended (BLOCKED = she stopped and walked back). */
+function stobeGoalStatusEnded(string $status): bool
+{
+    return !in_array(strtoupper(trim($status)), ['ACTIVE', 'PAUSED', 'WAITING_APPROVAL'], true);
+}
+
+/** Item 121: prompt rules for ended goals (shared by work_goals and task_goals). */
+function stobeEndedGoalRules(): array
+{
+    return [
+        'Goals with ended_minutes_ago have ended (COMPLETE, CANCELLED or BLOCKED). They are past history, not the current state: power, materials, stations and stock may have changed since.',
+        'Never turn down a new order because of an ended goal. When the player orders new work, take it on and start a new goal; the planner checks power, materials and stations right now and reports any real blocker itself.',
+    ];
+}
+
+/**
+ * Item 121: what an ended goal may still say. Only a BLOCKED goal that ended at most 15 minutes ago
+ * keeps its reason, phrased as past (the player may ask why she stopped). Cancelled and completed
+ * goals and older blocks keep nothing: their old blockers read like current facts to the model.
+ */
+function stobeEndedGoalHistoryNote(string $status, int $ageMin, string $reason): string
+{
+    $reason = trim($reason);
+    if (strtoupper(trim($status)) !== 'BLOCKED' || $reason === '' || $ageMin > 15) {
+        return '';
+    }
+    return 'Past, may no longer be true: ' . $ageMin . ' min ago she stopped because ' . $reason;
 }

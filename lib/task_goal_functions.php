@@ -240,7 +240,8 @@ function stobeBuildTaskGoalStateBlock(string $npcName): string
         stobeTaskGoalSyncStatusFile();
         $rows=$GLOBALS['db']->fetchAll(
             "SELECT goal_id,kind,item_name,target_name,destination_name,quantity,completed,status,
-                    current_step,reason,max_spend,spent
+                    current_step,reason,max_spend,spent,
+                    GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (NOW()-updated_at))/60))::int AS age_min
              FROM stobe_task_goal_runtime WHERE LOWER(actor_name)=LOWER($1)
              ORDER BY CASE status WHEN 'WAITING_APPROVAL' THEN 0 WHEN 'ACTIVE' THEN 1 WHEN 'PAUSED' THEN 2 ELSE 3 END,
                       updated_at DESC LIMIT 8",[$npcName]
@@ -250,11 +251,27 @@ function stobeBuildTaskGoalStateBlock(string $npcName): string
     $o=['<task_goals>',
         '  <rule>These are real persistent Kenshi goals. Never claim an incomplete or blocked goal succeeded.</rule>',
         '  <rule>WAITING_APPROVAL means spending Cats is forbidden until the player explicitly approves that purchase. Selling is never an automatic fallback.</rule>'];
+    if(function_exists('stobeEndedGoalRules'))foreach(stobeEndedGoalRules() as $rule)$o[]='  <rule>'.$rule.'</rule>';
+    $seen=[];
     foreach($rows as $r){
+        // Item 121: ended goals are history; a newer goal of the same kind+item supersedes them.
+        $st=strtoupper(trim(strval($r['status']??'')));
+        $ended=function_exists('stobeGoalStatusEnded')&&stobeGoalStatusEnded($st);
+        $key=strtolower(strval($r['kind']??'').'|'.trim(strval($r['item_name']??'')));
+        if($ended&&isset($seen[$key]))continue;
+        $seen[$key]=true;
         $attrs=' kind="'.stobePromptXmlEscape(strval($r['kind']??'')).'" status="'.stobePromptXmlEscape(strval($r['status']??'')).'"';
         $attrs.=' item="'.stobePromptXmlEscape(strval($r['item_name']??'')).'" requested="'.intval($r['quantity']??0).'" completed="'.intval($r['completed']??0).'"';
         if(trim(strval($r['target_name']??''))!=='')$attrs.=' target="'.stobePromptXmlEscape(strval($r['target_name'])).'"';
         if(trim(strval($r['destination_name']??''))!=='')$attrs.=' destination="'.stobePromptXmlEscape(strval($r['destination_name'])).'"';
+        if($ended){
+            $age=max(0,intval($r['age_min']??0));
+            $o[]='  <goal'.$attrs.' ended_minutes_ago="'.$age.'">';
+            $h=stobeEndedGoalHistoryNote($st,$age,strval($r['reason']??''));
+            if($h!=='')$o[]='    <history>'.stobePromptXmlEscape($h).'</history>';
+            $o[]='  </goal>';
+            continue;
+        }
         $o[]='  <goal'.$attrs.'>';
         if(trim(strval($r['current_step']??''))!=='')$o[]='    <current_step>'.stobePromptXmlEscape(strval($r['current_step'])).'</current_step>';
         if(trim(strval($r['reason']??''))!=='')$o[]='    <reason>'.stobePromptXmlEscape(strval($r['reason'])).'</reason>';
