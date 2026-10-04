@@ -31,6 +31,8 @@ stobe_say "Rel Tess" "Tess, wait here a moment."
 speed 1
 @sleep 10
 speed 0
+# M23_F8_REL: end the greeting's FOLLOW_WHILE_TALKING so her own theft reaction can run
+order ${O} IDLE
 teleport ${O} Shay dist 4
 drop ${O} "Iron Plates" owned ~ owner_faction=Nomads
 # m22: let the owner's pending loss expire (6 s) so the pickup is an item_gain, not an in-sweep transfer from him
@@ -51,7 +53,7 @@ speed 1
 speed 0
 crime Shay ~ hunters=[1-9]
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_gain seq=\d+ load=\d+ actor=${SHAY_S} target=#0 witnesses=\d+ facts="items":\{[^}]*\},"stolen_items":\{"[^"]+":1\}
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: theft hunt hunter=.* thief=Shay
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: theft (hunt hunter|dialog ev)=.* thief=Shay
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=theft_caught seq=\d+ load=\d+ actor=${SHAY_S} target=${O_S}
 # SR14: Shay hands it back
 speed 1

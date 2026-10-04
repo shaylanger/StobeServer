@@ -74,7 +74,7 @@ if (($i = array_search('--set-relation', $args, true)) !== false) {
 if (($i = array_search('--set-switch', $args, true)) !== false) {
     // TEST SETUP ONLY: the REL test switches (SR30, SR06).
     $id = strval($args[$i+1] ?? ''); $value = strval($args[$i+2] ?? '');
-    if (!in_array($id, ['SOCIAL_TEST_FORCE_JOIN_ATTEMPT', 'SOCIAL_TEST_FORCE_FIRST_STRIKE', 'SOCIAL_FIGHTS_LIVE', 'SOCIAL_FIGHT_RULES', 'SOCIAL_GRUDGE_FADE_DAYS'], true) || $value === '') { fwrite(STDERR, "--set-switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT|SOCIAL_TEST_FORCE_FIRST_STRIKE <value|off>\n"); exit(2); }
+    if (!in_array($id, ['SOCIAL_TEST_FORCE_JOIN_ATTEMPT', 'SOCIAL_TEST_FORCE_FIRST_STRIKE', 'SOCIAL_FIGHTS_LIVE', 'SOCIAL_FIGHT_RULES', 'SOCIAL_GRUDGE_FADE_DAYS', 'SOCIAL_TEST_INJECT_DIALOGUE_GAIN'], true) || $value === '') { fwrite(STDERR, "--set-switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT|SOCIAL_TEST_FORCE_FIRST_STRIKE <value|off>\n"); exit(2); }
     $previous = $setting($id);
     if (in_array(strtolower($value), ['off', 'false', '0'], true)) $db->exec('DELETE FROM general_settings WHERE id=$1', [$id]);
     else $db->exec('INSERT INTO general_settings(id,value) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value', [$id, $value]);

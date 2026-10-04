@@ -39,8 +39,9 @@ insp --set-mode shadow >/dev/null; fresh "SR13 seen"
 run REL-p5-03-theft-owned-seen.txt
 T=$(val TNAME REL-p5-03-theft-owned-seen); [ -z "$T" ] && T="Rel Tess"
 insp --pair-effects --interpret-log 60 --log-filter "$T" --check-shadow > "$O/p5-03.inspect.txt" 2>&1
-grep -a "theft hunt\|kind=theft_caught\|kind=item_gain" $L | tail -8 > "$O/p5-03.stobe.txt"
-grep -q "petty_theft\|\"theft\"" "$O/p5-03.inspect.txt" && v "SR13 seen: PASS theft row $T -> Shay" || v "SR13 seen: FAIL/INCONCLUSIVE no theft row (hunt lines: $(grep -c 'theft hunt' "$O/p5-03.stobe.txt"))"
+# M23_F8_REL: the game's theft dialog event (Stobe m23) counts like HUNT_MY_THIEF
+grep -a "theft hunt\|theft dialog\|kind=theft_caught\|kind=item_gain" $L | tail -8 > "$O/p5-03.stobe.txt"
+grep -q "petty_theft\|\"theft\"" "$O/p5-03.inspect.txt" && v "SR13 seen: PASS theft row $T -> Shay" || v "SR13 seen: FAIL/INCONCLUSIVE no theft row (hunt/dialog lines: $(grep -c 'theft hunt\|theft dialog' "$O/p5-03.stobe.txt"))"
 grep -q "property_returned" "$O/p5-03.inspect.txt" && v "SR14 returned: PASS" || v "SR14 returned: FAIL no property_returned"
 fi
 

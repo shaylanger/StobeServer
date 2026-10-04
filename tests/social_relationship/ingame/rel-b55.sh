@@ -35,7 +35,7 @@ aff(){ insp --relation "$1" "$2" 2>/dev/null | grep -o '"aff": *-\?[0-9]*' | hea
 v(){ echo "VERDICT $*" | tee -a "$O/verdicts.txt"; }
 lines(){ grep -a -c "" "$1" 2>/dev/null || echo 0; }
 since(){ tail -n +"$(( $2 + 1 ))" "$1" 2>/dev/null; }   # since <file> <linecount>: lines added after the mark
-off(){ for s in SOCIAL_GRUDGE_FADE_DAYS SOCIAL_TEST_FORCE_FIRST_STRIKE; do insp --set-switch $s off >/dev/null 2>&1; done; }
+off(){ for s in SOCIAL_GRUDGE_FADE_DAYS SOCIAL_TEST_FORCE_FIRST_STRIKE SOCIAL_TEST_INJECT_DIALOGUE_GAIN; do insp --set-switch $s off >/dev/null 2>&1; done; }
 trap off EXIT
 fresh(){ stobe-auto load auto-home >/dev/null; sleep 12; stobe-auto wait-world 240 >/dev/null; sleep 8
   stobe-auto speed 0 >/dev/null; stobe-auto select Shay >/dev/null
@@ -52,12 +52,16 @@ bandit(){ local name="$1" dist="${2:-20}" h=""
   stobe-say say "$name" "Hello there. Who are you?" --wait 30 >/dev/null 2>&1
   for i in $(seq 1 15); do insp --relation "$name" Shay 2>/dev/null | grep -q 'observer not found' || break; sleep 2; done
   stobe-auto speed 0 >/dev/null
+  # m23: names are reused across runs and a spawned NPC's stored entries can outlive a reload (Rel Fenn kept -15): start at 0
+  insp --set-relation "$name" Shay 0 >/dev/null 2>&1; insp --set-relation "$name" Malzin 0 >/dev/null 2>&1
+  [ "$(aff "$name" Shay)" = 0 ] || { echo "SETUP baseline $name -> Shay is '$(aff "$name" Shay)', not 0" >&2; return 2; }
   echo "$h"; }
 # fightko <handle>: Shay attacks (legs crippled so he stays in reach), then a KO right after the attack (run m5 recipe)
 fightko(){ local h="$1"
   stobe-auto damage "$h" left_leg 110 >/dev/null; stobe-auto damage "$h" right_leg 110 >/dev/null
   stobe-auto attack Shay "$h" >/dev/null; stobe-say speed 1 >/dev/null; sleep 6
-  stobe-auto teleport "$h" Shay dist 4 >/dev/null; stobe-auto ko "$h" "${2:-60}" >/dev/null
+  # m23: the KO must land inside the 10 s recent-attacker window (14 s after the attack = attribution none): attack again, KO at once
+  stobe-auto teleport "$h" Shay dist 2 >/dev/null; stobe-auto attack Shay "$h" >/dev/null; sleep 1; stobe-auto ko "$h" "${2:-60}" >/dev/null
   for i in $(seq 1 20); do stobe-auto where "$h" | grep -q ' KO' && break; sleep 1; done
   stobe-auto speed 0 >/dev/null; }
 # fightlight <handle>: a few seconds of Shay attacking, then he is sent 300 m away (aggression, maybe injury, no KO)
@@ -90,16 +94,20 @@ wild)
   fresh
   a=$(bandit "Rel Arn" 20) || { v "wild: FAIL no bandit"; continue; }
   b=$(bandit "Rel Bek" 25) || { v "wild: FAIL no 2nd bandit"; continue; }
-  stobe-auto faction "$b" "Traders Guild" >/dev/null
+  # m23: not a player-allied faction (Traders Guild made Shay defend Bek -> squad involved); Dust Bandits so Arn fights him
+  stobe-auto faction "$b" "Dust Bandits" >/dev/null
   a="Rel Arn"; b="Rel Bek"   # m22: names; the re-resolved handle came back empty and Shay was teleported instead
+  stobe-auto teleport Malzin Shay dist 2 >/dev/null   # the squad stays together, far from the pair
   w0=$(lines $WL)
-  stobe-auto teleport "$a" Shay dist 60 >/dev/null; stobe-auto teleport "$b" "$a" dist 3 >/dev/null
+  stobe-auto teleport "$a" Shay dist 200 >/dev/null; stobe-auto teleport "$b" "$a" dist 3 >/dev/null
   stobe-auto order "$a" UNPROVOKED_FOCUSED_MELEE_ATTACK target "$b" >/dev/null
   stobe-say speed 1 >/dev/null; sleep 25; stobe-auto speed 0 >/dev/null
   since $WL $w0 | grep -a "SOCIAL_INTERPRET" | grep -a -e "Rel Arn" -e "Rel Bek" > "$O/wild.log.txt"
   insp --pair-effects > "$O/wild.inspect.txt" 2>&1
   e1=$(aff "Rel Bek" "Rel Arn"); e2=$(aff "Rel Arn" "Rel Bek")
-  if grep -q '"ignored"' "$O/wild.log.txt" && [ "${e1:-0}" = 0 ] && [ "${e2:-0}" = 0 ]; then v "wild: PASS ignored, no entries"
+  if grep -a -q -e '"actor":"Shay"' -e '"target":"Shay"' -e '"actor":"Malzin"' -e '"target":"Malzin"' "$O/wild.log.txt"; then
+    v "wild: SETUP FAIL the squad joined the fight (Shay/Malzin in wild.log.txt): not a wild fight"
+  elif grep -q '"ignored"' "$O/wild.log.txt" && [ "${e1:-0}" = 0 ] && [ "${e2:-0}" = 0 ]; then v "wild: PASS ignored, no entries"
   elif [ ! -s "$O/wild.log.txt" ]; then v "wild: INCONCLUSIVE no structured attack between them reached the server (wild.log.txt empty)"
   else v "wild: FAIL Bek->Arn '${e1:-none}' Arn->Bek '${e2:-none}' (wild.log.txt)"; fi
   ;;
@@ -165,15 +173,20 @@ chat)
   for i in $(seq 1 60); do stobe-auto where "$h" | grep -q ' KO' || break; sleep 2; done
   stobe-auto speed 0 >/dev/null
   stobe-auto teleport "$h" Shay dist 5 >/dev/null
+  # rule 4 is mechanical: inject a +3 evaluator gain before the fight filter (the live model gave -4 in m23: nothing to block)
+  insp --set-switch SOCIAL_TEST_INJECT_DIALOGUE_GAIN 3 > "$O/chat.setup.txt" 2>&1
   w0=$(lines $WL); s0=$(lines $SL); c0=$(lines $CL)
   stobe-say say "Rel Mira" "Mira, I'm sorry about the fight. No hard feelings, friend? You fought well." --wait 40 > "$O/chat.say.txt" 2>&1
   sleep 20
-  { since $WL $w0; since $SL $s0; } | grep -a "SOCIAL_DIALOGUE filtered" | grep -a "Rel Mira" > "$O/chat.filtered.txt"
-  since $CL $c0 | grep -a -o "<memory>[^<]*</memory>" | head -3 > "$O/chat.memory.txt"
+  insp --set-switch SOCIAL_TEST_INJECT_DIALOGUE_GAIN off >> "$O/chat.setup.txt" 2>&1
+  { since $WL $w0; since $SL $s0; } | grep -a -e "SOCIAL_DIALOGUE filtered" -e "SOCIAL_TEST_INJECT_DIALOGUE_GAIN" | grep -a "Rel Mira" > "$O/chat.filtered.txt"
+  # the stance block is sent as markdown (prompt_formatting.php): "## Memory" + the line; the raw <memory> form is kept as a fallback
+  since $CL $c0 | grep -a -A2 -e '^## Memory' -e '<memory>' | grep -a -e "Shay .* in a fight (day" | head -3 > "$O/chat.memory.txt"
   m="memory line: $(grep -c . "$O/chat.memory.txt")"
-  if grep -q "fight_cooldown" "$O/chat.filtered.txt"; then v "chat: PASS chat gain blocked (fight_cooldown), $m"
-  elif [ -s "$O/chat.memory.txt" ]; then v "chat: INCONCLUSIVE no positive evaluator delta to block; $m (PASS item 6 memory)"
-  else v "chat: FAIL no cooldown filter and no <memory> line (chat.*.txt)"; fi
+  inj=$(grep -a -c "SOCIAL_TEST_INJECT_DIALOGUE_GAIN" "$O/chat.filtered.txt")
+  if [ "$inj" = 0 ]; then v "chat: SETUP FAIL the injected +3 never reached the evaluator path (no injection log line; chat.setup.txt, chat.say.txt), $m"
+  elif grep -q "fight_cooldown" "$O/chat.filtered.txt" && [ -s "$O/chat.memory.txt" ]; then v "chat: PASS injected +3 blocked (fight_cooldown), $m"
+  else v "chat: FAIL cooldown filter $(grep -c fight_cooldown "$O/chat.filtered.txt"), $m (chat.filtered.txt, chat.memory.txt)"; fi
   away "$h" ;;
 bleed)
   fresh

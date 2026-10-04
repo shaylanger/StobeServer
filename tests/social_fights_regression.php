@@ -30,7 +30,7 @@ foreach (P as $name => [$serial]) {
     sql('DELETE FROM core_npc_master_history WHERE name=$1', [$name]); sql('DELETE FROM core_npc WHERE name=$1', [$name]);
     sql("INSERT INTO core_npc(name,extended_data,metadata) VALUES($1,'{}'::jsonb,jsonb_build_object('storage_id',$2::text))", [$name, 'hand_' . $serial]);
 }
-foreach (['SOCIAL_RELATIONSHIP_MODE','SOCIAL_FIGHTS_LIVE','SOCIAL_FIGHT_RULES','SOCIAL_GRUDGE_FADE_DAYS','SOCIAL_GRUDGE_FADE_THRESHOLD','SOCIAL_TEST_FORCE_FIRST_STRIKE'] as $id) setting($id, null);
+foreach (['SOCIAL_RELATIONSHIP_MODE','SOCIAL_FIGHTS_LIVE','SOCIAL_FIGHT_RULES','SOCIAL_GRUDGE_FADE_DAYS','SOCIAL_GRUDGE_FADE_THRESHOLD','SOCIAL_TEST_FORCE_FIRST_STRIKE','SOCIAL_TEST_INJECT_DIALOGUE_GAIN'] as $id) setting($id, null);
 sql("DELETE FROM stobe_meta.settings WHERE key='PLAYTHROUGH_AUTO_SWITCH' AND value<>'true'");
 ok(one("SELECT value FROM stobe_meta.settings WHERE key='PLAYTHROUGH_AUTO_SWITCH'") === null, 'suite needs Playthrough Saves off (legacy campaign)');
 
@@ -183,6 +183,14 @@ $u = stobeSocialFilterDialogueUpdates('Bandit Rook', [['target'=>'Fight Shay', '
 ok((int)$u[0]['aff_delta'] === 0, 'item 4: no chat gain within a game day of the fight');
 $u = stobeSocialFightDialogueRules('Bandit Rook', [['target'=>'Fight Shay', 'aff_delta'=>-4]]);
 ok((int)$u[0]['aff_delta'] === -4, 'item 4: negative chat passes');
+// rule 4 test switch (m23): the injected +N replaces the evaluator's updates before the fight filter, which then blocks it
+setting('SOCIAL_TEST_INJECT_DIALOGUE_GAIN', '3');
+$u = stobeSocialTestInjectDialogueGain('Bandit Rook', 'Fight Shay', 'chat', [['target'=>'Fight Shay', 'aff_delta'=>-4]]);
+ok(count($u) === 1 && $u[0]['target'] === 'Fight Shay' && (int)$u[0]['aff_delta'] === 3, 'rule 4 switch: +3 injected for the listener');
+ok((int)stobeSocialFilterDialogueUpdates('Bandit Rook', $u)[0]['aff_delta'] === 0, 'rule 4 switch: injected gain blocked by the cooldown');
+ok(stobeSocialTestInjectDialogueGain('Bandit Rook', 'Fight Shay', 'bored', []) === [], 'rule 4 switch: chat turns only');
+setting('SOCIAL_TEST_INJECT_DIALOGUE_GAIN', null);
+ok(stobeSocialTestInjectDialogueGain('Bandit Rook', 'Fight Shay', 'chat', []) === [], 'rule 4 switch: off by default');
 
 // ---- item 1: fading ----
 attack('Fight Shay', 'Bandit Fen', 101600);

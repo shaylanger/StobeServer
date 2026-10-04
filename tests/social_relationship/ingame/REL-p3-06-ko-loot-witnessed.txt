@@ -48,7 +48,8 @@ speed 0
 spawn "Hungry Bandit" Drifters near Shay dist 6 count 1 ~ spawned 1/1
 @set W chars 20 ~ Hungry Bandit\]? (#\d+/\d+)
 setname ${W} "Rel Wren" ~ ^([^ ].* \[)?Hungry Bandit\]? ->
-@set WNAME where ${W} ~ ^(.+?) #\d+
+# M23_F8_REL: the name must stick (batch E: Stobe renamed her back to "Skenn 2 [Hungry Bandit]")
+@set WNAME where ${W} ~ ^(Rel Wren) #\d+
 protect ${W} on
 relation ${W} 60
 # m22: the take's witness list had only Shay (W was not within 40 m of the body when the sweep saw the take):
@@ -67,9 +68,13 @@ speed 0
 where ${W}
 where ${V}
 where Malzin
+# M23_F8_REL: W 3 m from the body at the take; paused 5 s so the sweep (runs while paused) lists her before she walks off
+teleport ${W} ${V} dist 3
 transfer ${V} Malzin "Iron Plates"
+@sleep 5
+where ${W}
 speed 1
-@sleep 20
+@sleep 15
 speed 0
 where ${W}
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_(gain|transfer) seq=\d+ load=\d+ actor=${MALZIN_S} .*witnesses=[1-9]

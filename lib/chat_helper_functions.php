@@ -12533,6 +12533,10 @@ function stobeEvaluateRelationshipsForTurn(
         }
     }
 
+    require_once __DIR__ . '/social_dialogue.php';
+    $injected = stobeSocialTestInjectDialogueGain($speaker, $listener, $eventType, $updates); // B 55 rule 4 test switch, off by default
+    if ($injected !== $updates) { $updates = $injected; $method = 'test_inject'; }
+
     if (count($updates) === 0) {
         if ($method === '') {
             $method = 'none';
