@@ -41,7 +41,9 @@ $npc = static fn(int $aff, string $faction = 'Test Traders', array $extra = []):
 ] + $extra;
 check('r from the map', stobeRelValue($npc(42), $player) === 42);
 check('r: no entry = 0', stobeRelValue(['name' => 'X', 'extended_data' => '{}'], $player) === 0);
-check('r: a squad character falls back to the persona entry', stobeRelValue($npc(33), 'SomeSquadChar') === 33);
+check('r (item 100 b): a squad character without an entry reads 0, not the persona entry', stobeRelValue($npc(33), 'SomeSquadChar') === 0);
+check('r (item 100 b): nobody speaking falls back to the persona entry', stobeRelValue($npc(33), '') === 33);
+check('r: the persona entry is case-insensitive', stobeRelValue($npc(21), strtoupper($player)) === 21);
 
 // ---- 102 weapon guard at +69/+70, exemptions
 check('weapon: r=69 blocked', !stobeDealWeaponReleaseAllowed($npc(69), $player, 'social'));

@@ -1678,7 +1678,7 @@ function stobeDealEquippedWeapons(array|false $npcData): array {
 
 /** The NPC's affinity toward the player, or 0 if they have no relationship. */
 function stobeDealNpcTrust(array|false $npcData, string $player): int {
-    if (function_exists('stobeRelValue')) return stobeRelValue($npcData, $player); // Item 102: character, else persona
+    if (function_exists('stobeRelValue')) return stobeRelValue($npcData, $player); // Item 102; item 100 (b): the speaking character's entry
     if (!is_array($npcData) || !function_exists('stobeGetNpcRelationshipMap')) return 0;
     foreach (stobeGetNpcRelationshipMap($npcData) as $target => $entry) {
         if (strcasecmp(normalizeParticipantNameToken(strval($target)), normalizeParticipantNameToken($player)) === 0) {

@@ -2032,10 +2032,9 @@ function stobeNegApplyConsequences(array $deal, string $player): void {
 
         $state = stobeNegDecode($deal['term_state'] ?? []);
         $summary = stobeNegTermsSummary($state, $npc, $player);
-        // Item 100 (Shay's call (a)): reputation and relationship history stay keyed by the PLAYER_NAME persona.
-        // Only a player-squad character other than the persona is mapped (a deal made as Beaks counts for "shay").
-        $persona = normalizeParticipantNameToken(strval(getSetting('PLAYER_NAME', '')));
-        if ($persona === '' || strcasecmp($persona, $player) === 0 || !stobeNegIsPlayerSide($player, $persona)) $persona = $player;
+        // Item 100 (b), Shay 2026-10-03: reputation and relationship history follow the character the deal was
+        // made with ($player = deal player_name, else PLAYER_NAME): Beaks' deal counts for "beaks", Shay's for "shay".
+        $persona = $player;
         [$delta, $memory, $repColumn] = match ($status) {
             'COMPLETE' => [4, $player . ' kept their word on our deal (' . $summary . ').', 'player_kept'],
             'BREACHED_PLAYER' => [-15, $player . ' broke our deal and never delivered (' . $summary . ').', 'player_broken'],
@@ -2064,7 +2063,7 @@ function stobeNegApplyConsequences(array $deal, string $player): void {
             $GLOBALS['db']->exec(
                 "INSERT INTO stobe_negotiation_reputation (player_name, {$repColumn}) VALUES ($1, 1)
                  ON CONFLICT (player_name) DO UPDATE SET {$repColumn}=stobe_negotiation_reputation.{$repColumn}+1, updated_at=NOW()", // item 50: key is lower-case
-                [strtolower($persona)] /* item 50; Item 100: persona */
+                [strtolower($persona)] /* item 50: lower-case key; item 100 (b): the deal's character */
             );
         }
         if ($memory !== '') {
@@ -2258,7 +2257,10 @@ function stobeRemovedClothingPromptBlock(string $npc, array $npcData): string {
 // ------------------------------------------------------------------ prompt support
 
 function stobeNegDealPromptExtras(string $npc, array $npcData, array $openDeal = []): string {
-    $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+    // Item 100 (b): the deal's character, else the speaking character, else the PLAYER_NAME persona.
+    $player = normalizeParticipantNameToken(strval($openDeal['player_name'] ?? ''));
+    if ($player === '' && function_exists('stobePlayerActorName')) $player = stobePlayerActorName();
+    if ($player === '') $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
     $lines = [];
     $money = stobeNegMoney(stobeNegNpcRow($npc));
     if (function_exists('stobeNegOfferCap')) {

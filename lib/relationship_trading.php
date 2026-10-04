@@ -31,14 +31,15 @@ function stobeRelClamp(int $r): int { return max(-100, min(100, $r)); }
 
 /**
  * r for (NPC, player character). The live relationship map (core_npc_master extended_data->relationships; the REL
- * system writes into the same map) by the character's name, else by the PLAYER_NAME persona (item 100: a squad
- * character's history is kept on the persona). No entry = 0.
+ * system writes into the same map) by the character's name (item 100 (b): each squad character has its own
+ * history); the PLAYER_NAME persona only when no character is given. No entry = 0.
  */
 function stobeRelValue(array|false $npcData, string $player): int {
     if (!is_array($npcData) || !function_exists('stobeGetNpcRelationshipMap')) return 0;
     $map = stobeGetNpcRelationshipMap($npcData);
+    // Item 100 (b): the speaking character's own entry; the persona only when nobody speaks.
     $names = [normalizeParticipantNameToken($player)];
-    if (function_exists('getSetting')) $names[] = normalizeParticipantNameToken(strval(getSetting('PLAYER_NAME', '')));
+    if ($names[0] === '' && function_exists('getSetting')) $names[] = normalizeParticipantNameToken(strval(getSetting('PLAYER_NAME', '')));
     foreach ($names as $want) {
         if ($want === '') continue;
         foreach ($map as $target => $entry) {

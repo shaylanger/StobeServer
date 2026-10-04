@@ -15589,7 +15589,7 @@ function stobeReplyAgreesToHandover(string $reply): bool {
  * Item 67: a squad member who agreed in words but sent no GIVE_ITEM at all: the requested
  * items she carries ($squadMember null = npcIsInPlayerFaction).
  */
-/** Item 100: the PLAYER_NAME persona (reputation/relationship history key, Shay's call (a)). */
+/** Item 100: the PLAYER_NAME persona (fallback when nobody speaks; item 100 (b): history follows the speaker). */
 function stobePlayerPersonaName(): string {
     return function_exists('getSetting') ? normalizeParticipantNameToken(strval(getSetting('PLAYER_NAME', 'Drifter'))) : '';
 }

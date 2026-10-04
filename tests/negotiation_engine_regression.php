@@ -873,7 +873,8 @@ check('phase 6 toggle on enables social offers', stobeNegLooksLikeSocialOffer("I
 
 // ---------------------------------------------------------------- Item 100: another squad than the PLAYER_NAME persona
 // Speaker "NegTestBeaks" (a player-faction character), persona $player: the item 43 helper must not add a second
-// GIVE_ITEM for the persona; "me" is the speaking character; deal actions target it; the reputation key stays the persona.
+// GIVE_ITEM for the persona; "me" is the speaking character; deal actions target it; item 100 (b): reputation and
+// relationship history follow the character (Shay 2026-10-03).
 fixtureNpc('NegTestBeaks', ['money'=>800, 'money_observed_at'=>time()], '', '', '100/100', 'Nameless');
 fixtureNpc('NegTestAvarek', ['money'=>10, 'money_observed_at'=>time()], 'Bread x2 value 10', 'Loyal.', '100/100', 'Nameless');
 $GLOBALS['STOBE_PLAYER_ACTOR'] = 'NegTestBeaks';
@@ -893,11 +894,50 @@ $db->exec("UPDATE stobe_social_contract SET player_name='NegTestBeaks' WHERE con
 stobeNegBeginPerformance($id, ['GIVE_CATS@NegTestBeaks@20'], 'NegTestBeaks', 1000, '');
 check('item 100: the deal payment is dispatched to the speaking character', termStatus($id, 0) === 'DISPATCHED', termStatus($id, 0));
 $repBefore = intval($db->fetchOne("SELECT COALESCE(MAX(npc_kept),0) AS k FROM stobe_negotiation_reputation WHERE player_name=LOWER($1)", [$player])['k'] ?? 0);
+$relP100before = stobeRelationshipEntryFor(getNpcData('NegTestBandit'), $player)['aff'] ?? null; // item 100 (b)
+$repP100before = intval($db->fetchOne("SELECT COALESCE(MAX(player_kept),0) AS k FROM stobe_negotiation_reputation WHERE player_name=LOWER($1)", [$player])['k'] ?? 0);
 stobeLine("ACTION_EXEC: GIVE_CATS actor=NegTestBandit recipient=NegTestBeaks amount=20", time());
 stobeNegTick();
 check('item 100: deal with the squad character completes', status($id) === 'COMPLETE', [status($id), termStatus($id, 0)]);
-$beaksRep = $db->fetchOne("SELECT 1 AS x FROM stobe_negotiation_reputation WHERE player_name='negtestbeaks'");
-check('item 100: reputation stays on the persona (no row for the character)', !$beaksRep);
+$beaksRep = $db->fetchOne("SELECT player_kept FROM stobe_negotiation_reputation WHERE player_name='negtestbeaks'");
+check('item 100 (b): Beaks\' deal lands on "negtestbeaks"', intval($beaksRep['player_kept'] ?? 0) === 1, $beaksRep);
+$repP100after = intval($db->fetchOne("SELECT COALESCE(MAX(player_kept),0) AS k FROM stobe_negotiation_reputation WHERE player_name=LOWER($1)", [$player])['k'] ?? 0);
+check('item 100 (b): the persona row is untouched by Beaks\' deal', $repP100after === $repP100before, [$repP100before, $repP100after]);
+$bandit100 = getNpcData('NegTestBandit');
+$rels100 = is_array($bandit100) ? stobeGetNpcRelationshipMap($bandit100) : [];
+$relKeys100 = array_map('strtolower', array_keys($rels100));
+$relP100after = stobeRelationshipEntryFor(getNpcData('NegTestBandit'), $player)['aff'] ?? null;
+check('item 100 (b): the NPC\'s relationship delta goes to the Beaks entry, not the persona',
+    in_array('negtestbeaks', $relKeys100, true) && $relP100after === $relP100before, [$relKeys100, $relP100before, $relP100after]);
+// A broken deal by Beaks counts against "negtestbeaks"; the same by the persona (other casing) against the persona row.
+$idB100 = makeDeal('NegTestBandit', [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>20]], 'social');
+$db->exec("UPDATE stobe_social_contract SET player_name='NegTestBeaks' WHERE contract_id=$1", [$idB100]);
+$dealB100 = stobeNegFetchDeal($idB100); $dealB100['status'] = 'BREACHED_PLAYER';
+stobeNegApplyConsequences($dealB100, 'NegTestBeaks');
+check('item 100 (b): Beaks\' broken deal lands on "negtestbeaks"',
+    intval($db->fetchOne("SELECT player_broken FROM stobe_negotiation_reputation WHERE player_name='negtestbeaks'")['player_broken'] ?? 0) === 1);
+$brokenP0 = intval($db->fetchOne("SELECT COALESCE(MAX(player_broken),0) AS b FROM stobe_negotiation_reputation WHERE player_name=LOWER($1)", [$player])['b'] ?? 0);
+$idS100 = makeDeal('NegTestBandit', [['kind'=>'GIVE_CATS','by'=>'player','to'=>'npc','amount'=>20]], 'social');
+$dealS100 = stobeNegFetchDeal($idS100); $dealS100['status'] = 'BREACHED_PLAYER';
+stobeNegApplyConsequences($dealS100, strtoupper($player));
+check('item 100 (b): the persona\'s broken deal (any casing) lands on the persona row',
+    intval($db->fetchOne("SELECT COALESCE(MAX(player_broken),0) AS b FROM stobe_negotiation_reputation WHERE player_name=LOWER($1)", [$player])['b'] ?? 0) === $brokenP0 + 1);
+check('item 100 (b): no upper-case duplicate row', !$db->fetchOne("SELECT 1 AS x FROM stobe_negotiation_reputation WHERE player_name<>LOWER(player_name) AND LOWER(player_name) IN ('negtestbeaks', LOWER($1))", [$player]));
+// Prompt lines read the speaking character's reputation, not the persona's.
+$db->exec("UPDATE stobe_negotiation_reputation SET player_kept=0, player_broken=3 WHERE player_name='negtestbeaks'");
+$extras100 = stobeNegDealPromptExtras('NegTestBandit', getNpcData('NegTestBandit') ?: []);
+check('item 100 (b): deal prompt reputation line names the speaking character', str_contains($extras100, 'NegTestBeaks has a reputation for breaking deals'), $extras100);
+$GLOBALS['STOBE_PLAYER_ACTOR'] = $player; // the open deal's character wins over the speaker
+$extrasDeal100 = stobeNegDealPromptExtras('NegTestBandit', getNpcData('NegTestBandit') ?: [], ['player_name'=>'NegTestBeaks', 'status'=>'PROPOSED']);
+$GLOBALS['STOBE_PLAYER_ACTOR'] = 'NegTestBeaks';
+check('item 100 (b): an open deal\'s character names the line', str_contains($extrasDeal100, 'NegTestBeaks has a reputation'), $extrasDeal100);
+// The stance block reads the speaker's own entry.
+$stanceNpc100 = ['name'=>'NegTestBandit', 'extended_data'=>json_encode(['relationships'=>[
+    $player=>['aff'=>80, 'type'=>'platonic'], 'NegTestBeaks'=>['aff'=>-60, 'type'=>'enemy']]])];
+$stance100 = stobeBuildRelationshipStanceBlock('NegTestBandit', $stanceNpc100, 'NegTestBeaks', false);
+check('item 100 (b): an NPC\'s stance toward Beaks reads the Beaks entry', str_contains($stance100, '-60') && !str_contains($stance100, ' 80 of'), $stance100);
+$db->exec("DELETE FROM stobe_social_contract WHERE contract_id IN ($1, $2)", [$idB100, $idS100]);
+$db->exec("DELETE FROM stobe_negotiation_reputation WHERE player_name='negtestbeaks'");
 unset($GLOBALS['STOBE_PLAYER_ACTOR']);
 check('item 100: without a speaking character, "me" is the persona (Shay/Malzin unchanged)', strcasecmp(stobeGoalPersonName('me'), $player) === 0, stobeGoalPersonName('me'));
 foreach (['NegTestBeaks', 'NegTestAvarek'] as $n) { $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n]); $db->exec("DELETE FROM core_npc WHERE name=$1", [$n]); }
