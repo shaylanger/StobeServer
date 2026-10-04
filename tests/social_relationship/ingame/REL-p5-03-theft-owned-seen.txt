@@ -16,10 +16,12 @@ speed 0
 @set SHAY_S where ${SHAY} ~ (#\d+)/\d+
 protect Shay on
 teleport Malzin Shay dist 60
-spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
+# m22: Nomads, not Drifters: Drifters is "not a real faction" (FCS), BountyManager::setCrime refuses it and the game
+# never treats taking their goods as a crime (no HUNT_MY_THIEF, crime commit set=0)
+spawn "Hungry Bandit" Nomads near Shay dist 10 count 1 ~ spawned 1/1
 @set O chars 40 ~ Hungry Bandit\]? (#\d+/\d+)
 @set O_S where ${O} ~ (#\d+)/\d+
-# run m11: Malzin/Shay attack test Drifters otherwise
+# run m11: Malzin/Shay attack the test faction otherwise
 relation ${O} 60
 setname ${O} "Rel Tess" ~ ^([^ ].* \[)?Hungry Bandit\]? ->
 @set TNAME where ${O} ~ ^(.+?) #\d+
@@ -30,7 +32,9 @@ speed 1
 @sleep 10
 speed 0
 teleport ${O} Shay dist 4
-drop ${O} "Iron Plates" owned ~ owner_faction=Drifters
+drop ${O} "Iron Plates" owned ~ owner_faction=Nomads
+# m22: let the owner's pending loss expire (6 s) so the pickup is an item_gain, not an in-sweep transfer from him
+@sleep 8
 stealth Shay off
 crime Shay ~ committing_crime=
 # the PICKUP order only runs while the game runs; the reply comes when the plate is in Shay's inventory
