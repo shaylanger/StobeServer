@@ -661,7 +661,8 @@ function stobeNegPlayerRefusal(string $npc, string $player, string $message): st
             $sentence = trim($sentence);
             if ($sentence === '' || str_ends_with($sentence, '?')) continue;
             if (preg_match("/\\b(he|she|they|you) (said|says|told)\\b/", $sentence)) continue;
-            if (preg_match("/\\b(not|never|won'?t|wont|ain'?t|no way|refuse to)\\b[^.!?]{0,25}\\b(pay|paying|give|giving|hand|handing)\\b/", $sentence)
+            // A12: refusing the heal of a heal-for-item deal is a refusal too.
+            if (preg_match("/\\b(not|never|won'?t|wont|ain'?t|no way|refuse to)\\b[^.!?]{0,25}\\b(pay|paying|give|giving|hand|handing|heal|healing|bandage|bandaging|patch|patching|treat|treating)\\b/", $sentence)
                 || preg_match("/\\b(keep|keeping|take|taking) (it|this|that|them|the [a-z ]{1,30}) for free\\b/", $sentence)
                 || preg_match("/\\byou(?:'re| are) not getting (paid|anything|a thing|your (cats|money))\\b/", $sentence)) {
                 $refused = true;

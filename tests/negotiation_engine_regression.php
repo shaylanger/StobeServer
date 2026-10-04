@@ -961,6 +961,15 @@ check('item 90: an agreeing reply still gets the goal', stobeInferWorkGoalFromOr
 check('item 90: no reply text -> goal as before (bug 76)', stobeInferWorkGoalFromOrder('Malzin, make 2 bread.', $malzin90, []) === 'WORK_GOAL@Bread@2');
 $db->exec("DELETE FROM core_npc_master WHERE name='NegTestMalzin90'");
 
+// ---------------------------------------------------------------- STOBE A12: refusing to heal breaks a heal deal
+fixtureNpc('NegTestSenlinA12', ['money'=>20, 'money_observed_at'=>time()], 'Rag Loincloth x1 value 10', 'Calm.');
+$idA12 = makeDeal('NegTestSenlinA12', [['kind'=>'FIRST_AID', 'by'=>'player', 'target'=>'npc', 'when'=>'after_npc'],
+    ['kind'=>'GIVE_ITEM', 'by'=>'npc', 'to'=>'player', 'item'=>'Rag Loincloth']], 'social');
+stobeNegBeginPerformance($idA12, ['GIVE_ITEM@' . $player . '@Rag Loincloth@1'], $player, 1000, '');
+$noteA12 = stobeNegPlayerRefusal('NegTestSenlinA12', $player, "Thanks. I'm not going to heal you, though.");
+check('A12: "not going to heal you" is a refusal of the heal term', $noteA12 !== '' && termStatus($idA12, 0) === 'UNMET', [$noteA12, termStatus($idA12, 0)]);
+$db->exec("DELETE FROM core_npc_master WHERE name='NegTestSenlinA12'");
+
 // ---------------------------------------------------------------- cleanup
 $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");
