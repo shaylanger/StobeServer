@@ -6,14 +6,20 @@
 speed 0
 @set FREE where "__FREE__" ~ (#\d+/\d+)
 @set NS where "__NS__" ~ (#\d+/\d+)
+@set NSNAME where ${NS} ~ ^(.+?) #\d+
 setname ${NS} "Rel Nima" ~ -> Rel Nima
 protect ${FREE} on
+setstat ${FREE} lockpicking 100
 teleport ${FREE} ${NS} dist 3
 speed 1
 @sleep 6
 speed 0
+# m31 (batch P: the order was never carried out, the slave state never moved): setup check, then progress
+#   (chains off, or Stobe's 'liberation task' line for the freer) within 60 s, else the order once more
+chance ${FREE} lockpick ${NS} ~ lockpick_chance=(0\.0*[1-9]|[1-9])
 order ${FREE} PICK_LOCK_ON_SHACKLES target ${NS}
 speed 2
+@any @log-wait 60 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ (slave state serial=\d+ name=Rel Nima chained=1->0|liberation task serial=\d+ name=__FREE__ task=) || order ${FREE} PICK_LOCK_ON_SHACKLES target ${NS}
 # m26: poll (the lock pick takes a while) instead of a fixed 60 s
 @log-wait 180 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator":\{[^}]*"name":"__FREE__"
 speed 0
@@ -25,4 +31,6 @@ stobe_say "Rel Nima" "Rel Nima, you're free now. Join my squad and come with me.
 speed 1
 @sleep 25
 speed 0
-where ${NS2} ~ .
+# m31 (batch P): a while after leaving the cage the game re-creates him under a new handle (#706909184/5 gone
+#   25 s after the ask): by name, else the old handle, else his original name; never in the squad
+@any where "Rel Nima" ~ \[(?!Nameless\])[^\]]+\] pos= || where ${NS2} ~ \[(?!Nameless\])[^\]]+\] pos= || where "${NSNAME}" ~ \[(?!Nameless\])[^\]]+\] pos=

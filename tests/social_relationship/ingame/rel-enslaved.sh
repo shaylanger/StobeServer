@@ -33,6 +33,8 @@ koslavers(){
     grep -v -e ' KO' -e ' DEAD' "$O/slavers-$1.txt" | grep -o '#[0-9]*/[0-9]*' > "$O/slavers-$1.todo"
     [ -s "$O/slavers-$1.todo" ] || break
     while read -r h; do stobe-auto ko "$h" 1500 >> "$O/guards.txt" 2>&1; n=$((n + 1)); done < "$O/slavers-$1.todo"
+    # m31: a KO shows in `chars` only after a frame (paused, every pass re-knocked the same nearest 40): 1 s of time
+    stobe-auto speed 1 >/dev/null; sleep 1; stobe-auto speed 0 >/dev/null
   done
   log "$1: knocked out $n Slave Traders for 1500 s ($(grep -c . "$O/slavers-$1.txt") listed, 40 = cap; awake left: $(grep -c . "$O/slavers-$1.todo"))"
 }

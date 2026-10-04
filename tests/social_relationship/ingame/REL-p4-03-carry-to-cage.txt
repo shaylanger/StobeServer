@@ -43,12 +43,16 @@ speed 5
 @until 300 where ${K} ~ dist=[0-9.]+$
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${K_S}
-spawn "Hungry Bandit" Drifters near Shay dist 15 count 1 ~ spawned 1/1
-@set U chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
+# m31 (Full-Base batch P: `chars 60` is centred on the first squad member, no bandit found; the only cage held Kade):
+#   the handle the spawn prints, next to Malzin, in a cage built for him (unbuilt after); unknown captor = actor #0
+@set U spawn "Hungry Bandit" Drifters near Malzin dist 15 count 1 ~ spawned 1/1 .*?(#\d+/\d+)
+@set U_S where ${U} ~ (#\d+)/\d+
 setname ${U} "Rel Ulf" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 @set UNAME where ${U} ~ ^(.+?) #\d+
-cage ${U}
+build "Prisoner Cage" near ${U} dist 6 ~ ^built Prisoner Cage
+cage ${U} "Prisoner Cage" ~ cage Prisoner Cage \(
 speed 1
-@sleep 6
+@log-wait 30 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=placed seq=\d+ load=\d+ actor=#0 target=${U_S} witnesses=\d+ facts="place":"prison"
 speed 0
-uncage ${U}
+uncage ${U} "Prisoner Cage" ~ uncage Prisoner Cage \(
+unbuild "Prisoner Cage" 1000 ~ ^destroyed
