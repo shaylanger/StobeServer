@@ -108,7 +108,8 @@ wild)
   since $WL $w0 | grep -a "SOCIAL_INTERPRET" | grep -a -e "Rel Arn" -e "Rel Bek" > "$O/wild.log.txt"
   insp --pair-effects > "$O/wild.inspect.txt" 2>&1
   e1=$(aff "Rel Bek" "Rel Arn"); e2=$(aff "Rel Arn" "Rel Bek")
-  if grep -a -q -e '"actor":"Shay"' -e '"target":"Shay"' -e '"actor":"Malzin"' -e '"target":"Malzin"' "$O/wild.log.txt"; then
+  # M24_F12: theft_caught = Shay/Malzin saw the bandits' burglary in the home, not the fight
+  if grep -a -v '"kind":"theft_caught"' "$O/wild.log.txt" | grep -a -q -e '"actor":"Shay"' -e '"target":"Shay"' -e '"actor":"Malzin"' -e '"target":"Malzin"'; then
     v "wild: SETUP FAIL the squad joined the fight (Shay/Malzin in wild.log.txt): not a wild fight"
   elif grep -q '"ignored"' "$O/wild.log.txt" && [ "${e1:-0}" = 0 ] && [ "${e2:-0}" = 0 ]; then v "wild: PASS ignored, no entries"
   elif [ ! -s "$O/wild.log.txt" ]; then v "wild: INCONCLUSIVE no structured attack between them reached the server (wild.log.txt empty)"
@@ -196,9 +197,21 @@ bleed)
   h=$(bandit "Rel Vex") || { v "bleed: FAIL no bandit"; continue; }
   l0=$(lines $L); w0=$(lines $WL)
   fightko "$h" 40
-  stobe-auto damage "$h" chest 100 >/dev/null; stobe-auto blood "$h" 30% >/dev/null
+  # M24_F12: chest 100 + blood 30 % bled him out before waking (m22 F). A deep arm wound that doesn't bleed instead:
+  # about -70 % (native "health" = worst part ratio <= -0.3 on waking = near death); blood watchdog while KO.
+  d=$(stobe-auto damage "$h" right_arm 1 bleed 0); echo "$d" > "$O/bleed.setup.txt"
+  idx=$(echo "$d" | grep -o 'part [0-9]*' | grep -o '[0-9]*$'); fl=$(echo "$d" | grep -o 'flesh [-0-9.]* -> [-0-9.]*' | awk '{print $4}')
+  mx=$(stobe-auto hp "$h" | grep -o " $idx:[-0-9.]*/[0-9.]*" | head -1 | cut -d/ -f2)
+  cut=$(awk -v f="$fl" -v m="$mx" 'BEGIN{ if (m > 0) printf "%.1f", f + 0.7 * m }')
+  [ -n "$cut" ] && stobe-auto damage "$h" right_arm "$cut" bleed 0 >> "$O/bleed.setup.txt"
+  ratio=$(stobe-auto hp "$h" | tee -a "$O/bleed.setup.txt" | grep -o " $idx:[-0-9.]*/[0-9.]*" | head -1 | awk -F'[:/]' '{ if ($3 > 0) printf "%d", 100 * $2 / $3 }')
+  if [ -z "$ratio" ] || [ "$ratio" -gt -50 ] || [ "$ratio" -le -95 ]; then
+    v "bleed: SETUP FAIL arm wound ${ratio:-?}% (want -50..-95; bleed.setup.txt)"; stobe-auto speed 0 >/dev/null; away "$h"; continue; fi
   stobe-say speed 3 >/dev/null
-  for i in $(seq 1 80); do stobe-auto where "$h" | grep -q ' KO' || break; sleep 2; done
+  for i in $(seq 1 80); do hl=$(stobe-auto hp "$h"); echo "$hl" | grep -q ' KO' || break
+    bf=$(echo "$hl" | grep -o 'blood=[0-9.]*/[0-9.]*' | head -1 | awk -F'[=/]' '{ if ($3 > 0) printf "%d", 100 * $2 / $3 }')
+    if [ -n "$bf" ] && [ "$bf" -lt 30 ]; then stobe-auto blood "$h" 40% >/dev/null; echo "watchdog: blood $bf% -> 40%" >> "$O/bleed.setup.txt"; fi
+    sleep 2; done
   sleep 10; stobe-auto speed 0 >/dev/null
   since $L $l0 | grep -a "structured kind=recovered" | head -2 > "$O/bleed.stobe.txt"
   since $WL $w0 | grep -a "SOCIAL_INTERPRET" | grep -a "Rel Vex" > "$O/bleed.log.txt"
