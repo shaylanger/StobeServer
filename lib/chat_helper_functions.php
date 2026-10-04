@@ -15508,6 +15508,42 @@ function stobeInferFollowFromOrder(string $playerLine, array|false $npcData, arr
 }
 
 /**
+ * Item 113: the player's clear yes/no to a squad member's purchase that waits for approval ->
+ * TASK_CONTROL@APPROVE|DECLINE@<goal id>. $waiting(actor) returns the waiting goal id or ''.
+ */
+function stobeInferApprovalFromReply(string $playerLine, array|false $npcData, array $actions, ?callable $waiting = null, ?bool $squadMember = null): string {
+    if (!is_array($npcData)) return '';
+    if ($squadMember === null) $squadMember = function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData);
+    if (!$squadMember) return '';
+    foreach ($actions as $a) {
+        if (preg_match('/^TASK_CONTROL@(APPROVE|DECLINE|CANCEL)@/i', trim(strval($a)))) return '';
+    }
+    $line = strtolower(trim($playerLine));
+    if ($line === '' || str_contains($line, '?')) return '';
+    $no = preg_match("/\b(no|nope|don'?t|do\s+not|cancel|decline|forget\s+(?:it|that)|never\s*mind|not\s+worth)\b/", $line) === 1;
+    $yes = preg_match("/^(?:[a-z]+,\s*)?(?:yes|yeah|yep|aye|sure|ok(?:ay)?|fine|approved?)\b|\b(?:go\s+ahead|do\s+it|you\s+can\s+buy|buy\s+(?:it|them|those|that|the\s+[a-z' -]{2,40})|i\s+approve|approved)\b/", $line) === 1;
+    if ($yes === $no) return ''; // neither, or mixed
+    $actor = normalizeParticipantNameToken(strval($npcData['name'] ?? ''));
+    if ($actor === '' && $waiting === null) return '';
+    if ($waiting === null) {
+        $waiting = static function (string $who): string {
+            try {
+                $row = $GLOBALS['db']->fetchOne(
+                    "SELECT goal_id FROM stobe_task_goal_runtime WHERE LOWER(actor_name)=LOWER($1) AND status='WAITING_APPROVAL' ORDER BY updated_at DESC LIMIT 1",
+                    [$who]
+                );
+                return is_array($row) ? strval($row['goal_id'] ?? '') : '';
+            } catch (Throwable $e) {
+                return '';
+            }
+        };
+    }
+    $goal = strval($waiting($actor));
+    if ($goal === '') return '';
+    return 'TASK_CONTROL@' . ($yes ? 'APPROVE' : 'DECLINE') . '@' . $goal . '@0@';
+}
+
+/**
  * Item 43: the items a player's line asks her to hand over, in order:
  * [['part'=>'dried meat', 'qty'=>int|null (null = all)], ...]. Empty if it isn't a hand-over request.
  */

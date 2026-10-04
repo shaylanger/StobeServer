@@ -82,6 +82,15 @@ check('item 82: "... and bring it to me" -> the bought kit goes to the player',
 check('item 74: a number is kept', stobeInferBuyFromAgreedRequest('Buy 2 bread from Apothecary Abia.', $npc73, [], 'Will do.', true, $known74) === 'TASK_GOAL@BUY@Apothecary Abia@bread@2@@0');
 check('item 74: an unknown trader -> nothing', stobeInferBuyFromAgreedRequest('Go buy a kit from Nobody Here.', $npc73, [], "I'll go.", true, $known74) === '');
 check('item 74: a refusal -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, [], "No, I'm not wasting cats on that.", true, $known74) === '');
+// 113: a spoken yes/no to a purchase waiting for approval (m18 Squin)
+$wait113 = static fn(string $who): string => 'buy-wg-test-Fabrics';
+check('item 113: "Yes, go ahead and buy the fabrics." -> APPROVE',
+    stobeInferApprovalFromReply('Yes, go ahead and buy the fabrics.', $npc73, ['MOVE_TO_TARGET@Apothecary Marquart'], $wait113, true) === 'TASK_CONTROL@APPROVE@buy-wg-test-Fabrics@0@',
+    stobeInferApprovalFromReply('Yes, go ahead and buy the fabrics.', $npc73, ['MOVE_TO_TARGET@Apothecary Marquart'], $wait113, true));
+check('item 113: "No, don\'t buy anything." -> DECLINE', stobeInferApprovalFromReply("No, don't buy anything.", $npc73, [], $wait113, true) === 'TASK_CONTROL@DECLINE@buy-wg-test-Fabrics@0@');
+check('item 113: nothing waiting -> nothing', stobeInferApprovalFromReply('Yes, go ahead.', $npc73, [], static fn($w) => '', true) === '');
+check('item 113: a question -> nothing', stobeInferApprovalFromReply('Should I buy the fabrics?', $npc73, [], $wait113, true) === '');
+check('item 113: not a squad member -> nothing', stobeInferApprovalFromReply('Yes, go ahead.', false, [], $wait113) === '');
 // 111: "from the shop here" (m18 Squin) -> unnamed BUY, KenshiFP picks the nearest trader
 check('item 111: "buy one X from the shop here" + agreement -> TASK_GOAL@BUY with no trader',
     stobeInferBuyFromAgreedRequest('Kint, go buy one Limited-sight Scrap Helm from the shop here.', $npc73, ['MOVE_TO@Beak'], "Aye, I'll see what the armor trader's got.", true, $known74)

@@ -1685,6 +1685,15 @@ if (!$narratorMode && function_exists('stobeInferBuyFromAgreedRequest')
         stobeLogInfo('Agreed purchase without action: TASK_GOAL added (item 74)', ['npc'=>$targetNpc, 'action'=>$inferredBuy]);
     }
 }
+if (!$narratorMode && function_exists('stobeInferApprovalFromReply')
+    && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+    $inferredApproval = stobeInferApprovalFromReply(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions);
+    if ($inferredApproval !== '') {
+        $responseActions = array_values(array_filter($responseActions, static fn($a) => !preg_match('/^(MOVE_TO|MOVE_TO_TARGET)@/i', strval($a))));
+        $responseActions[] = $inferredApproval;
+        stobeLogInfo('Spoken purchase approval: TASK_CONTROL added (item 113)', ['npc'=>$targetNpc, 'action'=>$inferredApproval]);
+    }
+}
 if (!$narratorMode && function_exists('stobeInferFollowFromOrder')
     && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
     $inferredFollow = stobeInferFollowFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
