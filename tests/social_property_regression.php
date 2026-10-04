@@ -17,7 +17,8 @@ const P = ['Prop Owner'=>[401,'Blue',false], 'Prop Thief'=>[402,'Grey',false], '
     'Prop Owner Four'=>[405,'Blue',false], 'Prop Squad A'=>[411,'Nameless',true], 'Prop Squad B'=>[412,'Nameless',true],
     'Prop Giver'=>[421,'Hub',false], 'Prop Friend'=>[422,'Blue',false], 'Prop Trader'=>[431,'Traders',false], 'Prop Buyer'=>[432,'Blue',false],
     'Prop Rich Buyer'=>[433,'Blue',false], 'Prop Patron'=>[434,'Blue',false], 'Prop Npc'=>[441,'Blue',false], 'Prop Npc Two'=>[442,'Blue',false], 'Prop Player'=>[450,'Nameless',true],
-    'Prop Hunter'=>[406,'Traders',false], 'Prop Guard'=>[407,'Traders',false], 'Prop Shop Thief'=>[408,'Grey',false], 'Prop Squad C'=>[413,'Nameless',true]];
+    'Prop Hunter'=>[406,'Traders',false], 'Prop Guard'=>[407,'Traders',false], 'Prop Shop Thief'=>[408,'Grey',false], 'Prop Squad C'=>[413,'Nameless',true],
+    'Prop Escapee'=>[409,'Slaves',false], 'Prop Slaver'=>[410,'Slave Hunters',false]];
 foreach (['social_event_inbox','social_incident','social_belief','social_effect','social_evidence','social_checkpoint'] as $t) sql("DELETE FROM $t");
 foreach (P as $name => [$serial]) {
     sql('DELETE FROM core_npc_master_history WHERE name=$1', [$name]); sql('DELETE FROM core_npc WHERE name=$1', [$name]);
@@ -195,5 +196,10 @@ $gd = affOf('Prop Guard', 'Prop Shop Thief');
 send('item_gain', ent('Prop Shop Thief'), null, ['items'=>['Iron Bar'=>1], 'stolen_items'=>['Iron Bar'=>1]], 50009000);
 send('theft_caught', ent('Prop Shop Thief'), ent('Prop Guard'), ['goal'=>'EV_THIEF_CAUGHT_STEALING_FROM_ME', 'stolen_items'=>['Iron Bar'=>1]], 50009464);
 ok(affOf('Prop Guard', 'Prop Shop Thief') < $gd, 'SR13 theft dialog 464 game s after the pickup still scores (m22 F)');
+// m22 batch O: a slave picking his shackles = witness crime Terrorism, nothing stolen: no theft hunt, so a later stolen gain blames nobody.
+ok(status(send('theft_caught', ent('Prop Escapee'), ent('Prop Slaver'), ['goal'=>'EV_WITNESS_THIEF_OR_LOCKPICK', 'stolen_items'=>[],
+    'thief_stolen_count'=>0, 'crime'=>'Terrorism'], 50010000)) === 'not_theft', 'Terrorism witness without stolen goods: not_theft');
+send('item_gain', ent('Prop Escapee'), null, ['items'=>['Iron Bar'=>1], 'stolen_items'=>['Iron Bar'=>1]], 50010005);
+ok(entryOf('Prop Slaver', 'Prop Escapee') === null, 'Terrorism witness opens no hunt: a later stolen gain blames nobody');
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 echo "$n property/agreement regression checks passed\n";

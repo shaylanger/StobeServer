@@ -147,6 +147,13 @@ trait SocialPropertyInterpreter
     {
         $thief = $event['actor']; $hunter = $event['target'];
         if (!$thief || !$hunter || $thief['entity_key'] === $hunter['entity_key']) return [['status'=>'incomplete_roles']];
+        // The native witness/caught dialog carries every crime (Terrorism = a slave picking shackles): only a
+        // theft-like crime, or one with stolen goods, opens a theft hunt.
+        $crime = trim(strval($event['facts']['crime'] ?? ''));
+        if ($crime !== '' && strcasecmp($crime, 'none') !== 0 && !preg_match('/theft|steal|thie|loot|burgl|lockpick|fenc|uniform/i', $crime)
+            && (int)($event['facts']['thief_stolen_count'] ?? 0) <= 0 && empty($event['facts']['stolen_items'])) {
+            return [['status'=>'not_theft', 'crime'=>$crime]];
+        }
         if (self::squadPair($thief, $hunter)) return [['status'=>'exempt', 'note'=>'squad']];
         if (($hunter['conscious'] ?? null) !== true) return [['status'=>'not_aware']];
         $hunt = 'hunt:' . substr(hash('sha256', $hunter['entity_key'] . '|' . $thief['entity_key']), 0, 24);
