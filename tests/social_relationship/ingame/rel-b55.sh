@@ -67,6 +67,8 @@ fightlight(){ local h="$1"
   stobe-auto teleport "$h" Shay dist 300 >/dev/null; }
 away(){ stobe-auto teleport "$1" Shay dist 300 >/dev/null 2>&1; }
 : > "$O/verdicts.txt"
+# Standalone B55 test starts from its documented mode-off baseline (fights stays live).
+insp --set-mode off >/dev/null
 
 for B in $BLOCKS; do case $B in
 mode)
