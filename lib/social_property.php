@@ -106,7 +106,8 @@ trait SocialPropertyInterpreter
             ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>$giver['name'] . ' gave back what was stolen', 'kind'=>'restitution'], $rows[0]['incident_id']);
     }
 
-    private function theftWindow(): int { return max(30, (int)$this->economy('theft_caught_window_seconds', 300)); }
+    // M24_F12: 900 game s (~30 real s at 1x). The owner's own alarm (theft dialog) came 464 game s after the pickup in m22 F.
+    private function theftWindow(): int { return max(30, (int)$this->economy('theft_caught_window_seconds', 900)); }
 
     /** Open hunts on this thief (by everyone, or by one hunter) within the window. */
     private function openHunts(array $event, array $thief, ?array $hunter = null): array

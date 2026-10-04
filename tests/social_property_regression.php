@@ -190,5 +190,10 @@ $late = affOf('Prop Owner', 'Prop Thief') - $o5;
 ok($late < 0 && $late >= -18, "SR13 late theft_caught by the owner ($late)");
 send('theft_caught', ent('Prop Thief'), ent('Prop Owner'), ['goal'=>'HUNT_MY_THIEF'], 50007060);
 ok(affOf('Prop Owner', 'Prop Thief') - $o5 === $late, 'SR13 late caught once');
+// M24_F12: the owner's theft dialog arrives after he walked over (m22 F: 464 game s after the pickup): still caught.
+$gd = affOf('Prop Guard', 'Prop Shop Thief');
+send('item_gain', ent('Prop Shop Thief'), null, ['items'=>['Iron Bar'=>1], 'stolen_items'=>['Iron Bar'=>1]], 50009000);
+send('theft_caught', ent('Prop Shop Thief'), ent('Prop Guard'), ['goal'=>'EV_THIEF_CAUGHT_STEALING_FROM_ME', 'stolen_items'=>['Iron Bar'=>1]], 50009464);
+ok(affOf('Prop Guard', 'Prop Shop Thief') < $gd, 'SR13 theft dialog 464 game s after the pickup still scores (m22 F)');
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 echo "$n property/agreement regression checks passed\n";
