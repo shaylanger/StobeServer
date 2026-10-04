@@ -412,6 +412,15 @@ $db->exec("UPDATE stobe_social_contract SET updated_at=NOW() WHERE contract_id=$
 $people = "[\"$player|hand_1\",\"NegTestBandit|hand_2\",\"Trella [Slaver Guard]|hand_3\"]";
 check('unnamed line routed to partner', stobeNegPartnerForUnnamedLine('Trella [Slaver Guard]', 'Do we have a deal?', $people) === 'NegTestBandit');
 check('named line respected', stobeNegPartnerForUnnamedLine('Trella [Slaver Guard]', 'Trella, back off.', $people) === '');
+// C49: the bracket suffix is the existing deal partner, not another addressee.
+check('C49 renamed partner retains live name', stobeNegPartnerForUnnamedLine('Weth [NegTestBandit]', 'Here are your 200 cats.', '["Weth [NegTestBandit]|hand_424249"]') === '');
+check('C49 renamed partner case insensitive', stobeNegPartnerForUnnamedLine('Weth [negtestbandit]', 'Here are your 200 cats.', '["Weth [negtestbandit]|hand_424249"]') === '');
+$GLOBALS['CACHE_PEOPLE'] = '["NegTestBandit|hand_424249"]';
+check('C49 serial recovered from current roster before stale storage', stobeNegSerialFromStorage('NegTestBandit') === 424249);
+unset($GLOBALS['CACHE_PEOPLE']);
+check('C49 current roster name overrides stale canonical profile', function_exists('stobeNegCanonicalChatTarget') && stobeNegCanonicalChatTarget('Weth [NegTestBandit]', 'Garr 2 [NegTestBandit]', 424249) === 'Weth [NegTestBandit]');
+check('C49 stored canonical still used without current identity', function_exists('stobeNegCanonicalChatTarget') && stobeNegCanonicalChatTarget('Old alias', 'Canonical', 0) === 'Canonical');
+
 
 // ---------------------------------------------------------------- 12b. bug 119: putting on what she already wears
 $wornNpc = ['equipment'=>'Black Cloth Shirt [Shoddy] x1 value 202, Black Rag Shirt [Shoddy] x1 value 96, Iron Hat [Shoddy] x1 value 526',

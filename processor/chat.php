@@ -718,6 +718,9 @@ if ($narratorMode) {
     }
 
     $canonicalTargetNpc = normalizeParticipantNameToken(strval($npcData['name'] ?? ''));
+    // C49: profiles can retain a previous fixture's name for the same reused serial.
+    $canonicalTargetNpc = stobeNegCanonicalChatTarget($targetNpc, $canonicalTargetNpc, $targetLiveSerial);
+    if ($targetLiveSerial > 0) $npcData['name'] = $targetNpc;
     if ($canonicalTargetNpc !== '' && strcasecmp($canonicalTargetNpc, $targetNpc) !== 0) {
         stobeLogInfo('Chat target remapped to canonical NPC name', [
             'requested_target_npc' => $targetNpc,

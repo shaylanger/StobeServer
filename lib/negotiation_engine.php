@@ -153,6 +153,9 @@ function stobeNegNpcRow(string $name, int $serial = 0): array {
 
 /** Live serial for an NPC from its stored storage_id (hand_<serial>), or 0. */
 function stobeNegSerialFromStorage(string $name): int {
+    // C49: a fixture reload may reuse a hand serial; current roster is authoritative.
+    $live = function_exists('stobeResolveLiveParticipantSerial') ? stobeResolveLiveParticipantSerial($name) : 0;
+    if ($live > 0) return $live;
     $row = $GLOBALS['db']->fetchOne(
         "SELECT metadata->>'storage_id' AS sid FROM core_npc_master WHERE LOWER(name)=LOWER($1) AND metadata ? 'storage_id' LIMIT 2",
         [$name]
@@ -1969,6 +1972,11 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
  * While a negotiation is live, a line without an explicit name goes to the
  * negotiation partner rather than whichever combatant the client targeted.
  */
+/** C49: a name in the current roster outranks a stored profile from another load. */
+function stobeNegCanonicalChatTarget(string $requested, string $canonical, int $liveSerial): string {
+    return $liveSerial > 0 || $canonical === '' ? $requested : $canonical;
+}
+
 function stobeNegPartnerForUnnamedLine(string $targetNpc, string $message, string $peopleRaw): string {
     if (!stobeNegPhaseEnabled(3)) return '';
     try {
@@ -1982,6 +1990,8 @@ function stobeNegPartnerForUnnamedLine(string $targetNpc, string $message, strin
         );
         $partner = normalizeParticipantNameToken(strval($row['npc_name'] ?? ''));
         if ($partner === '' || strcasecmp($partner, $targetNpc) === 0) return '';
+        // C49: Weth [Dust Bandit] is the renamed partner, keep his live name.
+        if (preg_match('/\[\s*(.+?)\s*\]$/', $targetNpc, $suffix) && strcasecmp(trim($suffix[1]), $partner) === 0) return '';
         if (stripos($peopleRaw, $partner) === false) return '';
         $targetBase = function_exists('baseNameWithoutBracketSuffix') ? baseNameWithoutBracketSuffix($targetNpc) : $targetNpc;
         foreach (array_filter([$targetNpc, $targetBase, strtok($targetBase, ' ')]) as $alias) {
