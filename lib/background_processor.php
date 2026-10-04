@@ -131,11 +131,61 @@ function stobeBackgroundProcessorIsRunning(float $timeoutSeconds = 0.15): bool
     return boolval($status['healthy'] ?? false);
 }
 
+function stobeBackgroundProcessorLiveDbName(): string
+{
+    $name = trim(strval(getenv('STOBE_LIVE_DB_NAME') ?: ''));
+    return $name !== '' ? $name : 'stobe';
+}
+
+function stobeBackgroundProcessorDbName(): string
+{
+    $name = trim(strval(getenv('STOBE_DB_NAME') ?: ''));
+    return $name !== '' ? $name : 'stobe';
+}
+
+/**
+ * Only the live database may own the single background processor slot (lock + port 12346).
+ * Test suites (STOBE_DB_NAME=stobe_test, php -S ingress tests) and STOBE_NO_BACKGROUND_PROCESSOR=1
+ * must never start it: a test-DB loop holds the slot and the live processor stalls forever (STOBE 124).
+ */
+function stobeBackgroundProcessorStartAllowed(): bool
+{
+    $off = strtolower(trim(strval(getenv('STOBE_NO_BACKGROUND_PROCESSOR') ?: '')));
+    if ($off !== '' && $off !== '0' && $off !== 'false' && $off !== 'no') {
+        return false;
+    }
+    return stobeBackgroundProcessorDbName() === stobeBackgroundProcessorLiveDbName();
+}
+
+function stobeBackgroundProcessorOwnerPath(): string
+{
+    return '/tmp/stobe_background_processor.owner';
+}
+
+function stobeBackgroundProcessorOwnerInfo(): string
+{
+    $path = stobeBackgroundProcessorOwnerPath();
+    if (!is_file($path)) {
+        return '';
+    }
+    return trim(strval(@file_get_contents($path, false, null, 0, 200)));
+}
+
 function stobeEnsureBackgroundProcessorRunning(bool $logFailures = true): bool
 {
     $status = stobeBackgroundProcessorStatus();
     if (boolval($status['healthy'] ?? false)) {
         return true;
+    }
+
+    if (!stobeBackgroundProcessorStartAllowed()) {
+        if ($logFailures) {
+            stobeLogDebug('Background processor start skipped for non-live database', [
+                'db' => stobeBackgroundProcessorDbName(),
+                'live_db' => stobeBackgroundProcessorLiveDbName(),
+            ]);
+        }
+        return false;
     }
 
     $startScript = stobeBackgroundProcessorStartScriptPath();
@@ -240,6 +290,7 @@ function stobeEnsureBackgroundProcessorRunning(bool $logFailures = true): bool
                 'port' => stobeBackgroundProcessorPort(),
                 'script' => $startScript,
                 'cooldown_seconds' => $cooldownSeconds,
+                'slot_owner' => stobeBackgroundProcessorOwnerInfo(),
             ]);
         }
         return false;

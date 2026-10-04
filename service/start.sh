@@ -9,6 +9,8 @@ SERVICE_LOG="${ENGINE_DIR}/log/service.log"
 FALLBACK_SERVICE_LOG="/tmp/stobe_service.log"
 MANAGER_SCRIPT="${ENGINE_DIR}/service/manager.php"
 LOCK_FILE="/tmp/stobe_background_processor.lock"
+OWNER_FILE="/tmp/stobe_background_processor.owner"
+LIVE_DB_NAME="${STOBE_LIVE_DB_NAME:-stobe}"
 MANAGER_TIMEOUT_SECONDS="${STOBE_BACKGROUND_MANAGER_TIMEOUT_SECONDS:-600}"
 
 umask 0002
@@ -18,6 +20,17 @@ case "${MANAGER_TIMEOUT_SECONDS}" in
 esac
 if [ "${MANAGER_TIMEOUT_SECONDS}" -lt 60 ]; then
     MANAGER_TIMEOUT_SECONDS=60
+fi
+
+# Only the live database may own the processor slot (lock + port). A loop started
+# from a test suite (STOBE_DB_NAME=stobe_test) would hold it and stall live forever.
+case "${STOBE_NO_BACKGROUND_PROCESSOR:-}" in
+    ''|0|false|no) ;;
+    *) echo "Stobe background processor disabled (STOBE_NO_BACKGROUND_PROCESSOR)."; exit 3 ;;
+esac
+if [ -n "${STOBE_DB_NAME:-}" ] && [ "${STOBE_DB_NAME}" != "${LIVE_DB_NAME}" ]; then
+    echo "Refusing to start the Stobe background processor for non-live database ${STOBE_DB_NAME} (live: ${LIVE_DB_NAME})."
+    exit 3
 fi
 
 # Hold the lock for the daemon lifetime so concurrent web requests cannot
@@ -39,12 +52,26 @@ if ! flock -n 9; then
     echo "An instance of the Stobe background processor is already running."
     exit 0
 fi
+printf 'db=%s pid=%s started=%s
+' "${STOBE_DB_NAME:-${LIVE_DB_NAME}}" "$$"     "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > "${OWNER_FILE}" 2>/dev/null || true
+chmod 0666 "${OWNER_FILE}" 2>/dev/null || true
 
 # Ensure a writable service log is available.
 mkdir -p "${ENGINE_DIR}/log" 2>/dev/null
 if ! touch "${SERVICE_LOG}" 2>/dev/null; then
     SERVICE_LOG="${FALLBACK_SERVICE_LOG}"
     touch "${SERVICE_LOG}" 2>/dev/null || true
+fi
+
+# We hold the lock, so no live loop owns a listener: an nc listener whose parent
+# died (ppid 1, e.g. start.sh OOM-killed) is an orphan; reclaim its port.
+if nc -z 127.0.0.1 "${PORT}" 2>/dev/null && command -v pgrep >/dev/null 2>&1; then
+    for orphan_pid in $(pgrep -f "^nc -lk -p ${PORT}\$" 2>/dev/null || true); do
+        if [ "$(ps -o ppid= -p "${orphan_pid}" 2>/dev/null | tr -d ' ')" = "1" ]; then
+            kill "${orphan_pid}" 2>/dev/null || true
+            sleep 0.2
+        fi
+    done
 fi
 
 # Refuse to claim a port already owned by another process.
@@ -54,7 +81,8 @@ if nc -z 127.0.0.1 "${PORT}" 2>/dev/null; then
 fi
 
 # Keep the health socket continuously bound for the manager lifetime.
-nc -lk -p "${PORT}" </dev/null >/dev/null 2>&1 &
+# 9>&-: the listener must not inherit the lock fd, or an orphaned listener keeps the lock.
+nc -lk -p "${PORT}" </dev/null >/dev/null 2>&1 9>&- &
 LISTENER_PID=$!
 
 trap "kill ${LISTENER_PID} 2>/dev/null || true" EXIT
