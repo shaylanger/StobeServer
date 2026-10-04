@@ -153,9 +153,12 @@ function stobeRelTradeGate(string $npc, array|false $npcData, string $player, st
     if ($hostile) return $out;
 
     // Item 104: prices. Player buys items she sells for Cats.
-    $catsFromPlayer = 0; $catsIdx = -1;
+    // Item 119: the recorded Cats are her relationship price both ways (not only a cheaper offer raised), when the
+    // deal is plain Cats for known items; 'counter' marks a change against the player (she asks more).
+    $onlyKinds = static fn(array $ts, array $kinds): bool => count($ts) > 0 && count(array_filter($ts, static fn($t) => !in_array(strval($t['kind'] ?? ''), $kinds, true))) === 0;
+    $catsFromPlayer = 0; $catsIdx = -1; $catsIdxs = [];
     foreach ($terms as $i => $t) {
-        if (is_array($t) && ($t['kind'] ?? '') === 'GIVE_CATS' && ($t['by'] ?? '') === 'player') { $catsFromPlayer += intval($t['amount'] ?? 0); if ($catsIdx < 0) $catsIdx = $i; }
+        if (is_array($t) && ($t['kind'] ?? '') === 'GIVE_CATS' && ($t['by'] ?? '') === 'player') { $catsFromPlayer += intval($t['amount'] ?? 0); if ($catsIdx < 0) $catsIdx = $i; $catsIdxs[] = $i; }
     }
     $required = 0; $known = true; $buyItems = 0;
     foreach ($npcTerms as $t) {
@@ -165,10 +168,25 @@ function stobeRelTradeGate(string $npc, array|false $npcData, string $player, st
         if ($base === null) { $known = false; break; }
         $required += stobeRelBuyPrice($base * max(1, intval($t['quantity'] ?? 1)), $r);
     }
-    if ($buyItems > 0 && $known && $catsIdx >= 0 && $catsFromPlayer < $required) {
-        $terms[$catsIdx]['amount'] = intval($terms[$catsIdx]['amount']) + ($required - $catsFromPlayer);
-        $out['terms'] = $terms; $out['priced'] = true;
-        stobeRelLog('info', 'Deal price set by relationship (item 104)', ['npc' => $npc, 'player' => $player, 'r' => $r, 'side' => 'player buys', 'offered' => $catsFromPlayer, 'price' => $required]);
+    $plainBuy = $onlyKinds($playerTerms, ['GIVE_CATS']) && $onlyKinds($npcTerms, ['GIVE_ITEM']);
+    if ($buyItems > 0 && $known && $catsIdx >= 0 && $required > 0
+        && ($catsFromPlayer < $required || ($plainBuy && $catsFromPlayer > $required))) {
+        if ($catsFromPlayer < $required) {
+            $terms[$catsIdx]['amount'] = intval($terms[$catsIdx]['amount']) + ($required - $catsFromPlayer);
+        } else {
+            // Lower: take the excess off the later instalments first.
+            $excess = $catsFromPlayer - $required;
+            foreach (array_reverse($catsIdxs) as $i) {
+                if ($excess <= 0) break;
+                $have = intval($terms[$i]['amount'] ?? 0);
+                $cut = $i === $catsIdx ? min($excess, $have - 1) : min($excess, $have);
+                $terms[$i]['amount'] = $have - $cut;
+                $excess -= $cut;
+            }
+            $terms = array_values(array_filter($terms, static fn($t) => !(is_array($t) && ($t['kind'] ?? '') === 'GIVE_CATS' && ($t['by'] ?? '') === 'player' && intval($t['amount'] ?? 0) <= 0)));
+        }
+        $out['terms'] = $terms; $out['priced'] = true; $out['counter'] = $catsFromPlayer < $required;
+        stobeRelLog('info', 'Deal price set by relationship (item 104/119)', ['npc' => $npc, 'player' => $player, 'r' => $r, 'side' => 'player buys', 'asked' => $catsFromPlayer, 'price' => $required]);
         return $out;
     }
     // Player sells items to her for Cats.
@@ -188,8 +206,18 @@ function stobeRelTradeGate(string $npc, array|false $npcData, string $player, st
         }
         if ($sellItems > 0 && $known && $catsFromNpc > $maxPay && $maxPay > 0) {
             $terms[$npcCatsIdx]['amount'] = max(1, intval($terms[$npcCatsIdx]['amount']) - ($catsFromNpc - $maxPay));
-            $out['terms'] = $terms; $out['priced'] = true;
-            stobeRelLog('info', 'Deal price set by relationship (item 104)', ['npc' => $npc, 'player' => $player, 'r' => $r, 'side' => 'player sells', 'asked' => $catsFromNpc, 'price' => $maxPay]);
+            $out['terms'] = $terms; $out['priced'] = true; $out['counter'] = true;
+            stobeRelLog('info', 'Deal price set by relationship (item 104/119)', ['npc' => $npc, 'player' => $player, 'r' => $r, 'side' => 'player sells', 'asked' => $catsFromNpc, 'price' => $maxPay]);
+        } elseif ($sellItems > 0 && $known && $catsFromNpc < $maxPay && $maxPay > 0
+            && $onlyKinds($npcTerms, ['GIVE_CATS']) && $onlyKinds($playerTerms, ['GIVE_ITEM'])) {
+            // Item 119: she pays her relationship price, not less (up to what she's known to carry).
+            $purse = function_exists('stobeDealNpcPurse') ? stobeDealNpcPurse($npc) : -1;
+            $pay = $purse >= 0 ? min($maxPay, max($catsFromNpc, $purse)) : $maxPay;
+            if ($pay > $catsFromNpc) {
+                $terms[$npcCatsIdx]['amount'] = intval($terms[$npcCatsIdx]['amount']) + ($pay - $catsFromNpc);
+                $out['terms'] = $terms; $out['priced'] = true; $out['counter'] = false;
+                stobeRelLog('info', 'Deal price set by relationship (item 104/119)', ['npc' => $npc, 'player' => $player, 'r' => $r, 'side' => 'player sells', 'asked' => $catsFromNpc, 'price' => $pay, 'purse' => $purse]);
+            }
         }
     }
     return $out;

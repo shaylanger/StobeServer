@@ -670,7 +670,7 @@ function stobeDealCaptureResponse(string $raw, string $npc, string $player, arra
         $gate = stobeRelTradeGate($npc, $npcData, $player, $kind, $terms);
         if (empty($gate['ok'])) return $gate;
         $terms = $gate['terms'];
-        if (!empty($gate['priced']) && $decision === 'ACCEPT') {
+        if (!empty($gate['priced']) && !empty($gate['counter']) && $decision === 'ACCEPT') { // item 119: only a change against the player
             $decision = 'COUNTER'; // she asks her price instead of accepting a cheaper one
             stobeDealLog('info', 'Negotiation: accept at the wrong price recorded as a counter at her price (item 104)', ['npc'=>$npc, 'r'=>$gate['r'] ?? 0]);
         }
@@ -1045,6 +1045,8 @@ function stobeDealSpokenCatsAmounts(string $text): array {
         '/\b(?:total(?:\s+of)?|now|after(?:wards)?|up\s*front|later|pay(?:s|ing)?|paid|owes?|owed|another|rest(?:\s+of)?)\s+(?:(?:is|of|me|you|the|just|only|another|still)\s+){0,2}(\d+)\b/i',
         // Bug 130: "Four hundred, then." / "400. Fine." (a bare amount as its own sentence)
         '/(?:^|[.!?]\s+)(\d+)(?=\s*(?:[,.!?]|then\b))/i',
+        // Item 119: a price without "cats": "it's three hundred." / "I'll take 300 for it" / "price is 300".
+        "/\\b(?:it'?s|it\\s+is|that'?s|that\\s+is|price(?:'s|\\s+is)?|costs?|asking|take|want|make\\s+it|for)\\s+(?:(?:just|only|a|me|you)\\s+)?(\\d+)(?=\\s*(?:[,.!?;]|$)|\\s+(?:and|or|then|for|if|no|not|flat|even)\\b)/i",
     ];
     foreach ($patterns as $pattern) {
         if (preg_match_all($pattern, $text, $m)) {

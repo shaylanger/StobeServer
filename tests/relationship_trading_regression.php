@@ -79,8 +79,45 @@ if ($pf !== '') check('squadmate exempt from the lines', !empty(stobeRelTradeGat
 foreach ([[-50, 1502], [-10, 524], [0, 500], [10, 489], [56, 421], [100, 350]] as [$r, $want]) {
     $g = $gate($r, $buy);
     $amount = intval($g['terms'][1]['amount'] ?? 0);
-    $expect = max(500, $want); // the player offered 500: raised to her price when hers is higher, kept otherwise
-    check("price r=$r: player pays " . $expect, !empty($g['ok']) && $amount === $expect && (!empty($g['priced']) === ($want > 500)), [$amount, $g['priced'] ?? null]);
+    // Item 119: the player offered 500: the recorded price is hers, above and below.
+    check("price r=$r: player pays " . $want, !empty($g['ok']) && $amount === $want && (!empty($g['priced']) === ($want !== 500)) && (!empty($g['counter']) === ($want > 500)), [$amount, $g['priced'] ?? null, $g['counter'] ?? null]);
+}
+// Item 119 (run m19, Vel Harrow): her counter of 300 for a 16-Cat hat is recorded at her relationship price.
+$velNpc = static fn(int $r) => ['name' => 'RelTrade Npc', 'faction' => 'Test Traders', 'extended_data' => json_encode(['relationships' => [$player => ['aff' => $r]]]),
+    'metadata' => '{}', 'inventory' => 'Bread x2 value 10', 'equipment' => 'Iron Hat x1 value 16'];
+$velAsk = [['kind' => 'GIVE_CATS', 'by' => 'player', 'to' => 'npc', 'amount' => 300], ['kind' => 'GIVE_ITEM', 'by' => 'npc', 'to' => 'player', 'item' => 'Iron Hat', 'when' => 'after_player']];
+foreach ([0 => 16, 10 => 16, 56 => 14, 100 => 12] as $r => $want) {
+    $g = stobeRelTradeGate('RelTrade Npc', $velNpc($r), $player, 'social', $velAsk);
+    check("item 119 r=$r: her counter of 300 for the 16-Cat hat is recorded at $want", !empty($g['ok']) && intval($g['terms'][0]['amount'] ?? 0) === $want && !empty($g['priced']) && empty($g['counter']), $g['terms'] ?? $g);
+}
+$g = stobeRelTradeGate('RelTrade Npc', $velNpc(-50), $player, 'social', $velAsk);
+check('item 119 r=-50: 300 for the 16-Cat hat becomes 49', intval($g['terms'][0]['amount'] ?? 0) === 49, $g['terms'] ?? $g);
+$split = [['kind' => 'GIVE_CATS', 'by' => 'player', 'to' => 'npc', 'amount' => 200], ['kind' => 'GIVE_CATS', 'by' => 'player', 'to' => 'npc', 'amount' => 100, 'when' => 'after_npc'], ['kind' => 'GIVE_ITEM', 'by' => 'npc', 'to' => 'player', 'item' => 'Iron Hat']];
+$g = stobeRelTradeGate('RelTrade Npc', $velNpc(0), $player, 'social', $split);
+$paid = array_sum(array_map(static fn($t) => ($t['kind'] ?? '') === 'GIVE_CATS' && ($t['by'] ?? '') === 'player' ? intval($t['amount']) : 0, $g['terms'] ?? []));
+check('item 119: two instalments of 300 come down to 16 in total', $paid === 16, $g['terms'] ?? $g);
+$barter = [['kind' => 'GIVE_CATS', 'by' => 'player', 'to' => 'npc', 'amount' => 300], ['kind' => 'GIVE_ITEM', 'by' => 'player', 'to' => 'npc', 'item' => 'Bread'], ['kind' => 'GIVE_ITEM', 'by' => 'npc', 'to' => 'player', 'item' => 'Iron Hat']];
+$g = stobeRelTradeGate('RelTrade Npc', $velNpc(0), $player, 'social', $barter);
+check('item 119: Cats plus an item from the player (barter) not lowered', intval($g['terms'][0]['amount'] ?? 0) === 300 && empty($g['priced']), $g['terms'] ?? $g);
+$service = [['kind' => 'GIVE_CATS', 'by' => 'player', 'to' => 'npc', 'amount' => 300], ['kind' => 'FIRST_AID', 'by' => 'npc', 'target' => 'player']];
+$g = stobeRelTradeGate('RelTrade Npc', $velNpc(0), $player, 'social', $service);
+check('item 119: a service without an item value is untouched', intval($g['terms'][0]['amount'] ?? 0) === 300 && empty($g['priced']), $g['terms'] ?? $g);
+check('item 119: still no trade at r=-80', (stobeRelTradeGate('RelTrade Npc', $velNpc(-80), $player, 'social', $velAsk)['error'] ?? '') === 'relationship_no_trade');
+// Item 119: her spoken price without "cats" is caught, so the line is corrected to the recorded price.
+$velTerms = [['kind' => 'GIVE_CATS', 'by' => 'player', 'to' => 'npc', 'amount' => 16], ['kind' => 'GIVE_ITEM', 'by' => 'npc', 'to' => 'player', 'item' => 'Iron Hat', 'when' => 'after_player']];
+$fix = stobeDealSpeechAmountCheck("One cat for a hat that keeps swords off my skull. No. If you want it, it's three hundred. That's the price, not a joke.", 'RelTrade Nobody', ['decision' => 'COUNTER', 'terms' => $velTerms], "Vel, I'll buy your Iron Hat. One cat, take it or leave it.");
+check("item 119: \"it's three hundred\" corrected to the 16-Cat terms line", is_array($fix) && in_array(300, $fix['wrong'] ?? [], true) && str_contains(strval($fix['line'] ?? ''), '16 Cats'), $fix);
+check('item 119: "I\'ll take 300 for it" is a spoken amount', in_array(300, stobeDealSpokenCatsAmounts("I'll take 300 for it."), true));
+check('item 119: "for 2 days" is not a spoken amount', stobeDealSpokenCatsAmounts('Guard you for 2 days.') === []);
+// Item 119 sell side: the player sells her a 500-Cat Iron Hat; she pays her relationship price both ways.
+$playerRow = ['name' => $player, 'inventory' => 'Iron Hat x1 value 500', 'equipment' => '', 'metadata' => '{}'];
+$sell = static fn(int $amount) => [['kind' => 'GIVE_ITEM', 'by' => 'player', 'to' => 'npc', 'item' => 'Iron Hat'], ['kind' => 'GIVE_CATS', 'by' => 'npc', 'to' => 'player', 'amount' => $amount]];
+foreach ([0, 56, -50] as $r) {
+    $want = stobeRelSellPrice(500, $r);
+    $g = stobeRelTradeGate('RelTrade Npc', $npc($r), $player, 'social', $sell(5), $playerRow);
+    check("item 119 sell r=$r: her offer of 5 is raised to $want", intval($g['terms'][1]['amount'] ?? 0) === $want && empty($g['counter']), $g['terms'] ?? $g);
+    $g = stobeRelTradeGate('RelTrade Npc', $npc($r), $player, 'social', $sell(5000), $playerRow);
+    check("item 119 sell r=$r: her offer of 5000 is lowered to $want (a counter)", intval($g['terms'][1]['amount'] ?? 0) === $want && !empty($g['counter']), $g['terms'] ?? $g);
 }
 $cheap = $buy; $cheap[1]['amount'] = 100;
 $g = $gate(56, $cheap);
