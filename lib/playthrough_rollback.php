@@ -1156,6 +1156,9 @@ function stobePlaythroughRestoreRelationshipStates(int $cutoffGamets): array
             restored AS (
                 UPDATE core_npc c
                 SET extended_data = (" . $stripCurrent . ") || " . $restoredState . ",
+                    -- m23: the relationships column mirrors the map (read as fallback/merge): restore it too
+                    relationships = CASE WHEN COALESCE(latest.extended_data -> 'relationships', '{}'::jsonb) = '{}'::jsonb
+                                         THEN '' ELSE (latest.extended_data -> 'relationships')::text END,
                     updated_at = NOW()
                 FROM latest
                 WHERE c.id = latest.npc_id
@@ -1165,13 +1168,15 @@ function stobePlaythroughRestoreRelationshipStates(int $cutoffGamets): array
             cleared AS (
                 UPDATE core_npc c
                 SET extended_data = " . $stripCurrent . ",
+                    relationships = '', -- m23: else the column map comes back through stobeGetNpcRelationshipMap
                     updated_at = NOW()
                 WHERE NOT EXISTS (SELECT 1 FROM latest WHERE latest.npc_id = c.id)
                   -- clear only NPCs first seen after the save (they didn't exist then)
                   AND NOT EXISTS (SELECT 1 FROM core_npc_master_history h
                                    WHERE h.npc_id = c.id AND h.gamets_last_updated <= $1 AND h.gamets_last_updated > 0)
                   AND (c.gamets_last_updated > $1 OR c.gamets_last_updated IS NULL)
-                  AND COALESCE(c.extended_data, '{}'::jsonb) ?| " . $relationshipKeyArray . "
+                  AND (COALESCE(c.extended_data, '{}'::jsonb) ?| " . $relationshipKeyArray . "
+                       OR COALESCE(c.relationships, '') <> '')
                 RETURNING c.id, c.name
             )
             SELECT
