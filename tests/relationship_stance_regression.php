@@ -22,6 +22,8 @@ check('every reply, even a greeting', str_contains($love, 'Hey, how are you?'));
 $npc = ['extended_data' => json_encode(['relationships' => ['Shay' => ['aff' => -60, 'type' => 'rival', 'note' => 'stole her bread']]])];
 $block = stobeBuildRelationshipStanceBlock('Malzin', $npc, 'shay', false);
 check('stored entry found case-insensitively, note included', str_contains($block, 'Resentful') && str_contains($block, 'stole her bread') && str_contains($block, 'rival'), $block);
+$colNpc = ['relationships' => json_encode(['Shay' => ['aff' => -11, 'type' => 'neutral', 'note' => 'attacked me']]), 'extended_data' => '{}'];
+check('m22 B55: entry in the relationships column only -> stance block', str_contains(stobeBuildRelationshipStanceBlock('Rel Mira', $colNpc, 'Shay', false), 'how_you_feel_about_them'));
 check('no entry: no block', stobeBuildRelationshipStanceBlock('Malzin', ['extended_data' => '{}'], 'Shay', false) === '');
 check('tier edges', stobeRelationshipStanceTier(-91)[0] === 'Hostile' && stobeRelationshipStanceTier(-90)[0] === 'Hateful'
     && stobeRelationshipStanceTier(5)[0] === 'Neutral' && stobeRelationshipStanceTier(6)[0] === 'Acquaintance'

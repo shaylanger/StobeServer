@@ -13214,9 +13214,14 @@ function stobeRelationshipStanceText(string $target, int $aff, string $type, boo
 /** Her stored entry for $target (case-insensitive), or null. */
 function stobeRelationshipEntryFor(array|false $npcData, string $target): ?array {
     if (!is_array($npcData) || trim($target) === '') return null;
-    $ext = function_exists('normalizeNpcExtendedDataPayload') ? normalizeNpcExtendedDataPayload($npcData['extended_data'] ?? []) : (is_array($npcData['extended_data'] ?? null) ? $npcData['extended_data'] : []);
-    $rels = $ext['relationships'] ?? [];
-    if (is_string($rels)) { $d = json_decode($rels, true); $rels = is_array($d) ? $d : []; }
+    // m22 B55: live affinities sit in the core_npc relationships column; extended_data alone missed them (no stance, no memory).
+    if (function_exists('stobeGetNpcRelationshipMap')) {
+        $rels = stobeGetNpcRelationshipMap($npcData);
+    } else {
+        $ext = function_exists('normalizeNpcExtendedDataPayload') ? normalizeNpcExtendedDataPayload($npcData['extended_data'] ?? []) : (is_array($npcData['extended_data'] ?? null) ? $npcData['extended_data'] : []);
+        $rels = $ext['relationships'] ?? [];
+        if (is_string($rels)) { $d = json_decode($rels, true); $rels = is_array($d) ? $d : []; }
+    }
     if (!is_array($rels)) return null;
     $want = function_exists('normalizeParticipantNameToken') ? normalizeParticipantNameToken($target) : trim($target);
     foreach ($rels as $k => $v) {
