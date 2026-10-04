@@ -80,8 +80,16 @@ run REL-p2-04b-repeat-assault-forced.txt
 insp --set-switch SOCIAL_TEST_FORCE_FIRST_STRIKE off >> "$O/p2-04b.switch.txt"
 insp --pair-effects --effects 20 --interpret-log 40 --log-filter "Rel Vorn" --check-shadow > "$O/p2-04b.inspect.txt" 2>&1
 grep -a "SOCIAL_TEST_FORCE_FIRST_STRIKE" $SL | tail -3 > "$O/p2-04b.forced.txt"
-n=$(grep -o '"aggression"' "$O/p2-04b.inspect.txt" | wc -l)
-v "SR06: aggression rows mentioned=$n (need two combat incidents; forced lines=$(wc -l < "$O/p2-04b.forced.txt"))"
+# M24_F12: PASS/FAIL. Rel Vorn -> Shay aggression in >= 2 distinct combat incidents (min of the pair's aggression parts and
+# the distinct combat incidents carrying an aggression row).
+n=$(php -r '$j = json_decode(file_get_contents($argv[1]), true) ?: []; $p = 0; $i = [];
+  foreach ($j["pair_effects"] ?? [] as $r) if (($r["observer"] ?? "") === "Rel Vorn" && ($r["culprit"] ?? "") === "Shay") $p = substr_count($r["components"] ?? "", "aggression:");
+  foreach ($j["effect_rows"] ?? [] as $r) if (($r["component"] ?? "") === "aggression" && strpos($r["incident_id"] ?? "", "combat:") === 0) $i[$r["incident_id"]] = 1;
+  echo min($p, count($i));' "$O/p2-04b.inspect.txt" 2>/dev/null)
+fs=$(grep -c '"attacker":"Shay","victim":"Rel Vorn"' "$O/p2-04b.forced.txt")
+if [ "${n:-0}" -ge 2 ]; then v "SR06: PASS Rel Vorn -> Shay aggression in $n combat incidents (forced first strike lines $fs)"
+elif [ "$fs" = 0 ]; then v "SR06: SETUP FAIL the forced first strike never fired for Shay -> Rel Vorn (aggression incidents ${n:-0}, p2-04b.forced.txt)"
+else v "SR06: FAIL Rel Vorn -> Shay aggression in ${n:-0} combat incidents, need 2 (p2-04b.inspect.txt)"; fi
 fi
 
 # --- SR30 forced join attempt (ENABLED) ---
