@@ -51,6 +51,9 @@ setname ${W} "Rel Wren" ~ ^([^ ].* \[)?Hungry Bandit\]? ->
 @set WNAME where ${W} ~ ^(.+?) #\d+
 protect ${W} on
 relation ${W} 60
+# m22: the take's witness list had only Shay (W was not within 40 m of the body when the sweep saw the take):
+# W stands next to the body from here on, and is put back right before the take
+teleport ${W} ${V} dist 4
 stobe_say "Rel Wren" "Wren, your friend over there needs you. Watch him."
 speed 1
 @sleep 10
@@ -61,11 +64,17 @@ teleport Malzin ${V} dist 2
 speed 1
 @sleep 3
 speed 0
+where ${W}
+where ${V}
+where Malzin
 transfer ${V} Malzin "Iron Plates"
 speed 1
 @sleep 20
 speed 0
+where ${W}
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_(gain|transfer) seq=\d+ load=\d+ actor=${MALZIN_S} .*witnesses=[1-9]
+# m22: W (not just Shay) must be a conscious witness who saw Malzin take it (server witnessedTaker -> known_thief)
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_(gain|transfer) seq=\d+ load=\d+ actor=${MALZIN_S} .*"name":"${WNAME}"[^}]*\},"conscious":true,"perceived":true,"sees_actor":true
 # B wakes (protect clears the KO at once) and finds the plate gone
 protect ${V} on
 speed 1
