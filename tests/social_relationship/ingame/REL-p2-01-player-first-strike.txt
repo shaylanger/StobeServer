@@ -33,7 +33,8 @@ speed 1
 teleport ${BANDIT} Shay dist 4
 ko ${BANDIT} 60
 @until 20 where ${BANDIT} ~ KO
+# m22: the knockout harm comes from the 3 s world sweep: poll for it while the game runs (harness fc53dba @log-wait)
+@log-wait 15 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=#\d+ target=${BANDIT_S} witnesses=\d+ facts="level":"knockout","attribution":"(defeated_by|attacker_list|recent_attacker)"
 speed 0
 @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY_S} target=${BANDIT_S}
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=#\d+ target=${BANDIT_S} witnesses=\d+ facts="level":"knockout","attribution":"(defeated_by|attacker_list|recent_attacker)"
 teleport ${BANDIT} Shay dist 300
