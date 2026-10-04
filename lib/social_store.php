@@ -218,9 +218,9 @@ final class SocialStore
     }
 
     /**
-     * B 55 item 1: forgiveness over time, event-based. Each fight incident (per observer -> culprit) is its own grudge;
-     * one with no knockout or worse and an unscaled worst charge of at most SOCIAL_GRUDGE_FADE_THRESHOLD fades back
-     * linearly over SOCIAL_GRUDGE_FADE_DAYS game days (what treatment/deals already won back is not faded twice).
+     * B 55 item 1: forgiveness over time, decided by what happened. Each fight incident (per observer -> culprit) is its
+     * own grudge; one with no knockout or worse (STOBE_SOCIAL_NEVER_FADE, accidental KO/limb) fades back linearly over
+     * SOCIAL_GRUDGE_FADE_DAYS game days whatever its size (what treatment/deals already won back is not faded twice).
      * Runs inside ingest at most every fights.fade_check_seconds of game time per load (and after a time jump back).
      * Each step is its own grudge_fade row at the event's game time, so a rollback removes exactly the later steps.
      */
@@ -233,7 +233,7 @@ final class SocialStore
         $last = getConfOpt($throttle, '');
         if ($last !== '' && $ts >= (int)$last && $ts - (int)$last < $every) return [];
         setConfOpt($throttle, strval($ts));
-        [$threshold, $days] = stobeSocialFadeSettings($this->rules);
+        $days = stobeSocialFadeDays($this->rules);
         $span = max(1.0, $days * 86400.0);
         $fight = stobeSocialPgList(STOBE_SOCIAL_FIGHT_COMPONENTS);
         $groups = $this->fetchRows("SELECT COALESCE(detail->>'fight_incident', incident_id) AS fi, lower(detail->>'observer_name') AS o, lower(detail->>'culprit_name') AS c,
@@ -242,7 +242,6 @@ final class SocialStore
               MAX(CASE WHEN component = ANY(\$2::text[]) THEN observer_key END) AS observer_key,
               MAX(CASE WHEN component = ANY(\$2::text[]) THEN culprit_key END) AS culprit_key,
               bool_or(component = ANY(\$3::text[]) OR (component = 'accident' AND detail->>'level' IN ('knockout', 'maiming'))) AS never,
-              MIN(CASE WHEN component = ANY(\$2::text[]) THEN COALESCE((detail->>'unscaled')::int, (detail->>'total')::int, delta) END) AS worst,
               SUM(CASE WHEN component = ANY(\$2::text[]) THEN delta ELSE 0 END) AS charged,
               SUM(CASE WHEN component = ANY(\$4::text[]) THEN delta ELSE 0 END) AS relief,
               SUM(CASE WHEN component = 'grudge_fade' THEN delta ELSE 0 END) AS faded,
@@ -253,7 +252,7 @@ final class SocialStore
             [$event['campaign_id'], $fight, stobeSocialPgList(STOBE_SOCIAL_NEVER_FADE), stobeSocialPgList(STOBE_SOCIAL_FIGHT_RELIEF), $ts]);
         $out = [];
         foreach ($groups as $g) {
-            if ($g['never'] === 't' || (int)$g['worst'] < -$threshold || $g['observer_key'] === null) continue;
+            if ($g['never'] === 't' || $g['observer_key'] === null) continue; // severity class, never the size (Shay 94761de)
             $owed = -(int)$g['charged'] - (int)$g['relief'];
             if ($owed <= 0) continue;
             $fraction = $days <= 0 ? 1.0 : min(1.0, max(0.0, ($ts - (int)$g['first_ts']) / $span));

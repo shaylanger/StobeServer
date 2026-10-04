@@ -320,7 +320,6 @@
    ]
   ],
   "accident_scale": 0.25,
-  "fade_threshold": 30,
   "fade_days": 14,
   "fade_check_seconds": 600,
   "spar_window_seconds": 3600,
@@ -332,6 +331,6 @@
    0.3
   ],
   "treated_soon_seconds": 21600,
-  "note": "B 55 (SOCIAL_FIGHT_RULES=b55, default): ranges = victim state when the fight ends/she wakes (not hurt, wounded standing, KO moderate, bleeding out, limb); x closeness (victim -> attacker before the fight, from aff >=) floor -100; accident = scale x level range; incidents with no KO-or-worse and unscaled worst >= -fade_threshold fade linearly over fade_days (settings SOCIAL_GRUDGE_FADE_THRESHOLD/DAYS); treated_share 15-30 % (more the sooner within treated_soon_seconds, seeded per incident); deal_share x keptness x forgiveness."
+  "note": "B 55 (SOCIAL_FIGHT_RULES=b55, default): ranges = victim state when the fight ends/she wakes (not hurt, wounded standing, KO moderate, bleeding out, limb); x closeness (victim -> attacker before the fight, from aff >=) floor -100; accident = scale x level range; incidents that stayed not-hurt/wounded-standing (no KO or worse, no accidental KO) fade linearly over fade_days whatever their size (setting SOCIAL_GRUDGE_FADE_DAYS); treated_share 15-30 % (more the sooner within treated_soon_seconds, seeded per incident); deal_share x keptness x forgiveness."
  }
 }

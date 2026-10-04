@@ -13,7 +13,7 @@ Server checks run in the **live tree** (`cd /var/www/html/StobeServer`) after th
 | Server mode | DB table `general_settings`, id `SOCIAL_RELATIONSHIP_MODE` (`off` default/unset, `shadow`, `enabled`) | `php tools/social_relationship_inspect.php --set-mode shadow` (prints the previous value) | `php tools/social_relationship_inspect.php --set-mode off` |
 | Category flags (later phases) | `general_settings` ids `SOCIAL_CATEGORY_COMBAT`, `_AID`, `_CARRY`, `_SLAVERY`, `_PROPERTY`, `_ECONOMY`, `_AGREEMENTS`, `_DIALOGUE` | unset = on; `false` turns one off | delete the row |
 | B 55 fights mode | `SOCIAL_FIGHTS_LIVE` (unset = on) | with the mode `off`, REL runs in "fights" mode: fights and deal outcomes change relationships (B 55 rules), everything else is recorded only; R4 is retired. `false` = old behaviour (R4, `RELATIONSHIP_FIGHTS_COUNT`) | delete the row |
-| B 55 rules / fade | `SOCIAL_FIGHT_RULES` (`rel` = plain phase-8 REL), `SOCIAL_GRUDGE_FADE_DAYS` (14), `SOCIAL_GRUDGE_FADE_THRESHOLD` (30) | `--set-switch <id> <value>` | `--set-switch <id> off` |
+| B 55 rules / fade | `SOCIAL_FIGHT_RULES` (`rel` = plain phase-8 REL), `SOCIAL_GRUDGE_FADE_DAYS` (14; fading is decided by what happened, no size threshold) | `--set-switch <id> <value>` | `--set-switch <id> off` |
 | B 55 in-game rows | `rel-b55.sh <outdir> [blocks]` | see its header | - |
 
 The server mode is global (general_settings is configuration, not saved per playthrough) and is read

@@ -152,7 +152,7 @@ fade)
   insp --effects 20 > "$O/fade.inspect.txt" 2>&1
   insp --set-switch SOCIAL_GRUDGE_FADE_DAYS off >> "$O/fade.setup.txt" 2>&1
   if [ -n "$r0" ] && [ "$r0" -lt 0 ] && [ "$r" = 0 ] && grep -q grudge_fade "$O/fade.inspect.txt"; then v "fade: PASS Rel Fenn -> Shay $r0 -> 0 after 90 game min (fade days 0.05)"
-  elif [ -n "$r0" ] && [ "$r0" -le -40 ]; then v "fade: INCONCLUSIVE the light fight reached the KO band ($r0): never fades by rule"
+  elif grep -q -e serious_assault -e critical_harm -e '"maiming"' "$O/fade.inspect.txt"; then v "fade: INCONCLUSIVE the light fight became a KO or worse ($r0): never fades by rule"
   else v "fade: FAIL $r0 -> '${r:-none}' (fade.inspect.txt, fade.wait.txt)"; fi ;;
 chat)
   fresh

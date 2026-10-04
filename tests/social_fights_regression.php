@@ -22,7 +22,7 @@ function setting(string $id, ?string $v): void {
 // name => [serial, faction, squad]
 const P = ['Fight Shay'=>[601,'Nameless',true], 'Fight Mal'=>[602,'Nameless',true], 'Fight Mal Two'=>[603,'Nameless',true], 'Fight Mal Three'=>[604,'Nameless',true],
     'Bandit Rook'=>[610,'Dust Bandits',false], 'Bandit Fen'=>[611,'Dust Bandits',false], 'Bandit Fen Two'=>[612,'Dust Bandits',false], 'Bandit Fen Three'=>[613,'Dust Bandits',false],
-    'Bandit Fen Four'=>[614,'Dust Bandits',false], 'Bandit Vex'=>[615,'Dust Bandits',false], 'Bandit Wex'=>[616,'Dust Bandits',false], 'Spar Bo'=>[617,'Drifters',false], 'Spar Kai'=>[618,'Drifters',false],
+    'Bandit Fen Four'=>[614,'Dust Bandits',false], 'Bandit Fen Five'=>[619,'Dust Bandits',false], 'Bandit Vex'=>[615,'Dust Bandits',false], 'Bandit Wex'=>[616,'Dust Bandits',false], 'Spar Bo'=>[617,'Drifters',false], 'Spar Kai'=>[618,'Drifters',false],
     'Wild Ana'=>[620,'Red',false], 'Wild Bel'=>[621,'Blue',false], 'Wild Cas'=>[622,'Red',false], 'Wild Dov'=>[623,'Blue',false], 'Wit Eon'=>[624,'Grey',false]];
 foreach (['social_event_inbox','social_incident','social_belief','social_effect','social_evidence','social_checkpoint'] as $t) sql("DELETE FROM $t");
 sql("DELETE FROM conf_opts WHERE id LIKE 'STOBE_REL_FADE_%' OR id LIKE 'STOBE_REL_SPAR_%'");
@@ -203,12 +203,21 @@ ok(stobeSocialFightMemoryLine('Bandit Fen', 'Fight Shay') !== '' && str_contains
 ok(str_contains(stobeSocialFightMemoryLine('Bandit Rook', 'Fight Shay'), 'knocked you out'), 'item 6: memory names the worst of the first fight');
 $block = stobeBuildRelationshipStanceBlock('Bandit Rook', getNpcData('Bandit Rook'), 'Fight Shay', false);
 ok(str_contains($block, '<memory>') && str_contains($block, 'knocked you out'), 'item 6: memory line in the stance block');
+// Shay 94761de: fading is decided by what happened, not by the size (the old size-threshold setting is ignored).
 $t3 = 101600 + 15 * 86400;
 setting('SOCIAL_GRUDGE_FADE_THRESHOLD', '5');
+RelationshipManager::setRelationship('Bandit Fen Three', 'Fight Shay', 60);
 attack('Fight Shay', 'Bandit Fen Three', $t3);
-$g3 = affOf('Bandit Fen Three', 'Fight Shay');
+harm('Fight Shay', 'Bandit Fen Three', 'injury', $t3 + 10);
+$g3 = affOf('Bandit Fen Three', 'Fight Shay') - 60;
+ok($g3 >= -60 && $g3 <= -46, "item 1 setup: Fond wound x2 = -46..-60 ($g3)");
+RelationshipManager::setRelationship('Bandit Fen Five', 'Fight Shay', 60);
+attack('Fight Shay', 'Bandit Fen Five', $t3 + 100);
+harm('Fight Shay', 'Bandit Fen Five', 'knockout', $t3 + 110, false);
+$g5 = affOf('Bandit Fen Five', 'Fight Shay');
 tick($t3 + 15 * 86400);
-ok(affOf('Bandit Fen Three', 'Fight Shay') === $g3 && $g3 < 0, 'item 1: SOCIAL_GRUDGE_FADE_THRESHOLD setting (5: aggression no longer fades)');
+ok(affOf('Bandit Fen Three', 'Fight Shay') === 60, "item 1: a Fond victim's wound (x2, $g3) fades back fully: what happened decides, not the size (" . affOf('Bandit Fen Three', 'Fight Shay') . ')');
+ok(affOf('Bandit Fen Five', 'Fight Shay') === $g5 && $g5 <= -20, "item 1: a Fond victim's KO never fades ($g5)");
 setting('SOCIAL_GRUDGE_FADE_THRESHOLD', null);
 $t4 = $t3 + 16 * 86400;
 setting('SOCIAL_GRUDGE_FADE_DAYS', '0.05');

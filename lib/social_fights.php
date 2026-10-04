@@ -11,9 +11,11 @@ require_once __DIR__ . '/social_identity.php';
  * and SOCIAL_FIGHTS_LIVE (default true) REL runs in "fights" mode: only the combat and agreement components (and
  * witness echoes of fights) are applied; everything else is recorded as in shadow. SOCIAL_FIGHT_RULES=rel turns
  * the B 55 rules below off (plain phase-8 REL, used by the older REL suites). On top (b55, the default):
- *  1. forgiveness over time, event-based only: each fight incident is its own grudge record; one whose worst
- *     (unscaled) charge is at most SOCIAL_GRUDGE_FADE_THRESHOLD (default 30 = "wounded but standing") and holds no
- *     knockout or worse fades back linearly over SOCIAL_GRUDGE_FADE_DAYS (default 14) game days (grudge_fade rows);
+ *  1. forgiveness over time, decided by WHAT HAPPENED (Shay 2026-10-03, plan 94761de), never by the size of the penalty:
+ *     each fight incident is its own grudge record; one that stayed "not really hurt" / "wounded but standing"
+ *     (aggression, injury, a non-KO accident, and witness echoes of those) fades back linearly over
+ *     SOCIAL_GRUDGE_FADE_DAYS (default 14) game days whatever the closeness multiplier made it (grudge_fade rows);
+ *     knocked out or worse (KO, bleeding out, limb, defensive maiming, an accidental KO) never fades on its own;
  *  2. a kept deal wins back 1/3 x keptness x forgiveness (personality) of that fight's penalty (deal_forgiveness);
  *     a broken deal keeps its betrayal penalty (agreements);
  *  3. sparring both sides agreed to (dialogue consent, 1 game hour) costs nothing unless someone is maimed;
@@ -69,13 +71,10 @@ function stobeSocialClosenessMultiplier(int $affinity, SocialRules $rules): floa
     return $mult;
 }
 
-/** [threshold (abs, unscaled worst charge), days] */
-function stobeSocialFadeSettings(SocialRules $rules): array
+/** Item 1: game days a fading grudge takes to reach 0 (setting SOCIAL_GRUDGE_FADE_DAYS, rules fights.fade_days, 14). */
+function stobeSocialFadeDays(SocialRules $rules): float
 {
-    $section = $rules->section('fights');
-    $threshold = abs((int)getSetting('SOCIAL_GRUDGE_FADE_THRESHOLD', strval($section['fade_threshold'] ?? 30)));
-    $days = (float)getSetting('SOCIAL_GRUDGE_FADE_DAYS', strval($section['fade_days'] ?? 14));
-    return [$threshold, $days];
+    return (float)getSetting('SOCIAL_GRUDGE_FADE_DAYS', strval($rules->section('fights')['fade_days'] ?? 14));
 }
 
 /** #5: a squad member is involved, or a named NPC / squad member is present, conscious and perceives it. */
