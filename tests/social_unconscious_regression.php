@@ -17,7 +17,8 @@ const PEOPLE = ['Uncon Attacker'=>[201,'Red',false], 'Uncon Looter'=>[202,'Grey'
     'Uncon Victim One'=>[211,'Blue',false], 'Uncon Victim Two'=>[212,'Blue',false], 'Uncon Victim Three'=>[213,'Blue',false],
     'Uncon Victim Four'=>[214,'Blue',false], 'Uncon Victim Five'=>[215,'Blue',false], 'Uncon Victim Six'=>[216,'Blue',false],
     'Uncon Victim Seven'=>[217,'Blue',false], 'Uncon Victim Eight'=>[218,'Blue',false], 'Uncon Squad Victim'=>[219,'Nameless',true],
-    'Uncon Squad Mate'=>[220,'Nameless',true], 'Uncon Victim Nine'=>[221,'Blue',false], 'Uncon Victim Ten'=>[222,'Blue',false]];
+    'Uncon Squad Mate'=>[220,'Nameless',true], 'Uncon Victim Nine'=>[221,'Blue',false], 'Uncon Victim Ten'=>[222,'Blue',false],
+    'Uncon Witness'=>[223,'Blue',false], 'Uncon Victim Eleven'=>[224,'Blue',false], 'Uncon Victim Twelve'=>[225,'Blue',false], 'Uncon Stranger'=>[226,'Green',false]];
 foreach (['social_event_inbox','social_incident','social_belief','social_effect','social_evidence','social_checkpoint'] as $t) sql("DELETE FROM $t");
 foreach (PEOPLE as $name => [$serial]) {
     sql('DELETE FROM core_npc_master_history WHERE name=$1', [$name]); sql('DELETE FROM core_npc WHERE name=$1', [$name]);
@@ -83,6 +84,30 @@ wake('Uncon Victim Two', ['Dried Meat'=>4], 2100);
 $ct = affOf('Uncon Victim Two', 'Uncon Looter');
 ok($ct <= -8 && $ct >= -18, "SR09 known thief blamed with ordinary theft ($ct)");
 ok(affOf('Uncon Victim Two', 'Uncon Attacker') === $koAff, 'SR09 no double inferred charge on A');
+
+// REL_THEFT_CAUGHT_M18 SR09 in game: the victim's conscious ally SAW the looter (native witnesses) = known thief.
+$koAff = koBy('Uncon Attacker', 'Uncon Victim Eleven', 2500, $INV);
+$e = ev('item_transfer', ent('Uncon Looter'), ent('Uncon Victim Eleven', false), ['items'=>['Katana'=>1], 'to_ground'=>false], 2510);
+$e['witnesses'] = [['entity'=>ent('Uncon Stranger'), 'conscious'=>true, 'perceived'=>true, 'sees_actor'=>true, 'sees_target'=>true, 'hears_actor'=>true],
+    ['entity'=>ent('Uncon Witness'), 'conscious'=>true, 'perceived'=>true, 'sees_actor'=>true, 'sees_target'=>true, 'hears_actor'=>true]];
+send($e);
+ok(str_contains(strval(one("SELECT state->'known_thief'->>'name' FROM social_incident WHERE state->>'kind'='ko' AND state->'victim'->>'serial'='224'")), 'Uncon Looter'), 'SR09 an ally witness names the looter');
+wake('Uncon Victim Eleven', ['Dried Meat'=>4], 2600);
+$ct = affOf('Uncon Victim Eleven', 'Uncon Looter');
+ok($ct <= -8 && $ct >= -18, "SR09 witnessed looter blamed ($ct)");
+ok(affOf('Uncon Victim Eleven', 'Uncon Attacker') === $koAff, 'SR09 witnessed: no double inferred charge on A');
+// A non-ally who saw it, or an ally who did not see the taker, is no evidence.
+$koAff = koBy('Uncon Attacker', 'Uncon Victim Twelve', 2700, $INV);
+$e = ev('item_transfer', ent('Uncon Looter'), ent('Uncon Victim Twelve', false), ['items'=>['Katana'=>1], 'to_ground'=>false], 2710);
+$e['witnesses'] = [['entity'=>ent('Uncon Stranger'), 'conscious'=>true, 'perceived'=>true, 'sees_actor'=>true, 'sees_target'=>true, 'hears_actor'=>true],
+    ['entity'=>ent('Uncon Witness'), 'conscious'=>true, 'perceived'=>true, 'sees_actor'=>false, 'sees_target'=>true, 'hears_actor'=>false]];
+send($e);
+ok(one("SELECT state->'known_thief'->>'name' FROM social_incident WHERE state->>'kind'='ko' AND state->'victim'->>'serial'='225'") === null, 'SR09 no evidence: no known thief');
+// ... then the ally hunts the looter (the game's HUNT_MY_THIEF): known thief after all.
+send(ev('theft_caught', ent('Uncon Looter'), ent('Uncon Witness'), ['goal'=>'HUNT_MY_THIEF'], 2720));
+ok(str_contains(strval(one("SELECT state->'known_thief'->>'name' FROM social_incident WHERE state->>'kind'='ko' AND state->'victim'->>'serial'='225'")), 'Uncon Looter'), 'SR09 an ally hunting the looter names him');
+wake('Uncon Victim Twelve', ['Dried Meat'=>4], 2800);
+ok(affOf('Uncon Victim Twelve', 'Uncon Attacker') === $koAff && affOf('Uncon Victim Twelve', 'Uncon Looter') < 0, 'SR09 hunt evidence: looter blamed, A not');
 
 // SR10a: unknown KO attacker: missing items are blamed on nobody.
 koBy(null, 'Uncon Victim Three', 3000, $INV);

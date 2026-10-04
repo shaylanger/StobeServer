@@ -6865,6 +6865,8 @@ function stobeParseStructuredDialogueResponse(string $rawResponse, string $event
         $destination,
         $maxCats
     );
+    require_once __DIR__ . '/social_recruitment.php';
+    $rawActionTag = stobeSocialTestForceJoinAttempt($rawActionTag, $character, $eventType); // SR30 test switch, off by default
     $actionTag = '';
     if ($rawActionTag !== '') {
         $speakerNpcData = $character !== '' ? getNpcData($character) : false;

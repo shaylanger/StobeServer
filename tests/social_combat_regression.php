@@ -171,5 +171,24 @@ ok($joined <= -25 && $joined >= -40, "m9 ally joining the assault charged ($join
 $before = affOf('Combat Echo', 'Combat Delta');
 send(ev('harm', ent('Combat Delta'), ent('Combat Echo', false), ['level'=>'injury', 'attribution'=>'attacker_list'], 7020));
 ok(affOf('Combat Echo', 'Combat Delta') === $before, 'm9 a non-ally without an encounter: not charged');
+// REL_THEFT_CAUGHT_M18 SR06 test switch: a squad attacker's new encounter on a victim who already targets him.
+$sq = ['entity_key'=>'sess2:7:120', 'serial'=>120, 'name'=>'Combat Hotel', 'storage_id'=>'hand_120', 'faction'=>'Nameless', 'in_player_faction'=>true, 'conscious'=>true];
+sql('DELETE FROM core_npc WHERE name=$1', ['Combat Hotel']);
+sql("INSERT INTO core_npc(name,extended_data,metadata) VALUES('Combat Hotel','{}'::jsonb,jsonb_build_object('storage_id','hand_120'))");
+sql("DELETE FROM general_settings WHERE id='SOCIAL_TEST_FORCE_FIRST_STRIKE'");
+$g0 = affOf('Combat Golf', 'Combat Hotel');
+send(ev('attack', $sq, ent('Combat Golf'), ['victim_targeting_actor'=>true], 25000));
+ok(affOf('Combat Golf', 'Combat Hotel') === $g0, 'SR06 switch off: a hostile victim = defence');
+sql("INSERT INTO general_settings(id,value) VALUES('SOCIAL_TEST_FORCE_FIRST_STRIKE','Combat Hotel')");
+send(ev('attack', $sq, ent('Combat Foxtrot'), ['victim_targeting_actor'=>true], 25010));
+$f1 = affOf('Combat Foxtrot', 'Combat Hotel');
+ok($f1 >= -15 && $f1 <= -8, "SR06 switch on: first strike forced ($f1)");
+send(ev('attack', $sq, ent('Combat Foxtrot'), ['victim_targeting_actor'=>true], 25010 + 2000));
+$f2 = affOf('Combat Foxtrot', 'Combat Hotel') - $f1;
+ok($f2 <= -9 && $f2 >= -18, "SR06 switch on: second distinct assault ($f2)");
+$d0 = affOf('Combat Delta', 'Combat Echo');
+send(ev('attack', ent('Combat Echo'), ent('Combat Delta'), ['victim_targeting_actor'=>true], 25020));
+ok(affOf('Combat Delta', 'Combat Echo') === $d0, 'SR06 switch never touches non-squad attackers');
+sql("DELETE FROM general_settings WHERE id='SOCIAL_TEST_FORCE_FIRST_STRIKE'");
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 echo "$n combat regression checks passed\n";

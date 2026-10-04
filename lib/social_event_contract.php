@@ -11,7 +11,9 @@ final class SocialEventContract
         'recovered', 'death', 'limb_loss', 'healing', 'slavery', 'imprisonment', 'carry',
         'looting', 'item_pickup', 'trade', 'eat', 'predation', 'dialogue', 'semantic',
         // Structured native facts (facts.source = "structured"), explicit roles: actor did it, target had it done.
-        'attack', 'harm', 'item_transfer', 'enslaved', 'freed', 'aid', 'carry_start', 'carry_end', 'placed', 'eat', 'item_gain'];
+        'attack', 'harm', 'item_transfer', 'enslaved', 'freed', 'aid', 'carry_start', 'carry_end', 'placed', 'eat', 'item_gain',
+        // REL_THEFT_CAUGHT_M18: the game's HUNT_MY_THIEF goal (actor = thief, target = the one who hunts him).
+        'theft_caught'];
 
     public static function token(mixed $value, string $field): string
     {

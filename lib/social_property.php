@@ -9,6 +9,11 @@ declare(strict_types=1);
  * Permission checks never reach here. Severity by share of the owner's belongings, food taken from a
  * starving owner = major. Giving the same items back within a day is a small compensation, once.
  * Squad members handling each other's things are exempt.
+ * REL_THEFT_CAUGHT_M18: the game's own detection is the HUNT_MY_THIEF goal (theft_caught: actor = thief, target =
+ * hunter). Stolen-flagged goods gained from nobody's inventory (shop/world goods, item_gain) score only when a hunt
+ * pairs with them within theft_caught_window_seconds (either order): the hunter blames the thief, once. A late hunt
+ * also scores an earlier uncaught theft for its owner and names the thief of a knocked-out ally (SR09). The hunter
+ * or owner taking the goods back is restitution/confiscation, never a theft by him.
  * Gifts: a conscious non-food, non-stolen hand-over outside a deal = gift (+1..+4) to the recipient's view.
  * Trade: only the game's own purchase path with a character seller; price vs the game's value of the goods
  * decides favorable/generous/exceptional (fair = nothing); a shop/faction purse or missing seller credits
@@ -52,8 +57,9 @@ trait SocialPropertyInterpreter
         if (!$taker || !$owner || $taker['entity_key'] === $owner['entity_key']) return [['status'=>'recorded', 'note'=>'dropped or unknown taker']];
         $stolen = is_array($facts['stolen_items'] ?? null) ? $facts['stolen_items'] : [];
         $squad = self::squadPair($taker, $owner);
-        if ($stolen && !$squad) return [$this->theft($event, $mode, $taker, $owner, $stolen)];
         if (!$squad && ($returned = $this->returnedProperty($event, $mode, $taker, $owner))) return [$returned];
+        if ($stolen && !$squad && $this->openHunts($event, $owner, $taker)) return [['status'=>'confiscated', 'note'=>'the owner side took the stolen goods back: no theft']];
+        if ($stolen && !$squad) return [$this->theft($event, $mode, $taker, $owner, $stolen)];
         if (!$stolen && ($food = $this->foodGift($event))) return [$food]; // squad food is judged at the meal (survival only)
         if ($squad) return [['status'=>'exempt', 'note'=>'squad inventory management']];
         if ($this->inDeal($taker, $owner)) return [['status'=>'deal_payment', 'note'=>'scored by the agreement outcome']];
@@ -76,7 +82,8 @@ trait SocialPropertyInterpreter
         elseif (($share !== null && $share >= 0.4) || ($food && $hunger !== null && $hunger < (float)$this->care('survival_hunger_below', 1.0))) $component = 'major_theft';
         elseif ($qty === 1 && $share !== null && $share < 0.1) $component = 'petty_theft';
         $this->store->saveIncident($event, $incident, ['kind'=>'theft', 'phase'=>'resolved', 'owner'=>$owner, 'thief'=>$thief,
-            'items'=>$stolen, 'component'=>$component, 'caught'=>$facts['caught'] ?? null, 'returned'=>false]);
+            'items'=>$stolen, 'component'=>$component, 'caught'=>$facts['caught'] ?? null, 'returned'=>false,
+            'opened_ts'=>$event['game_ts'], 'caught_by'=>($facts['caught'] ?? null) === true ? [$owner['entity_key']] : []]);
         if (($facts['caught'] ?? null) !== true) return ['status'=>'unseen_or_undetected', 'component'=>$component, 'note'=>'no detection: no personal blame'];
         return $this->effect($event, $mode, $owner, $thief, $component,
             ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>'Caught ' . $thief['name'] . ' stealing from me', 'kind'=>'theft'], $incident);
@@ -85,8 +92,9 @@ trait SocialPropertyInterpreter
     /** The thief hands the same items back within a game day: a small compensation, once per theft. */
     private function returnedProperty(array $event, string $mode, array $receiver, array $giver): ?array
     {
-        $rows = $this->store->fetchRows("SELECT incident_id,state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='theft'
-              AND state->'owner'->>'entity_key'=\$3 AND state->'thief'->>'entity_key'=\$4 AND (state->>'returned')::boolean IS NOT TRUE
+        $rows = $this->store->fetchRows("SELECT incident_id,state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2
+              AND ((state->>'kind'='theft' AND state->'owner'->>'entity_key'=\$3) OR (state->>'kind'='stolen_gain' AND state->'caught_by' ? \$3))
+              AND state->'thief'->>'entity_key'=\$4 AND (state->>'returned')::boolean IS NOT TRUE
               AND (state->>'caught')::boolean IS TRUE AND game_ts>=\$5 ORDER BY game_ts DESC LIMIT 1",
             [$event['campaign_id'], $event['timeline_epoch'], $receiver['entity_key'], $giver['entity_key'], $event['game_ts'] - 86400]);
         if (!$rows) return null;
@@ -96,6 +104,90 @@ trait SocialPropertyInterpreter
         $this->store->saveIncident($event, $rows[0]['incident_id'], $state);
         return $this->effect($event, $mode, $receiver, $giver, 'property_returned',
             ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>$giver['name'] . ' gave back what was stolen', 'kind'=>'restitution'], $rows[0]['incident_id']);
+    }
+
+    private function theftWindow(): int { return max(30, (int)$this->economy('theft_caught_window_seconds', 300)); }
+
+    /** Open hunts on this thief (by everyone, or by one hunter) within the window. */
+    private function openHunts(array $event, array $thief, ?array $hunter = null): array
+    {
+        $rows = $this->store->fetchRows("SELECT state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='theft_hunt'
+              AND state->'thief'->>'entity_key'=\$3 AND game_ts>=\$4", [$event['campaign_id'], $event['timeline_epoch'], $thief['entity_key'], $event['game_ts'] - $this->theftWindow()]);
+        $out = [];
+        foreach ($rows as $row) {
+            $state = json_decode($row['state'], true);
+            if ($hunter && ($state['hunter']['entity_key'] ?? '') !== $hunter['entity_key']) continue;
+            $out[] = $state;
+        }
+        return $out;
+    }
+
+    /** SR13 shop/world goods: stolen-flagged items the actor gained from nobody's inventory. */
+    private function stolenGain(array $event, string $mode): array
+    {
+        $thief = $event['actor'];
+        $stolen = is_array($event['facts']['stolen_items'] ?? null) ? array_filter(array_map('intval', $event['facts']['stolen_items']), fn($q) => $q > 0) : [];
+        if (!$thief || !$stolen) return [];
+        $incident = 'stolen_gain:' . $event['sequence'] . ':' . substr(hash('sha256', $thief['entity_key']), 0, 16);
+        $qty = array_sum($stolen);
+        $state = ['kind'=>'stolen_gain', 'phase'=>'open', 'thief'=>$thief, 'items'=>$stolen, 'qty'=>$qty,
+            'component'=>$qty === 1 ? 'petty_theft' : 'theft', 'opened_ts'=>$event['game_ts'], 'caught'=>null, 'caught_by'=>[], 'returned'=>false];
+        $this->store->saveIncident($event, $incident, $state);
+        $out = [['status'=>'stolen_gain', 'incident'=>$incident, 'qty'=>$qty, 'note'=>'no hunt yet: no blame']];
+        // The game raises the alarm at the pickup, often before the goods reach his inventory.
+        foreach ($this->openHunts($event, $thief) as $hunt) {
+            $out = array_merge($out, $this->scoreCaught($event, $mode, $hunt['hunter'], $thief, $incident, $state));
+        }
+        return $out;
+    }
+
+    /** The game's own detection: someone's current goal is HUNT_MY_THIEF on the actor. */
+    private function theftCaught(array $event, string $mode): array
+    {
+        $thief = $event['actor']; $hunter = $event['target'];
+        if (!$thief || !$hunter || $thief['entity_key'] === $hunter['entity_key']) return [['status'=>'incomplete_roles']];
+        if (self::squadPair($thief, $hunter)) return [['status'=>'exempt', 'note'=>'squad']];
+        if (($hunter['conscious'] ?? null) !== true) return [['status'=>'not_aware']];
+        $hunt = 'hunt:' . substr(hash('sha256', $hunter['entity_key'] . '|' . $thief['entity_key']), 0, 24);
+        $this->store->saveIncident($event, $hunt, ['kind'=>'theft_hunt', 'phase'=>'open', 'hunter'=>$hunter, 'thief'=>$thief,
+            'last_ts'=>$event['game_ts'], 'stolen_items'=>$event['facts']['stolen_items'] ?? null]);
+        $out = [];
+        $rows = $this->store->fetchRows("SELECT incident_id,state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2
+              AND state->>'kind' IN ('theft','stolen_gain') AND state->'thief'->>'entity_key'=\$3 ORDER BY game_ts DESC LIMIT 16",
+            [$event['campaign_id'], $event['timeline_epoch'], $thief['entity_key']]);
+        foreach ($rows as $row) {
+            $state = json_decode($row['state'], true);
+            $opened = (int)($state['opened_ts'] ?? $event['game_ts']);
+            if ($opened > $event['game_ts'] || $event['game_ts'] - $opened > $this->theftWindow()) continue;
+            if ($state['kind'] === 'stolen_gain') { $out = array_merge($out, $this->scoreCaught($event, $mode, $hunter, $thief, $row['incident_id'], $state)); continue; }
+            $owner = $state['owner'] ?? null;
+            if (!$owner) continue;
+            if ($owner['entity_key'] === $hunter['entity_key']) $out = array_merge($out, $this->scoreCaught($event, $mode, $hunter, $thief, $row['incident_id'], $state));
+        }
+        // SR09: an ally of a knocked-out victim hunts the one who took the victim's things: the victim learns who it was.
+        $kos = $this->store->fetchRows("SELECT state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='ko' AND state->>'phase'='pending_awareness'
+              AND state->'objective'->'transfers' @> jsonb_build_array(jsonb_build_object('taker', jsonb_build_object('entity_key', \$3::text)))",
+            [$event['campaign_id'], $event['timeline_epoch'], $thief['entity_key']]);
+        foreach ($kos as $row) {
+            $victim = json_decode($row['state'], true)['victim'] ?? null;
+            if (!$victim || $victim['entity_key'] === $hunter['entity_key'] || !self::allies($victim, $hunter)) continue;
+            if ($this->recordKnownThief($event, $victim, $thief)) $out[] = ['status'=>'known_thief', 'basis'=>'hunt', 'victim'=>$victim['name']];
+        }
+        return $out ?: [['status'=>'hunt_open', 'note'=>'no stolen goods seen yet: scored if they arrive within the window']];
+    }
+
+    /** One caught effect per incident and hunter (late for an owner's own uncaught theft). */
+    private function scoreCaught(array $event, string $mode, array $hunter, array $thief, string $incident, array $state): array
+    {
+        $by = is_array($state['caught_by'] ?? null) ? $state['caught_by'] : [];
+        if (in_array($hunter['entity_key'], $by, true)) return [['status'=>'duplicate_hunt', 'incident'=>$incident]];
+        $by[] = $hunter['entity_key'];
+        $state['caught_by'] = $by; $state['caught'] = true;
+        $this->store->saveIncident($event, $incident, $state);
+        $own = ($state['kind'] ?? '') === 'theft';
+        return [$this->effect($event, $mode, $hunter, $thief, strval($state['component'] ?? 'theft'),
+            ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>'Caught ' . $thief['name'] . ($own ? ' stealing from me' : ' stealing from us'), 'kind'=>'theft'],
+            $incident)];
     }
 
     private function trade(array $event, string $mode): array

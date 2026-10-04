@@ -21,6 +21,10 @@
  *   php tools/social_relationship_inspect.php --interpret-log 40 --log-filter "Rel Vash"   only log lines mentioning that text
  *   php tools/social_relationship_inspect.php --retention [campaign]   run the retention pass now (phase 8)
  *   php tools/social_relationship_inspect.php --set-mode off|shadow|enabled   prints the previous mode (restore with it)
+ *   php tools/social_relationship_inspect.php --set-switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT|SOCIAL_TEST_FORCE_FIRST_STRIKE <value|off>
+ *                                                  TEST SETUP: SR30/SR06 test switches (off by default; turn off after the test)
+ *   php tools/social_relationship_inspect.php --add-trust "Observer" "Culprit" lifesaving|slave_escape|meaningful_aid|safe_rescue [delta]
+ *                                                  TEST SETUP: an applied trust-evidence effect row (recruitment gate), current load
  *   php tools/social_relationship_inspect.php --purge-all --yes            empties the six social tables (test data only)
  *
  * DB: STOBE_DB_NAME (default stobe), like every server tool.
@@ -62,6 +66,28 @@ if (($i = array_search('--set-relation', $args, true)) !== false) {
     echo json_encode(['set_relation'=>$ok, 'observer'=>$args[$i+1] ?? '', 'target'=>$args[$i+2] ?? '', 'aff'=>(int)($args[$i+3] ?? 0)]), "
 ";
     exit($ok ? 0 : 1);
+}
+if (($i = array_search('--set-switch', $args, true)) !== false) {
+    // TEST SETUP ONLY: the REL test switches (SR30, SR06).
+    $id = strval($args[$i+1] ?? ''); $value = strval($args[$i+2] ?? '');
+    if (!in_array($id, ['SOCIAL_TEST_FORCE_JOIN_ATTEMPT', 'SOCIAL_TEST_FORCE_FIRST_STRIKE'], true) || $value === '') { fwrite(STDERR, "--set-switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT|SOCIAL_TEST_FORCE_FIRST_STRIKE <value|off>\n"); exit(2); }
+    $previous = $setting($id);
+    if (in_array(strtolower($value), ['off', 'false', '0'], true)) $db->exec('DELETE FROM general_settings WHERE id=$1', [$id]);
+    else $db->exec('INSERT INTO general_settings(id,value) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value', [$id, $value]);
+    echo json_encode(['switch'=>$id, 'previous'=>$previous ?? '(unset = off)', 'now'=>$setting($id) ?? '(unset = off)']), "\n";
+    exit(0);
+}
+if (($i = array_search('--add-trust', $args, true)) !== false) {
+    // TEST SETUP ONLY (fixture copies): one applied trust-evidence row, as the recruitment gate counts them.
+    $obs = strval($args[$i+1] ?? ''); $cul = strval($args[$i+2] ?? ''); $comp = strval($args[$i+3] ?? '');
+    $delta = isset($args[$i+4]) && is_numeric($args[$i+4]) ? (int)$args[$i+4] : 20;
+    if ($obs === '' || $cul === '' || !in_array($comp, ['lifesaving', 'slave_escape', 'meaningful_aid', 'safe_rescue'], true)) { fwrite(STDERR, "--add-trust Observer Culprit lifesaving|slave_escape|meaningful_aid|safe_rescue [delta]\n"); exit(2); }
+    try { $scope = stobeSocialScope($db); } catch (Throwable $e) { $scope = ['campaign_id'=>'legacy', 'timeline_epoch'=>'0']; }
+    $r = $db->exec("INSERT INTO social_effect(campaign_id,timeline_epoch,incident_id,observer_key,culprit_key,component,game_ts,delta,detail,applied,rules_version)
+         VALUES($1,$2,$3,'test_setup','test_setup',$4,0,$5,jsonb_build_object('observer_name',$6::text,'culprit_name',$7::text,'total',$5::int,'test_setup',true),true,'test_setup')",
+        [strval($scope['campaign_id']), strval($scope['timeline_epoch']), 'test_setup:' . bin2hex(random_bytes(4)), $comp, $delta, $obs, $cul]);
+    echo json_encode(['add_trust'=>$r !== false, 'observer'=>$obs, 'culprit'=>$cul, 'component'=>$comp, 'delta'=>$delta]), "\n";
+    exit($r !== false ? 0 : 1);
 }
 if (($i = array_search('--retention', $args, true)) !== false) {
     // Phase 8: run the retention pass now for one campaign (default: the current scope's campaign).

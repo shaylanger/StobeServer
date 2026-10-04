@@ -9,6 +9,24 @@ require_once __DIR__ . '/social_runtime.php';
  * on; SOCIAL_RECRUITMENT_OVERRIDE=true is the documented forced/cheat override. Vanilla recruitment (paid
  * recruits, slaves) never passes through here. The NPC may still refuse above the threshold (dialogue).
  */
+/**
+ * SR30 test switch (general_settings SOCIAL_TEST_FORCE_JOIN_ATTEMPT, off by default): when the player's line asks a
+ * non-squad NPC to join (join/recruit/come with me), the NPC's reply action becomes JoinParty so the recruitment
+ * gate decides (the LLM almost never tries on its own). Logged every time it fires.
+ */
+function stobeSocialTestForceJoinAttempt(string $rawActionTag, string $character, string $eventType): string
+{
+    try { $on = getSettingBool('SOCIAL_TEST_FORCE_JOIN_ATTEMPT', false); } catch (Throwable $e) { $on = false; }
+    if (!$on || trim($character) === '' || strtolower(trim($eventType)) !== 'chat') return $rawActionTag;
+    $line = strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? '');
+    if (!preg_match('/\b(join|recruit)\b|\bcome with (me|us)\b/i', $line)) return $rawActionTag;
+    $npc = getNpcData($character);
+    if (!is_array($npc) || !$npc || npcIsInPlayerFaction($npc)) return $rawActionTag;
+    stobeLogWarn('REL test switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT: JoinParty forced (turn it off after the test)',
+        ['npc'=>$character, 'replaced'=>$rawActionTag]);
+    return 'JoinParty@';
+}
+
 function stobeSocialRecruitmentDecision(string $npc, string $player, int $affinity): array
 {
     if (stobeSocialMode() !== 'enabled' || !getSettingBool('SOCIAL_CATEGORY_RECRUITMENT', true)) return ['allowed'=>true, 'reason'=>'rel_not_enabled'];

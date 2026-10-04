@@ -16,7 +16,8 @@ function entryOf(string $a, string $b): ?array { return stobeRelationshipEntryFo
 const P = ['Prop Owner'=>[401,'Blue',false], 'Prop Thief'=>[402,'Grey',false], 'Prop Owner Two'=>[403,'Blue',false], 'Prop Owner Three'=>[404,'Blue',false],
     'Prop Owner Four'=>[405,'Blue',false], 'Prop Squad A'=>[411,'Nameless',true], 'Prop Squad B'=>[412,'Nameless',true],
     'Prop Giver'=>[421,'Hub',false], 'Prop Friend'=>[422,'Blue',false], 'Prop Trader'=>[431,'Traders',false], 'Prop Buyer'=>[432,'Blue',false],
-    'Prop Rich Buyer'=>[433,'Blue',false], 'Prop Patron'=>[434,'Blue',false], 'Prop Npc'=>[441,'Blue',false], 'Prop Npc Two'=>[442,'Blue',false], 'Prop Player'=>[450,'Nameless',true]];
+    'Prop Rich Buyer'=>[433,'Blue',false], 'Prop Patron'=>[434,'Blue',false], 'Prop Npc'=>[441,'Blue',false], 'Prop Npc Two'=>[442,'Blue',false], 'Prop Player'=>[450,'Nameless',true],
+    'Prop Hunter'=>[406,'Traders',false], 'Prop Guard'=>[407,'Traders',false], 'Prop Shop Thief'=>[408,'Grey',false], 'Prop Squad C'=>[413,'Nameless',true]];
 foreach (['social_event_inbox','social_incident','social_belief','social_effect','social_evidence','social_checkpoint'] as $t) sql("DELETE FROM $t");
 foreach (P as $name => [$serial]) {
     sql('DELETE FROM core_npc_master_history WHERE name=$1', [$name]); sql('DELETE FROM core_npc WHERE name=$1', [$name]);
@@ -154,4 +155,38 @@ try {
     sql("DELETE FROM stobe_negotiation_reputation WHERE player_name='prop player'");
     sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 }
+sql("UPDATE general_settings SET value='enabled' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
+// REL_THEFT_CAUGHT_M18 SR13 shop goods: a stolen gain alone (unseen) blames nobody; the game's HUNT_MY_THIEF = caught.
+$sg = send('item_gain', ent('Prop Shop Thief'), null, ['items'=>['Iron Bar'=>1], 'stolen_items'=>['Iron Bar'=>1]], 50005000);
+ok(entryOf('Prop Hunter', 'Prop Shop Thief') === null && entryOf('Prop Guard', 'Prop Shop Thief') === null, 'SR13 unseen shop theft: no blame');
+send('theft_caught', ent('Prop Shop Thief'), ent('Prop Hunter'), ['goal'=>'HUNT_MY_THIEF', 'stolen_items'=>['Iron Bar'=>1]], 50005010);
+$h1 = affOf('Prop Hunter', 'Prop Shop Thief');
+ok($h1 >= -8 && $h1 <= -3, "SR13 late caught petty shop theft ($h1)");
+send('theft_caught', ent('Prop Shop Thief'), ent('Prop Hunter'), ['goal'=>'HUNT_MY_THIEF'], 50005040);
+ok(affOf('Prop Hunter', 'Prop Shop Thief') === $h1, 'SR13 the same hunt again: once');
+send('theft_caught', ent('Prop Shop Thief'), ent('Prop Hunter', false), ['goal'=>'HUNT_MY_THIEF'], 50005050);
+send('theft_caught', ent('Prop Squad A'), ent('Prop Squad C'), ['goal'=>'HUNT_MY_THIEF'], 50005050);
+ok(entryOf('Prop Squad C', 'Prop Squad A') === null, 'SR20 a squad mate hunting: exempt');
+// The alarm before the goods arrive: scored when they do; several items = ordinary theft.
+send('theft_caught', ent('Prop Shop Thief'), ent('Prop Guard'), ['goal'=>'HUNT_MY_THIEF'], 50006000);
+ok(entryOf('Prop Guard', 'Prop Shop Thief') === null, 'SR13 hunt without stolen goods yet: nothing');
+send('item_gain', ent('Prop Shop Thief'), null, ['items'=>['Katana'=>1, 'Iron Bar'=>2], 'stolen_items'=>['Katana'=>1, 'Iron Bar'=>2]], 50006005);
+$g1 = affOf('Prop Guard', 'Prop Shop Thief');
+ok($g1 >= -18 && $g1 <= -8, "SR13/SR14 caught ordinary shop theft ($g1)");
+ok(affOf('Prop Hunter', 'Prop Shop Thief') === $h1, 'SR13 an old hunt (outside the window) does not score a new theft');
+// The hunter takes the goods back: restitution, never a theft by him.
+$back = send('item_transfer', ent('Prop Guard'), ent('Prop Shop Thief'), ['items'=>['Katana'=>1], 'to_ground'=>false, 'food_items'=>[], 'recipient_hunger'=>null,
+    'stolen_items'=>['Katana'=>1], 'caught'=>true, 'loser_inventory_total'=>3, 'loser_hunger'=>2.0], 50006020);
+ok(entryOf('Prop Shop Thief', 'Prop Guard') === null, 'SR14 confiscation is no theft by the hunter');
+ok(affOf('Prop Guard', 'Prop Shop Thief') > $g1 && affOf('Prop Guard', 'Prop Shop Thief') - $g1 <= 9, 'SR14 goods returned to the hunter: small compensation');
+// A late hunt by the owner scores his own earlier uncaught theft, once.
+$o5 = affOf('Prop Owner', 'Prop Thief');
+steal('Prop Thief', 'Prop Owner', ['Iron Bar'=>2], null, 12, 50007000);
+ok(affOf('Prop Owner', 'Prop Thief') === $o5, 'SR13 uncaught again: nothing yet');
+send('theft_caught', ent('Prop Thief'), ent('Prop Owner'), ['goal'=>'HUNT_MY_THIEF'], 50007030);
+$late = affOf('Prop Owner', 'Prop Thief') - $o5;
+ok($late < 0 && $late >= -18, "SR13 late theft_caught by the owner ($late)");
+send('theft_caught', ent('Prop Thief'), ent('Prop Owner'), ['goal'=>'HUNT_MY_THIEF'], 50007060);
+ok(affOf('Prop Owner', 'Prop Thief') - $o5 === $late, 'SR13 late caught once');
+sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 echo "$n property/agreement regression checks passed\n";

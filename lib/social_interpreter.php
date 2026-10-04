@@ -37,7 +37,8 @@ final class SocialInterpreter
             'harm' => $this->harm($event, $mode),
             'recovered' => $this->recovered($event, $mode),
             'item_transfer' => $this->itemTransfer($event, $mode),
-            'item_gain' => $this->itemGain($event),
+            'item_gain' => array_merge($this->stolenGain($event, $mode), $this->itemGain($event)),
+            'theft_caught' => $this->theftCaught($event, $mode),
             'enslaved' => $this->enslaved($event, $mode),
             'freed' => $this->freed($event, $mode),
             'aid' => $this->aid($event, $mode),
@@ -219,7 +220,9 @@ final class SocialInterpreter
         }
         $facts = $event['facts'];
         $basis = 'first_strike'; $initiator = $a['entity_key']; $ally = null;
-        if (($facts['victim_targeting_actor'] ?? null) === true || ($facts['player_defending'] ?? null) === true) {
+        if ($this->forcedFirstStrike($a, $b)) {
+            $basis = 'first_strike_forced';
+        } elseif (($facts['victim_targeting_actor'] ?? null) === true || ($facts['player_defending'] ?? null) === true) {
             $basis = 'victim_already_engaged'; $initiator = $b['entity_key'];
         } elseif ($ally = $this->aggressorAgainstAllyOf($event, $b, $a)) {
             $basis = 'defending_ally'; $initiator = $b['entity_key'];
@@ -362,7 +365,16 @@ final class SocialInterpreter
             'items'=>$event['facts']['items'] ?? [], 'game_ts'=>$event['game_ts'], 'sequence'=>$event['sequence']];
         $ko['state']['objective']['transfers'] = array_slice($ko['state']['objective']['transfers'], -64);
         $this->store->saveIncident($event, $ko['id'], $ko['state']);
-        return [['status'=>'latent_property', 'incident'=>$ko['id']]];
+        $out = [['status'=>'latent_property', 'incident'=>$ko['id']]];
+        // SR09: a conscious ally of the owner saw the taker do it = verified better evidence for the owner's waking.
+        foreach ($taker ? array_slice($event['witnesses'] ?? [], 0, 12) : [] as $w) {
+            $who = $w['entity'] ?? null;
+            if (!$who || ($w['conscious'] ?? null) !== true || ($w['sees_actor'] ?? null) !== true) continue;
+            if (in_array($who['entity_key'], [$loser['entity_key'], $taker['entity_key']], true)) continue;
+            if (!self::allies($who, $loser) || self::allies($who, $taker)) continue;
+            if ($this->recordKnownThief($event, $loser, $taker)) { $out[] = ['status'=>'known_thief', 'basis'=>'witness', 'witness'=>$who['name']]; break; }
+        }
+        return $out;
     }
 
     /**
@@ -523,6 +535,21 @@ final class SocialInterpreter
             if (isset($ko['state']['carried_from_load'])) $this->store->retireIncident($event['campaign_id'], $ko['state']['carried_from_load'], $ko['id']);
         }
         return $results ?: [['status'=>'recorded']];
+    }
+
+    /**
+     * SR06 test switch (general_settings SOCIAL_TEST_FORCE_FIRST_STRIKE, off by default): a NEW encounter opened by
+     * a player-faction attacker is his first strike even if the victim already targets him (a beaten bandit who
+     * turned hostile spoils the second-assault measurement). Value: true (any squad attacker) or a name. Logged.
+     */
+    private function forcedFirstStrike(array $a, array $b): bool
+    {
+        try { $value = strtolower(trim(strval(getSetting('SOCIAL_TEST_FORCE_FIRST_STRIKE', '')))); } catch (Throwable $e) { $value = ''; }
+        if (in_array($value, ['', 'false', 'off', '0', 'no'], true) || ($a['in_player_faction'] ?? null) !== true) return false;
+        if (!in_array($value, ['true', 'on', '1', 'yes'], true) && $value !== strtolower(trim(strval($a['name'] ?? '')))) return false;
+        if (function_exists('stobeLogWarn')) stobeLogWarn('REL test switch SOCIAL_TEST_FORCE_FIRST_STRIKE: first strike forced (turn it off after the test)',
+            ['attacker'=>strval($a['name'] ?? ''), 'victim'=>strval($b['name'] ?? '')]);
+        return true;
     }
 
     /** Internal adapter: verified better evidence (e.g. a witnessed theft, phase 6) names the thief of a KO incident. */

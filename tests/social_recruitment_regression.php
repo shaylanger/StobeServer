@@ -77,6 +77,26 @@ $config = stobeBuildActionConfigForNpc('chat', $npc);
 ok(empty($config['disallow_join_party']), 'SR30 trusted at 80: JoinParty allowed');
 if (isAllowedActionCommand('JOIN_PARTY', $config['allowlist'] ?? [])) ok(normalizeActionTagToken('JoinParty@', $config) === 'JOIN_PARTY@', 'SR30 trusted dispatch passes');
 
+// REL_THEFT_CAUGHT_M18 SR30 test switch: off = the LLM's own action; on + a join request = JoinParty, which the gate decides.
+$GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] = 'Rec, join my squad right now.';
+setting('SOCIAL_TEST_FORCE_JOIN_ATTEMPT', null);
+ok(stobeSocialTestForceJoinAttempt('', 'Rec Candidate', 'chat') === '', 'SR30 switch off: nothing forced');
+setting('SOCIAL_TEST_FORCE_JOIN_ATTEMPT', 'true');
+ok(stobeSocialTestForceJoinAttempt('Talk@', 'Rec Candidate', 'chat') === 'JoinParty@', 'SR30 switch on: JoinParty forced');
+ok(stobeSocialTestForceJoinAttempt('', 'Rec Candidate', 'director') === '', 'SR30 switch: chat only');
+$GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] = 'Nice weather.';
+ok(stobeSocialTestForceJoinAttempt('', 'Rec Candidate', 'chat') === '', 'SR30 switch: only on a join request');
+$GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] = 'Rec, join my squad right now.';
+$reply = '{"character":"Rec Candidate","message":"Maybe later.","action":"Talk"}';
+$joinOffered = isAllowedActionCommand('JOIN_PARTY', stobeBuildActionConfigForNpc('chat', getNpcData('Rec Candidate'))['allowlist'] ?? []);
+if ($joinOffered) {
+    ok(stobeParseStructuredDialogueResponse($reply, 'chat')['action_tag'] === 'JOIN_PARTY@', 'SR30 forced join at 80 + lifesaving passes the gate');
+    RelationshipManager::setRelationship('Rec Candidate', $player, 50);
+    ok(stobeParseStructuredDialogueResponse($reply, 'chat')['action_tag'] === '', 'SR30 forced join at 50 is blocked by the gate');
+} else ok(true, 'SR30 JoinParty not in the chat allowlist here');
+setting('SOCIAL_TEST_FORCE_JOIN_ATTEMPT', null);
+unset($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE']);
+
 // SR32: slave escape. Unchained by a known liberator: chains_freed now; seen free after a game day: escape budget.
 send('freed', ent('Rec Owner'), ent('Rec Slave'), ['owner_role'=>'owner', 'liberator'=>ent('Rec Liberator'), 'liberator_task'=>1], 1000);
 $chains = affOf('Rec Slave', 'Rec Liberator');
