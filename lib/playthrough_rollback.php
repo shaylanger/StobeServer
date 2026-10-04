@@ -1050,6 +1050,23 @@ function stobePlaythroughRestoreUnlockedNpcs(int $cutoffGamets): array
             continue;
         }
 
+        // Item 110: core_npc.name is unique. If another row owns the snapshot's name now
+        // (spawned NPCs are renamed per load, bug 117), that row is the snapshot's NPC: skip.
+        $snapshotName = trim(strval($historyRow['name'] ?? ''));
+        $nameOwner = $snapshotName === '' ? false
+            : $db->fetchOne('SELECT id FROM core_npc WHERE name = $1 AND id <> $2 LIMIT 1', [$snapshotName, $npcId]);
+        if (is_array($nameOwner) && intval($nameOwner['id'] ?? 0) > 0) {
+            $skipped++;
+            stobeLogWarn('PLAYTHROUGH: skipped NPC restore, snapshot name belongs to another NPC', [
+                'npc_id' => $npcId,
+                'name' => strval($row['name'] ?? ''),
+                'snapshot_name' => $snapshotName,
+                'name_owner_id' => intval($nameOwner['id']),
+                'history_id' => intval($historyRow['history_id'] ?? 0),
+            ]);
+            continue;
+        }
+
         if (function_exists('stobeInsertNpcHistorySnapshotFromRow')) {
             stobeInsertNpcHistorySnapshotFromRow($row, 'rollback_pre_restore');
         }
