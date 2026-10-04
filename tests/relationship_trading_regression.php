@@ -18,7 +18,7 @@ check('buy r=-10: +5% (0.0479)', $near(stobeRelBuyFactor(-10) - 1, 0.0479), stob
 check('buy r=-50: +200%', $near(stobeRelBuyFactor(-50) - 1, 2.003, 0.002), stobeRelBuyFactor(-50) - 1);
 check('buy r=-100: +1000%', $near(stobeRelBuyFactor(-100) - 1, 10.0));
 check('sell r=+100: +10%', $near(stobeRelSellFactor(100), 1.10));
-check('sell r=-100: -75%', $near(stobeRelSellFactor(-100), 0.25));
+check('sell r=-100: -90%', $near(stobeRelSellFactor(-100), 0.10));
 check('clamped beyond +-100', stobeRelBuyFactor(150) === stobeRelBuyFactor(100) && stobeRelBuyFactor(-150) === stobeRelBuyFactor(-100));
 // floor: never a buy/sell loop profit, at the default ratio and at a high one
 $loop = true; $bad = null;

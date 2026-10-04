@@ -5,7 +5,7 @@
  * value toward the player character doing the deal (-100..100; no history = 0 = vanilla).
  *  - Weapon guard: an outsider gives up / drops / stows her weapon only at r >= 70 (squad and surrender exempt).
  *  - Prices: player buys: r>0 discount 30%*(r/100)^1.1, r<0 increase 1000%*(|r|/100)^2.32;
- *            player sells: r>0 they pay up to +10% (1.1 shape), r<0 up to -75% (2.32 shape).
+ *            player sells: r>0 they pay up to +10% (1.1 shape), r<0 up to -90% (2.32 shape).
  *            Floor: a discounted buy never goes below what the trader pays for it, nor below what they'd pay the
  *            player for it right now (no buy/sell loop profit).
  *  - Willingness: no trade at r <= -80; pay-later only at r >= 0; free favours at r >= 30; free items/Cats at the
@@ -19,7 +19,7 @@ const STOBE_REL_BUY_INCREASE_MAX = 10.0;   // +1000% at r = -100
 const STOBE_REL_BUY_INCREASE_EXP = 2.32;
 const STOBE_REL_SELL_BONUS_MAX = 0.10;     // they pay +10% at r = +100
 const STOBE_REL_SELL_BONUS_EXP = 1.1;
-const STOBE_REL_SELL_CUT_MAX = 0.75;       // they pay -75% at r = -100 (proposed, Shay to confirm)
+const STOBE_REL_SELL_CUT_MAX = 0.90;       // they pay -90% at r = -100 (Shay, 2026-10-03, item 104)
 const STOBE_REL_SELL_CUT_EXP = 2.32;
 const STOBE_REL_TRADER_BUY_RATIO = 0.5;    // what a trader pays for an item, as a share of its sell price
 const STOBE_REL_WEAPON_MIN = 70;
