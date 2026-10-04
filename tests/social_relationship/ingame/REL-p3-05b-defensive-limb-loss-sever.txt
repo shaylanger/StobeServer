@@ -4,7 +4,7 @@
 #   hook and the poll report it once)
 # fixture: auto-home
 # reset: fresh
-# needs: harness 08AB6BF0+ (protect); Capture=1; mode shadow
+# needs: harness 08AB6BF0+ (protect), kah.py fc53dba+ (@log-wait); Capture=1; mode shadow
 # verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --interpret-log 40 --check-shadow -> exit 0;
 #   pair_effects: "<LNAME>" -> "Shay" has defensive_maiming (and NO aggression row: he struck first); "Shay" -> "<LNAME>" aggression
 #   (his first strike). Exactly one "kind":"harm" interpret line with level maiming for <LNAME>.
@@ -38,14 +38,19 @@ attack Shay ${L}
 speed 1
 @sleep 4
 speed 0
+# m22: recent_attacker counts Shay's attacks of the last 10 s (m22: the cut came 10.7 s after): attack again right
+# before the cut and poll for the sweep's limb_loss/maiming lines instead of fixed sleeps
+attack Shay ${L}
+speed 1
+@sleep 1
+speed 0
 # the arm is cut off while he is in Shay's attacker list (attribution attacker_list / recent_attacker); KAH 20 sever
 sever ${L} left_arm
 hp ${L} ~ .
 speed 1
-@sleep 5
+@log-wait 10 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ \[EVENT\] limb_loss: 
+@log-wait 5 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY_S} target=${L_S} witnesses=\d+ facts="level":"maiming"
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ \[EVENT\] limb_loss: 
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY_S} target=${L_S} witnesses=\d+ facts="level":"maiming"
 ko ${L} 60
 teleport ${L} Shay dist 300
 protect Shay off
