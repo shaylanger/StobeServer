@@ -142,6 +142,7 @@ try {
     $d = affOf('Prop Npc', 'Prop Player') - $before;
     ok($d >= 1 && $d <= 3, "negotiation engine: REL delta instead of the legacy +4 ($d)");
     sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
+    sql("INSERT INTO general_settings(id,value) VALUES('SOCIAL_FIGHTS_LIVE','false') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value"); // B 55: fights mode off = legacy
     sql("INSERT INTO stobe_social_contract(contract_id,npc_name,player_name,status,terms,kind) VALUES('reltest-6','Prop Npc','Prop Player','COMPLETE','[]'::jsonb,'trade')");
     $before = affOf('Prop Npc', 'Prop Player');
     stobeNegApplyConsequences(['contract_id'=>'reltest-6', 'npc_name'=>'Prop Npc', 'status'=>'COMPLETE', 'kind'=>'trade', 'term_state'=>'[]', 'baseline'=>'{}'], 'Prop Player');
@@ -152,6 +153,7 @@ try {
     if ($prevSession === null) sql("DELETE FROM stobe_meta.settings WHERE key='PLAYTHROUGH_SESSION'");
     else sql("UPDATE stobe_meta.settings SET value=$1 WHERE key='PLAYTHROUGH_SESSION'", [$prevSession]);
     sql("DELETE FROM stobe_social_contract WHERE contract_id LIKE 'reltest%'");
+    sql("DELETE FROM general_settings WHERE id='SOCIAL_FIGHTS_LIVE'");
     sql("DELETE FROM stobe_negotiation_reputation WHERE player_name='prop player'");
     sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
 }

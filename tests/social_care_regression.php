@@ -21,6 +21,7 @@ foreach (P as $name => [$serial]) {
     sql("INSERT INTO core_npc(name,extended_data,metadata) VALUES($1,'{}'::jsonb,jsonb_build_object('storage_id',$2::text))", [$name, 'hand_' . $serial]);
 }
 sql("INSERT INTO general_settings(id,value) VALUES('SOCIAL_RELATIONSHIP_MODE','enabled') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value");
+sql("INSERT INTO general_settings(id,value) VALUES('SOCIAL_FIGHT_RULES','rel') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value"); // B 55 rules: tests/social_fights_regression.php
 $store = new SocialStore($db); $seq = 0;
 function ent(string $name, ?bool $conscious = true): array {
     [$serial, $faction, $squad] = P[$name];
@@ -166,4 +167,5 @@ for ($i = 0; $i < 10; ++$i) {
 }
 ok(affOf('Care Patient Two', 'Care Medic') >= 91, 'SR16 ten distinct lifesaving rescues reach >= 91 (' . affOf('Care Patient Two', 'Care Medic') . ')');
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
+sql("DELETE FROM general_settings WHERE id='SOCIAL_FIGHT_RULES'");
 echo "$n care regression checks passed\n";

@@ -10,7 +10,7 @@ try {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         http_response_code(405); header('Allow: POST'); echo json_encode(['status'=>'method_not_allowed']); exit;
     }
-    $mode = stobeSocialMode();
+    $mode = stobeSocialIngestMode(); // B 55: 'fights' while SOCIAL_RELATIONSHIP_MODE is off
     if ($mode === 'off') { echo json_encode(['status'=>'disabled']); exit; }
     $input = file_get_contents('php://input',false,null,0,SocialEventContract::MAX_BYTES+1);
     $event = SocialEventContract::validate($input);

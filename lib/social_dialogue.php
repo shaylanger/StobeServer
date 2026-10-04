@@ -12,6 +12,8 @@ require_once __DIR__ . '/social_runtime.php';
  */
 function stobeSocialFilterDialogueUpdates(string $speaker, array $updates): array
 {
+    require_once __DIR__ . '/social_fights.php';
+    $updates = stobeSocialFightDialogueRules($speaker, $updates); // B 55 items 4 + 6: no chat gains a game day after a fight, half while a fight grudge is open
     if (!$updates || stobeSocialMode() !== 'enabled' || !getSettingBool('SOCIAL_CATEGORY_DIALOGUE', true)) return $updates;
     $rules = (new SocialRules())->section('dialogue');
     [$lo, $hi] = $rules['clamp'] ?? [-8, 3];

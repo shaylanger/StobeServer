@@ -148,8 +148,9 @@ final class SocialInterpreter
      */
     private function witnesses(array $event, string $mode, array $victim, array $culprit, string $component, array $result, string $incident): array
     {
-        if (str_starts_with($component, 'witness_') || !in_array($result['status'] ?? '', ['shadow', 'enabled'], true)) return [];
-        $total = (int)($result['effect']['total'] ?? 0);
+        if (str_starts_with($component, 'witness_') || !in_array($result['status'] ?? '', ['shadow', 'enabled', 'fights'], true)) return [];
+        // B 55: witnesses feel what happened to the victim, not the victim's personal closeness to the culprit.
+        $total = (int)($result['effect']['unscaled'] ?? ($result['effect']['total'] ?? 0));
         if ($total === 0 || ($result['effect']['reason'] ?? '') !== 'known_outcome') return [];
         $bands = $this->rules->section('witness')['bands'] ?? [[11, 0.05, 0.10], [31, 0.15, 0.25], [56, 0.25, 0.40], [76, 0.40, 0.55], [91, 0.55, 0.70]];
         $positiveRate = (float)($this->rules->section('witness')['positive_rate'] ?? 0.5);
@@ -213,12 +214,17 @@ final class SocialInterpreter
                 $state['parties'][$a['entity_key']] = $a; $state['parties'][$b['entity_key']] = $b;
                 $this->store->saveIncident($event, $open['id'], $state);
             }
+            if (!empty($state['spar'])) return [['status'=>'sparring', 'incident'=>$open['id']]]; // B 55 item 3
             if ($state['initiator'] !== $a['entity_key']) return [['status'=>'defence', 'basis'=>'retaliation', 'incident'=>$open['id']]];
             // Same encounter: the first strike was already charged (ledger dedup); a victim who was unaware then and aware now learns it now.
             return [$this->effect($event, $mode, $b, $a, 'aggression', self::awareness($b['conscious'] ?? null) + ['note'=>'Attacked by ' . $a['name'], 'kind'=>'aggression'],
                 $open['id'], ['escalation_group'=>self::HARM_GROUP, 'severity'=>$state['severity'] ?? 1])];
         }
         $facts = $event['facts'];
+        // B 55 item 5: in fights mode only fights that matter count (a squad member, or a named NPC who saw it).
+        if ($mode === 'fights' && !stobeSocialFightMatters($event)) return [['status'=>'ignored', 'note'=>'a fight nobody who matters saw (B 55)']];
+        // B 55 item 3: a fight both sides agreed to (spar consent) costs nothing unless someone is maimed.
+        $spar = stobeSocialFightRulesOn() && stobeSocialSparActive(strval($a['name'] ?? ''), strval($b['name'] ?? ''), (int)$event['game_ts'], $this->rules);
         $basis = 'first_strike'; $initiator = $a['entity_key']; $ally = null;
         if ($this->forcedFirstStrike($a, $b)) {
             $basis = 'first_strike_forced';
@@ -235,7 +241,12 @@ final class SocialInterpreter
         $state = ['kind'=>'combat', 'phase'=>'active', 'pair'=>self::pairKey($a['entity_key'], $b['entity_key']),
             'initiator'=>$initiator, 'victim'=>$victim, 'basis'=>$basis, 'ally'=>$ally, 'severity'=>$severity,
             'parties'=>[$a['entity_key']=>$a, $b['entity_key']=>$b], 'opened_ts'=>$event['game_ts'], 'last_ts'=>$event['game_ts'], 'pending'=>(object)[]];
+        if ($spar) $state['spar'] = true;
         $this->store->saveIncident($event, $incident, $state);
+        if ($spar) {
+            if (function_exists('stobeLogRelationshipInfo')) stobeLogRelationshipInfo('SOCIAL_SPAR fight', ['a'=>$a['name'] ?? null, 'b'=>$b['name'] ?? null, 'incident'=>$incident]);
+            return [['status'=>'sparring', 'incident'=>$incident]];
+        }
         if ($initiator !== $a['entity_key']) return [['status'=>'defence', 'basis'=>$basis, 'incident'=>$incident]];
         $belief = self::awareness($b['conscious'] ?? null) + ['note'=>'Attacked by ' . $a['name'], 'kind'=>'aggression'];
         $result = $this->effect($event, $mode, $b, $a, 'aggression', $belief, $incident, ['escalation_group'=>self::HARM_GROUP, 'severity'=>$severity]);
@@ -289,12 +300,15 @@ final class SocialInterpreter
         if (!$a || $a['entity_key'] === $b['entity_key']) return [['status'=>'unattributed']];
         $open = $this->openPair($event, $a['entity_key'], $b['entity_key']);
         if (!$open) $open = $this->joinedAllyAssault($event, $a, $b);
+        // B 55 item 7: friendly fire (squad members, no attack between them) is an accident: 0.25x the level's range.
+        if (!$open && stobeSocialFightRulesOn() && self::squadPair($a, $b) && isset($this->combat['harm_levels'][$level])) return [$this->accident($event, $mode, $a, $b, $level)];
         if (!$open) return [['status'=>'no_encounter', 'note'=>'harm without an observed attack between this pair is not scored']];
         $state = $open['state'];
         $state['last_ts'] = $event['game_ts'];
         $state['harm'][] = ['level'=>$level, 'by'=>$a['entity_key'], 'to'=>$b['entity_key'], 'attribution'=>$event['facts']['attribution'] ?? null, 'sequence'=>$event['sequence']];
         $state['harm'] = array_slice($state['harm'], -32);
         $this->store->saveIncident($event, $open['id'], $state);
+        if (!empty($state['spar']) && $level !== 'maiming') return [['status'=>'sparring', 'level'=>$level, 'incident'=>$open['id']]]; // B 55 item 3
         // A knockout is experienced up to the blow; other harm needs the victim conscious when it happened.
         $conscious = $level === 'knockout' ? true : ($b['conscious'] ?? null);
         $note = ($level === 'maiming' ? 'Lost a limb to ' : ($level === 'knockout' ? 'Knocked out by ' : 'Hurt by ')) . $a['name'];
@@ -524,12 +538,54 @@ final class SocialInterpreter
             if (!$state['pending']) $state['pending'] = (object)[];
             $this->store->saveIncident($event, $row['incident_id'], $state);
         }
+        // B 55 item 7: waking up with severe wounds, bleeding out = critical_harm in the remembered attacker's fight budget.
+        if ($ko && $remembered && !empty($ko['state']['encounter']) && stobeSocialFightRulesOn() && $this->wokeBleedingOut($event['facts'])) {
+            $enc = $this->store->fetchRows('SELECT state FROM social_incident WHERE campaign_id=$1 AND timeline_epoch=$2 AND incident_id=$3',
+                [$event['campaign_id'], $event['timeline_epoch'], $ko['state']['encounter']]);
+            $encState = $enc ? json_decode($enc[0]['state'], true) : null;
+            if (is_array($encState) && ($encState['initiator'] ?? '') === $remembered['entity_key'] && empty($encState['spar'])) {
+                $results[] = $this->effect($event, $mode, $observer, $remembered, 'critical_harm',
+                    ['awareness'=>'directly_experienced', 'conscious'=>true, 'note'=>'Woke up bleeding out after ' . $remembered['name'] . ' knocked me out', 'kind'=>'harm'],
+                    $ko['state']['encounter'], ['escalation_group'=>self::HARM_GROUP, 'severity'=>$encState['severity'] ?? 1]);
+            }
+        }
         if ($ko) {
             $ko['state']['phase'] = 'resolved'; $ko['state']['resolved_ts'] = $event['game_ts'];
             $this->store->saveIncident($event, $ko['id'], $ko['state']);
             if (isset($ko['state']['carried_from_load'])) $this->store->retireIncident($event['campaign_id'], $ko['state']['carried_from_load'], $ko['id']);
         }
         return $results ?: [['status'=>'recorded']];
+    }
+
+    /** B 55 item 7: severe wounds on waking (recovered facts with vitals, Stobe B 55 build): near death, or bleeding with low blood. */
+    private function wokeBleedingOut(array $facts): bool
+    {
+        $v = $this->vitals($facts, '');
+        if (!$v) return false;
+        return $this->nearDeath($v) || ($v['bleed'] > 0.0001 && $v['blood'] <= (float)$this->care('critical_blood', 0.5));
+    }
+
+    /**
+     * B 55 item 7: friendly fire between squad members without an attack between them: an accident, 0.25x the level's
+     * fight range (x closeness). Injury then KO in the same 10 game minutes escalate one budget (only the difference).
+     */
+    private function accident(array $event, string $mode, array $a, array $b, string $level): array
+    {
+        $component = $this->combat['harm_levels'][$level];
+        $fights = $this->rules->section('fights');
+        $pair = substr(hash('sha256', self::pairKey($a['entity_key'], $b['entity_key'])), 0, 16);
+        $bucket = intdiv((int)$event['game_ts'], 600);
+        $incident = 'accident:' . $bucket . ':' . $level . ':' . $pair;
+        $prior = $this->store->fetchRows("SELECT MIN((detail->>'total')::int) AS worst FROM social_effect WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND component='accident'
+              AND observer_key=\$3 AND culprit_key=\$4 AND incident_id LIKE \$5", [$event['campaign_id'], $event['timeline_epoch'], $b['entity_key'], $a['entity_key'], 'accident:' . $bucket . ':%:' . $pair]);
+        $context = ['scale'=>(float)($fights['accident_scale'] ?? 0.25), 'prior_total'=>min(0, (int)($prior[0]['worst'] ?? 0)),
+            'fight_incident'=>'accident:' . $bucket . ':' . $pair, 'level'=>$level];
+        if (isset($fights['ranges'][$component])) $context['range'] = $fights['ranges'][$component];
+        elseif (isset($this->rules->section('ranges')[$component])) $context['range'] = $this->rules->section('ranges')[$component];
+        $conscious = $level === 'knockout' ? true : ($b['conscious'] ?? null);
+        $result = $this->effect($event, $mode, $b, $a, 'accident', self::awareness($conscious) + ['note'=>'Hurt by accident by ' . $a['name'], 'kind'=>'accident'], $incident, $context);
+        if ($conscious === false) $this->latent($event, $b, $a, 'accident', $incident);
+        return $result;
     }
 
     /**

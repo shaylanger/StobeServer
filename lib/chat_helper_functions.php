@@ -6867,6 +6867,8 @@ function stobeParseStructuredDialogueResponse(string $rawResponse, string $event
     );
     require_once __DIR__ . '/social_recruitment.php';
     $rawActionTag = stobeSocialTestForceJoinAttempt($rawActionTag, $character, $eventType); // SR30 test switch, off by default
+    require_once __DIR__ . '/social_fights.php';
+    stobeSocialNoteSparConsent($character, $message, $eventType); // B 55 item 3: a spar both sides agreed to
     $actionTag = '';
     if ($rawActionTag !== '') {
         $speakerNpcData = $character !== '' ? getNpcData($character) : false;
@@ -12072,7 +12074,7 @@ function stobeIsGenericNpcName(string $name): bool {
 /** R4: an attack lowers both sides' feelings (once per pair per 15 min). Returns the changes made. */
 function stobeRelationshipOnAttack(string $eventData, ?int $now = null): array {
     require_once __DIR__ . '/social_runtime.php';
-    if (stobeSocialMode() === 'enabled') return [];
+    if (in_array(stobeSocialIngestMode(), ['enabled', 'fights'], true)) return []; // B 55: R4 retired while REL scores fights
     if (function_exists('getSettingBool') && !getSettingBool('RELATIONSHIP_FIGHTS_COUNT', true)) return [];
     if (!preg_match('/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)/', trim($eventData), $m)) return [];
     $attacker = normalizeParticipantNameToken($m[1]);
@@ -13306,7 +13308,11 @@ function stobeBuildRelationshipStanceBlock(string $npcName, array|false $npcData
     $entry = stobeRelationshipEntryFor($npcData, $speaker);
     if ($entry === null) return '';
     $aff = intval($entry['aff'] ?? ($entry['affinity'] ?? 0));
-    return stobeRelationshipStanceText($speaker, $aff, strval($entry['type'] ?? ''), $sameSquad, strval($entry['note'] ?? ''));
+    $block = stobeRelationshipStanceText($speaker, $aff, strval($entry['type'] ?? ''), $sameSquad, strval($entry['note'] ?? ''));
+    require_once __DIR__ . '/social_fights.php';
+    $memory = stobeSocialFightMemoryLine($npcName, $speaker); // B 55 item 6: the first fight leaves a mark
+    if ($memory !== '' && $block !== '') $block = str_replace('</how_you_feel_about_them>', '  <memory>' . stobePromptXmlEscape($memory) . "</memory>\n</how_you_feel_about_them>", $block);
+    return $block;
 }
 
 function buildSystemPrompt(

@@ -49,8 +49,11 @@ final class SocialRules
             return ['delta'=>$new-$old, 'base'=>$total, 'total'=>$total, 'new_affinity'=>$new, 'rules_version'=>$this->version(),
                 'modifiers'=>['weight'=>$context['witness_weight'] ?? null], 'reason'=>'known_outcome'];
         }
-        $range = $this->config['ranges'][$component] ?? null;
+        // B 55: a caller may supply the range (fights.ranges, an accident's level range).
+        $range = $context['range'] ?? ($this->config['ranges'][$component] ?? null);
         if (!$range) throw new InvalidArgumentException('Unknown semantic component');
+        if (!is_array($range) || count($range) !== 2 || (int)$range[0] > (int)$range[1]) throw new InvalidArgumentException('Invalid range: ' . $component);
+        $range = [(int)$range[0], (int)$range[1]];
         $positive = $range[1] > 0;
         if (!SocialPerception::permits($belief, $positive, ($context['squad_control'] ?? false) === true)) return ['delta'=>0, 'reason'=>'not_known'];
         $seed = hexdec(substr(hash('sha256', implode('|', [$incident, $observer, $component, $this->version()])), 0, 8));
@@ -68,6 +71,18 @@ final class SocialRules
         $severity = $positive ? 1.0 : max(1.0, min(1.15, (float)($context['severity'] ?? 1)));
         $raw = (int)round($base * $personality * $confidence * $repetition * $affinity * $severity);
         if ($economic) $raw = max(0, min($raw, $this->config['trade_day_cap'] - (int)($context['economic_day_gain'] ?? 0), $this->config['economic_affinity_ceiling'] - $old));
+        // B 55 item 7: scale (accident 0.25x) and the victim's closeness before the fight; floor -100.
+        $scale = (float)($context['scale'] ?? 1.0); $closeness = max(1.0, (float)($context['closeness'] ?? 1.0));
+        $unscaled = $raw;
+        if (!$positive && ($scale !== 1.0 || $closeness !== 1.0)) {
+            $unscaled = (int)round($raw * $scale);
+            $raw = max(-100, (int)round($unscaled * $closeness));
+        }
+        // B 55: a server-computed amount (treatment relief, deal forgiveness), clamped to the component range.
+        if (array_key_exists('fixed_total', $context)) $base = $raw = $unscaled = max($range[0], min($range[1], (int)$context['fixed_total']));
+        // B 55 item 6: positive gains toward someone with an open fight grudge count at half rate.
+        $grudgeRate = $positive && isset($context['grudge_rate']) ? max(0.0, min(1.0, (float)$context['grudge_rate'])) : null;
+        if ($grudgeRate !== null) $raw = $unscaled = (int)floor($raw * $grudgeRate);
         $total = $raw;
         // Escalation inside one incident: only the difference to what this incident already charged
         // (hit -> KO -> limb is one growing harm budget, not stacked full penalties).
@@ -78,8 +93,8 @@ final class SocialRules
         $new = max(-100, min(100, $old + $raw));
         // Certain severe outcomes may force a ceiling (e.g. enslaver -56); never raises affinity.
         if (!$positive && isset($context['cap_max']) && ($belief['confidence'] ?? '') === 'certain') $new = min($new, (int)$context['cap_max']);
-        return ['delta'=>$new-$old, 'base'=>$base, 'total'=>$total, 'new_affinity'=>$new, 'rules_version'=>$this->version(),
-            'modifiers'=>compact('personality','confidence','repetition','affinity','severity'), 'reason'=>'known_outcome'];
+        return ['delta'=>$new-$old, 'base'=>$base, 'total'=>$total, 'unscaled'=>$unscaled, 'new_affinity'=>$new, 'rules_version'=>$this->version(),
+            'modifiers'=>compact('personality','confidence','repetition','affinity','severity','scale','closeness','grudgeRate'), 'reason'=>'known_outcome'];
     }
     public static function recruitment(int $affinity, array $trust, array $grievances, bool $vanilla = false): bool
     {

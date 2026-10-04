@@ -25,6 +25,10 @@
  *                                                  TEST SETUP: SR30/SR06 test switches (off by default; turn off after the test)
  *   php tools/social_relationship_inspect.php --add-trust "Observer" "Culprit" lifesaving|slave_escape|meaningful_aid|safe_rescue [delta]
  *                                                  TEST SETUP: an applied trust-evidence effect row (recruitment gate), current load
+ *   php tools/social_relationship_inspect.php --add-spar "A" "B" [game_ts]   TEST SETUP (B 55): record spar consent between A and B
+ *                                                  (game_ts default: the latest game time; a fight between them within 1 game hour is free)
+ *   php tools/social_relationship_inspect.php --set-switch SOCIAL_FIGHTS_LIVE|SOCIAL_FIGHT_RULES|SOCIAL_GRUDGE_FADE_DAYS|SOCIAL_GRUDGE_FADE_THRESHOLD <value|off>
+ *                                                  B 55 settings (off = back to the default: live, b55, 14 days, 30)
  *   php tools/social_relationship_inspect.php --purge-all --yes            empties the six social tables (test data only)
  *
  * DB: STOBE_DB_NAME (default stobe), like every server tool.
@@ -70,7 +74,7 @@ if (($i = array_search('--set-relation', $args, true)) !== false) {
 if (($i = array_search('--set-switch', $args, true)) !== false) {
     // TEST SETUP ONLY: the REL test switches (SR30, SR06).
     $id = strval($args[$i+1] ?? ''); $value = strval($args[$i+2] ?? '');
-    if (!in_array($id, ['SOCIAL_TEST_FORCE_JOIN_ATTEMPT', 'SOCIAL_TEST_FORCE_FIRST_STRIKE'], true) || $value === '') { fwrite(STDERR, "--set-switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT|SOCIAL_TEST_FORCE_FIRST_STRIKE <value|off>\n"); exit(2); }
+    if (!in_array($id, ['SOCIAL_TEST_FORCE_JOIN_ATTEMPT', 'SOCIAL_TEST_FORCE_FIRST_STRIKE', 'SOCIAL_FIGHTS_LIVE', 'SOCIAL_FIGHT_RULES', 'SOCIAL_GRUDGE_FADE_DAYS', 'SOCIAL_GRUDGE_FADE_THRESHOLD'], true) || $value === '') { fwrite(STDERR, "--set-switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT|SOCIAL_TEST_FORCE_FIRST_STRIKE <value|off>\n"); exit(2); }
     $previous = $setting($id);
     if (in_array(strtolower($value), ['off', 'false', '0'], true)) $db->exec('DELETE FROM general_settings WHERE id=$1', [$id]);
     else $db->exec('INSERT INTO general_settings(id,value) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value', [$id, $value]);
@@ -88,6 +92,15 @@ if (($i = array_search('--add-trust', $args, true)) !== false) {
         [strval($scope['campaign_id']), strval($scope['timeline_epoch']), 'test_setup:' . bin2hex(random_bytes(4)), $comp, $delta, $obs, $cul]);
     echo json_encode(['add_trust'=>$r !== false, 'observer'=>$obs, 'culprit'=>$cul, 'component'=>$comp, 'delta'=>$delta]), "\n";
     exit($r !== false ? 0 : 1);
+}
+if (($i = array_search('--add-spar', $args, true)) !== false) {
+    // TEST SETUP (B 55 item 3): spar consent between two characters, as if both agreed in dialogue.
+    $sa = strval($args[$i+1] ?? ''); $sb = strval($args[$i+2] ?? '');
+    $sts = isset($args[$i+3]) && is_numeric($args[$i+3]) ? (int)$args[$i+3] : stobeSocialNowGameTs();
+    if ($sa === '' || $sb === '') { fwrite(STDERR, "--add-spar A B [game_ts]\n"); exit(2); }
+    $ok = stobeSocialRecordSpar($sa, $sb, $sts, 'test_setup');
+    echo json_encode(['add_spar'=>$ok, 'a'=>$sa, 'b'=>$sb, 'game_ts'=>$sts]), "\n";
+    exit($ok ? 0 : 1);
 }
 if (($i = array_search('--retention', $args, true)) !== false) {
     // Phase 8: run the retention pass now for one campaign (default: the current scope's campaign).
@@ -121,7 +134,12 @@ try {
 $out = [
     'db' => getenv('STOBE_DB_NAME') ?: 'stobe',
     'mode' => stobeSocialMode(),
+    'ingest_mode' => stobeSocialIngestMode(),
+    'fight_rules' => stobeSocialFightRulesOn() ? 'b55' : 'rel',
     'settings' => [
+        'SOCIAL_FIGHTS_LIVE' => $setting('SOCIAL_FIGHTS_LIVE'),
+        'SOCIAL_GRUDGE_FADE_DAYS' => $setting('SOCIAL_GRUDGE_FADE_DAYS'),
+        'SOCIAL_GRUDGE_FADE_THRESHOLD' => $setting('SOCIAL_GRUDGE_FADE_THRESHOLD'),
         'SOCIAL_RELATIONSHIP_MODE' => $setting('SOCIAL_RELATIONSHIP_MODE'),
         'RELATIONSHIP_FIGHTS_COUNT' => $setting('RELATIONSHIP_FIGHTS_COUNT'),
         'NEVER_CLEAR_RELATIONSHIP_DATA' => $setting('NEVER_CLEAR_RELATIONSHIP_DATA'),

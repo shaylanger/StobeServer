@@ -20,6 +20,7 @@ foreach (NAMES as $name => [$serial, $faction]) {
 sql("DELETE FROM core_npc WHERE name IN ('Zed [Combat Grunt]')");
 sql("INSERT INTO core_npc(name,extended_data,metadata) VALUES('Zed [Combat Grunt]','{}'::jsonb,'{}'::jsonb)");
 sql("INSERT INTO general_settings(id,value) VALUES('SOCIAL_RELATIONSHIP_MODE','enabled') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value");
+sql("INSERT INTO general_settings(id,value) VALUES('SOCIAL_FIGHT_RULES','rel') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value"); // B 55 rules: tests/social_fights_regression.php
 
 $scope = ['campaign_id'=>'camp2', 'timeline_epoch'=>'7', 'native_session_id'=>'sess2'];
 $store = new SocialStore($db);
@@ -191,4 +192,5 @@ send(ev('attack', ent('Combat Echo'), ent('Combat Delta'), ['victim_targeting_ac
 ok(affOf('Combat Delta', 'Combat Echo') === $d0, 'SR06 switch never touches non-squad attackers');
 sql("DELETE FROM general_settings WHERE id='SOCIAL_TEST_FORCE_FIRST_STRIKE'");
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
+sql("DELETE FROM general_settings WHERE id='SOCIAL_FIGHT_RULES'");
 echo "$n combat regression checks passed\n";

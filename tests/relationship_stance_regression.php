@@ -76,6 +76,10 @@ $GLOBALS['db']->exec("DELETE FROM core_npc_master WHERE name IN ('Rex3 [Rel3 Ban
 $GLOBALS['db']->exec("DELETE FROM core_npc_master WHERE name IN ('Ann4 [Rel4]','Bob4 [Rel4]')");
 $GLOBALS['db']->exec("INSERT INTO core_npc_master (name, extended_data) VALUES ('Ann4 [Rel4]', '{}'::jsonb), ('Bob4 [Rel4]', '{}'::jsonb)");
 $GLOBALS['db']->exec("DELETE FROM conf_opts WHERE id LIKE 'STOBE_REL_FIGHT_%'");
+// B 55: R4 only runs with REL fights mode off (SOCIAL_FIGHTS_LIVE=false and SOCIAL_RELATIONSHIP_MODE off).
+$GLOBALS['db']->exec("DELETE FROM general_settings WHERE id IN ('SOCIAL_FIGHTS_LIVE','SOCIAL_RELATIONSHIP_MODE')");
+check('B 55: R4 retired while REL scores fights (default)', stobeRelationshipOnAttack('Ann4 [Rel4]: Initiated attack (talking to: Bob4 [Rel4])', 999000) === []);
+$GLOBALS['db']->exec("INSERT INTO general_settings(id,value) VALUES('SOCIAL_FIGHTS_LIVE','false') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value");
 $r4 = stobeRelationshipOnAttack('Ann4 [Rel4]: Initiated attack (talking to: Bob4 [Rel4])', 1000000);
 $bob = stobeRelationshipEntryFor(getNpcData('Bob4 [Rel4]'), 'Ann4 [Rel4]');
 $ann = stobeRelationshipEntryFor(getNpcData('Ann4 [Rel4]'), 'Bob4 [Rel4]');
@@ -83,6 +87,7 @@ check('R4: the victim likes the attacker 10 less, the attacker the victim 4 less
 $again = stobeRelationshipOnAttack('Ann4 [Rel4]: Initiated attack (talking to: Bob4 [Rel4])', 1000100);
 check('R4: once per pair per 15 min', $again === []);
 check('R4: generic names are skipped', stobeRelationshipOnAttack('Rel4: Initiated attack (talking to: Bob4 [Rel4])', 1000200) === []);
+$GLOBALS['db']->exec("DELETE FROM general_settings WHERE id='SOCIAL_FIGHTS_LIVE'");
 $GLOBALS['db']->exec("DELETE FROM core_npc_master WHERE name IN ('Ann4 [Rel4]','Bob4 [Rel4]')");
 echo "\n$pass passed, $fail failed\n";
 exit($fail > 0 ? 1 : 0);

@@ -25,6 +25,7 @@ foreach (PEOPLE as $name => [$serial]) {
     sql("INSERT INTO core_npc(name,extended_data,metadata) VALUES($1,'{}'::jsonb,jsonb_build_object('storage_id',$2::text))", [$name, 'hand_' . $serial]);
 }
 sql("INSERT INTO general_settings(id,value) VALUES('SOCIAL_RELATIONSHIP_MODE','enabled') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value");
+sql("INSERT INTO general_settings(id,value) VALUES('SOCIAL_FIGHT_RULES','rel') ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value"); // B 55 rules: tests/social_fights_regression.php
 $store = new SocialStore($db);
 $epoch = '7'; $seq = 0;
 function scope(): array { global $epoch; return ['campaign_id'=>'camp3', 'timeline_epoch'=>$epoch, 'native_session_id'=>'sess3']; }
@@ -213,4 +214,5 @@ ok(entryOf('Uncon Victim Ten', 'Uncon Slaver') === null, 'm11 not charged while 
 wake('Uncon Victim Ten', [], 14100);
 ok(affOf('Uncon Victim Ten', 'Uncon Slaver') <= -56, 'm11 enslavement without a seen KO learned on waking');
 sql("UPDATE general_settings SET value='off' WHERE id='SOCIAL_RELATIONSHIP_MODE'");
+sql("DELETE FROM general_settings WHERE id='SOCIAL_FIGHT_RULES'");
 echo "$n unconscious-perception regression checks passed\n";

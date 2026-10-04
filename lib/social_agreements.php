@@ -14,7 +14,7 @@ require_once __DIR__ . '/social_identity.php';
  */
 function stobeSocialAgreementOutcome(array $deal, string $player, string $status, array $termState): bool
 {
-    $mode = stobeSocialMode();
+    $mode = stobeSocialIngestMode(); // B 55: fights mode scores deal outcomes too
     if ($mode === 'off' || !getSettingBool('SOCIAL_CATEGORY_AGREEMENTS', true)) return false;
     $components = [];
     $hostile = in_array(strval($deal['kind'] ?? ''), ['combat', 'surrender'], true);
@@ -41,9 +41,9 @@ function stobeSocialAgreementOutcome(array $deal, string $player, string $status
         $contract = $token(strval($deal['contract_id'] ?? ''));
         if ($contract === '') return false;
         $store = new SocialStore($db);
-        $event = $store->recordInternal($scope, $mode, 'agreement:' . $contract . ':' . $status, function_exists('stobeNegLatestGamets') ? max(0, stobeNegLatestGamets()) : 0,
+        $event = $store->recordInternal($scope, $mode, 'agreement:' . $contract . ':' . $status, stobeSocialNowGameTs(), // B 55: never 0 when the game sent nothing recently
             $playerEntity, $npc, ['source'=>'server_agreement', 'contract_id'=>$contract, 'status'=>$status, 'deal_kind'=>strval($deal['kind'] ?? '')]);
-        if ($event === null) return $mode === 'enabled'; // already recorded (retry): legacy must not double-apply either
+        if ($event === null) return in_array($mode, ['enabled', 'fights'], true); // already recorded (retry): legacy must not double-apply either
         $resolve = static fn(string $key) => SocialIdentity::resolve($key === $npc['entity_key'] ? $npc : $playerEntity, $key === $npc['entity_key'] ? 'observer' : 'culprit');
         foreach ($components as $component) {
             $note = match ($component) {
@@ -57,7 +57,22 @@ function stobeSocialAgreementOutcome(array $deal, string $player, string $status
             if (function_exists('stobeLogRelationshipInfo')) stobeLogRelationshipInfo('SOCIAL_INTERPRET', ['mode'=>$mode, 'kind'=>'agreement', 'contract'=>$contract,
                 'status'=>$status, 'component'=>$component, 'npc'=>$npc['name'], 'result'=>$result['status'] ?? null, 'delta'=>$result['effect']['delta'] ?? null]);
         }
-        return $mode === 'enabled';
+        // B 55 item 2: a kept deal wins back 1/3 x how fully it was kept x the NPC's forgiveness of the latest fight's penalty.
+        if ($status === 'COMPLETE' && stobeSocialFightRulesOn()) {
+            [$fightIncident, $penalty] = stobeSocialLatestFight(strval($npcRow['name']), $player);
+            if ($fightIncident !== null && $penalty < 0) {
+                $share = (float)((new SocialRules())->section('fights')['deal_share'] ?? 0.3333);
+                $kept = stobeSocialDealKeptness($termState); $forgive = stobeSocialForgiveness($npcRow);
+                $amount = (int)round(-$penalty * $share * $kept * $forgive);
+                $result = $amount > 0 ? $store->apply($event, $npc['entity_key'], $playerEntity['entity_key'], 'deal_forgiveness',
+                    ['responsible_entity'=>$playerEntity['entity_key'], 'awareness'=>'directly_experienced', 'confidence'=>'certain', 'conscious'=>true,
+                     'note'=>$player . ' kept our deal after the fight', 'kind'=>'agreement'], $resolve, $mode, ['fixed_total'=>$amount], $fightIncident) : ['status'=>'nothing_to_forgive'];
+                if (function_exists('stobeLogRelationshipInfo')) stobeLogRelationshipInfo('SOCIAL_INTERPRET', ['mode'=>$mode, 'kind'=>'agreement', 'contract'=>$contract,
+                    'component'=>'deal_forgiveness', 'npc'=>$npc['name'], 'penalty'=>$penalty, 'kept'=>round($kept, 3), 'forgiveness'=>$forgive,
+                    'result'=>$result['status'] ?? null, 'delta'=>$result['effect']['delta'] ?? null]);
+            }
+        }
+        return in_array($mode, ['enabled', 'fights'], true);
     } catch (Throwable $e) {
         if (function_exists('stobeLogWarn')) stobeLogWarn('REL agreement outcome failed; legacy deal consequence used', ['error'=>$e->getMessage()]);
         return false;

@@ -140,6 +140,14 @@
   "property_returned": [
    3,
    9
+  ],
+  "treated_relief": [
+   0,
+   100
+  ],
+  "deal_forgiveness": [
+   0,
+   100
   ]
  },
  "trade_day_cap": 6,
@@ -180,7 +188,9 @@
   "betrayal": "agreements",
   "insult": "dialogue",
   "petty_theft": "property",
-  "property_returned": "property"
+  "property_returned": "property",
+  "treated_relief": "combat",
+  "deal_forgiveness": "agreements"
  },
  "combat": {
   "encounter_idle_seconds": 600,
@@ -267,5 +277,61 @@
  "retention": {
   "keep_seconds": 259200,
   "note": "raw facts/checkpoints/finished incidents older than this (game seconds) are pruned every 2000 facts; ledger, evidence, beliefs and waiting incidents are kept"
+ },
+ "fights": {
+  "ranges": {
+   "aggression": [
+    -15,
+    -10
+   ],
+   "injury": [
+    -30,
+    -23
+   ],
+   "serious_assault": [
+    -50,
+    -40
+   ],
+   "critical_harm": [
+    -65,
+    -55
+   ],
+   "maiming": [
+    -78,
+    -68
+   ]
+  },
+  "closeness": [
+   [
+    31,
+    1.3
+   ],
+   [
+    56,
+    2.0
+   ],
+   [
+    76,
+    2.5
+   ],
+   [
+    91,
+    3.0
+   ]
+  ],
+  "accident_scale": 0.25,
+  "fade_threshold": 30,
+  "fade_days": 14,
+  "fade_check_seconds": 600,
+  "spar_window_seconds": 3600,
+  "grudge_positive_rate": 0.5,
+  "chat_cooldown_seconds": 86400,
+  "deal_share": 0.3333,
+  "treated_share": [
+   0.15,
+   0.3
+  ],
+  "treated_soon_seconds": 21600,
+  "note": "B 55 (SOCIAL_FIGHT_RULES=b55, default): ranges = victim state when the fight ends/she wakes (not hurt, wounded standing, KO moderate, bleeding out, limb); x closeness (victim -> attacker before the fight, from aff >=) floor -100; accident = scale x level range; incidents with no KO-or-worse and unscaled worst >= -fade_threshold fade linearly over fade_days (settings SOCIAL_GRUDGE_FADE_THRESHOLD/DAYS); treated_share 15-30 % (more the sooner within treated_soon_seconds, seeded per incident); deal_share x keptness x forgiveness."
  }
 }

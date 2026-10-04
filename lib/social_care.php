@@ -103,12 +103,39 @@ trait SocialCareInterpreter
         $facts = $event['facts'];
         $class = $this->aidClass($this->vitals($facts, 'before_'), $this->vitals($facts, 'after_'), $facts['conscious_before'] ?? null);
         if (!$class) return [['status'=>'no_verified_improvement']];
-        if ($this->helperCausedHarm($event, $p, $r)) return [['status'=>'no_trust_from_own_harm', 'component'=>$class]];
+        if ($this->helperCausedHarm($event, $p, $r)) {
+            // B 55 item 8: the attacker himself treating her wounds takes 15-30 % off that fight's penalty (never positive trust).
+            $relief = stobeSocialFightRulesOn() ? $this->treatedRelief($event, $mode, $p, $r) : null;
+            return $relief ? [['status'=>'no_trust_from_own_harm', 'component'=>$class], $relief] : [['status'=>'no_trust_from_own_harm', 'component'=>$class]];
+        }
         $incident = 'aid:' . substr(hash('sha256', $r['entity_key'] . '|' . $this->injuryEpisode($event, $r)), 0, 24);
         $this->store->saveIncident($event, $incident, ['kind'=>'aid', 'phase'=>'resolved', 'recipient'=>$r, 'last_provider'=>$p, 'class'=>$class]);
         return [$this->effect($event, $mode, $r, $p, $class,
             ['awareness'=>'verified_aid', 'conscious'=>$r['conscious'] ?? null, 'note'=>($class === 'lifesaving' ? 'Saved my life: ' : 'Treated my wounds: ') . $p['name'], 'kind'=>'aid'],
             $incident, ['escalation_group'=>self::AID_GROUP])];
+    }
+
+    /** B 55 item 8: relief for the latest fight the provider started against the recipient (once per fight). */
+    private function treatedRelief(array $event, string $mode, array $p, array $r): ?array
+    {
+        $rows = $this->store->fetchRows("SELECT incident_id,state FROM social_incident WHERE campaign_id=\$1 AND timeline_epoch=\$2 AND state->>'kind'='combat'
+              AND state->>'victim'=\$3 AND state->>'initiator'=\$4 AND game_ts<=\$5 AND game_ts>=\$6 ORDER BY game_ts DESC LIMIT 1",
+            [$event['campaign_id'], $event['timeline_epoch'], $r['entity_key'], $p['entity_key'], $event['game_ts'], $event['game_ts'] - (int)$this->care('own_harm_window_seconds', 86400)]);
+        if (!$rows) return null;
+        $incident = $rows[0]['incident_id'];
+        $state = json_decode($rows[0]['state'], true);
+        $net = $this->store->fetchRows("SELECT COALESCE(SUM(delta),0) AS s FROM social_effect WHERE campaign_id=\$1 AND applied AND COALESCE(detail->>'fight_incident', incident_id)=\$2
+              AND observer_key=\$3 AND culprit_key=\$4", [$event['campaign_id'], $incident, $r['entity_key'], $p['entity_key']]);
+        $penalty = (int)($net[0]['s'] ?? 0);
+        if ($penalty >= 0) return ['status'=>'no_fight_penalty', 'component'=>'treated_relief', 'incident'=>$incident];
+        $share = stobeSocialTreatedShare($incident, strval($r['name']), (int)$event['game_ts'] - (int)($state['last_ts'] ?? $event['game_ts']), $this->rules);
+        $amount = min(-$penalty, max(1, (int)round(-$penalty * $share)));
+        $resolve = static fn(string $key) => SocialIdentity::resolve($key === $r['entity_key'] ? $r : $p, $key === $r['entity_key'] ? 'observer' : 'culprit');
+        $result = $this->store->apply($event, $r['entity_key'], $p['entity_key'], 'treated_relief',
+            ['responsible_entity'=>$p['entity_key'], 'awareness'=>'verified_aid', 'confidence'=>'certain', 'conscious'=>$r['conscious'] ?? null,
+             'note'=>$p['name'] . ' treated my wounds after our fight', 'kind'=>'aid'],
+            $resolve, $mode, ['fixed_total'=>$amount], $incident);
+        return ['component'=>'treated_relief', 'observer'=>$r['name'], 'culprit'=>$p['name'], 'share'=>round($share, 3), 'penalty'=>$penalty] + $result;
     }
 
     private function carryStart(array $event, string $mode): array

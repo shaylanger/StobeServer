@@ -1,11 +1,23 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/social_store.php';
+require_once __DIR__ . '/social_fights.php'; // B 55
 
 function stobeSocialMode(): string
 {
     $mode = getSetting('SOCIAL_RELATIONSHIP_MODE','off');
     return in_array($mode,['shadow','enabled'],true) ? $mode : 'off';
+}
+
+/**
+ * B 55: the mode social capture runs in. SOCIAL_RELATIONSHIP_MODE when shadow/enabled; while it is off, "fights"
+ * (only fights and deal outcomes change relationships, see lib/social_fights.php) unless SOCIAL_FIGHTS_LIVE=false.
+ */
+function stobeSocialIngestMode(): string
+{
+    $mode = stobeSocialMode();
+    if ($mode !== 'off') return $mode;
+    try { return getSettingBool('SOCIAL_FIGHTS_LIVE', true) ? 'fights' : 'off'; } catch (Throwable $e) { return 'off'; }
 }
 
 /** Campaign id used when Playthrough Saves (automatic switching) is off: one shared server timeline. */

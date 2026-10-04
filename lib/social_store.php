@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/social_event_contract.php';
 require_once __DIR__ . '/social_rules.php';
+require_once __DIR__ . '/social_fights.php'; // B 55
 
 // Ingress owns the transaction. All queries fail closed; no partial history/ledger commit.
 final class SocialStore
@@ -42,7 +43,7 @@ final class SocialStore
     public function ingest(string|array $input, array $scope, string $mode = 'off'): array
     {
         if ($mode === 'off') return ['status'=>'disabled', 'effects'=>[]];
-        if (!in_array($mode, ['shadow', 'enabled'], true)) throw new InvalidArgumentException('Unknown social mode');
+        if (!in_array($mode, ['shadow', 'enabled', 'fights'], true)) throw new InvalidArgumentException('Unknown social mode');
         $event = SocialEventContract::validate($input);
         foreach (['campaign_id','timeline_epoch','native_session_id'] as $field) {
             if (($event[$field] ?? null) !== ($scope[$field] ?? null)) throw new DomainException('Stale or mismatched social scope');
@@ -69,6 +70,7 @@ final class SocialStore
             if (($event['facts']['source'] ?? null) !== 'structured') return ['status'=>'captured','effects'=>[]];
             require_once __DIR__ . '/social_interpreter.php';
             $effects = (new SocialInterpreter($this, $this->rules))->interpret($event, $mode);
+            $effects = array_merge($effects, $this->fadeGrudges($event, $mode)); // B 55 item 1
             // Phase 8: bounded tables; every 2000th fact of a native session runs the retention pass.
             if ($event['sequence'] % 2000 === 0) $this->retention($event['campaign_id'], (int)($this->rules->section('retention')['keep_seconds'] ?? 259200));
             if (function_exists('stobeLogRelationshipInfo')) {
@@ -99,7 +101,7 @@ final class SocialStore
     {
         $incident = $incident ?? strval($event['incident_id'] ?? '');
         $event = SocialEventContract::validate($event);
-        if (!in_array($mode,['shadow','enabled'],true)) return ['status'=>'disabled'];
+        if (!in_array($mode,['shadow','enabled','fights'],true)) return ['status'=>'disabled'];
         if (!getSettingBool('SOCIAL_CATEGORY_' . strtoupper($this->rules->category($component)),true)) return ['status'=>'category_disabled'];
         if ($event['origin'] !== 'gameplay') return ['status'=>'setup'];
         SocialEventContract::token($observer,'observer'); SocialEventContract::token($culprit,'culprit');
@@ -129,14 +131,36 @@ final class SocialStore
                     [$key[0],$key[1],$key[2],$observer,$culprit,'{' . implode(',', array_map('strval', $group)) . '}']);
                 $context['prior_total'] = $positive ? max(0, (int)($prior['worst'] ?? 0)) : min(0, (int)($prior['worst'] ?? 0));
             }
+            if (stobeSocialFightRulesOn()) {
+                // B 55 item 7: harsher fight ranges x the victim's closeness to the attacker before this fight.
+                $fightRanges = $this->rules->section('fights')['ranges'] ?? [];
+                if (isset($fightRanges[$component]) && !isset($context['range'])) $context['range'] = $fightRanges[$component];
+                if (in_array($component, STOBE_SOCIAL_CLOSENESS_SCALED, true)) {
+                    $spent = $this->row('SELECT COALESCE(SUM(delta),0) AS s FROM social_effect WHERE campaign_id=$1 AND timeline_epoch=$2 AND incident_id=$3 AND observer_key=$4 AND culprit_key=$5 AND applied', array_slice($key, 0, 5));
+                    $context['pre_fight_affinity'] = max(-100, min(100, $context['affinity'] - (int)($spent['s'] ?? 0)));
+                    $context['closeness'] = stobeSocialClosenessMultiplier($context['pre_fight_affinity'], $this->rules);
+                }
+                // B 55 item 6: while a fight grudge toward the culprit is open, positive gains count at half rate.
+                if ($this->rules->positive($component) && !str_starts_with($component, 'witness_') && !in_array($component, STOBE_SOCIAL_FIGHT_RELIEF, true)
+                    && !isset($context['fixed_total']) && stobeSocialGrudgeOutstanding($a['name'], $b['name']) < 0) {
+                    $context['grudge_rate'] = (float)($this->rules->section('fights')['grudge_positive_rate'] ?? 0.5);
+                }
+            }
             $effect = $this->rules->calculate($incident,$observer,$component,$belief,$context);
+            foreach (['pre_fight_affinity', 'fight_incident', 'level'] as $k) if (isset($context[$k])) $effect[$k] = $context[$k]; // B 55
             $effect['observer_name'] = $a['name']; $effect['culprit_name'] = $b['name'];
             $effect['identity'] = [$a['basis'] ?? 'storage_id', $b['basis'] ?? 'storage_id'];
             if ($effect['reason'] === 'not_known') return ['status'=>'pending_awareness','effect'=>$effect];
-            $applied = $mode === 'enabled';
+            // B 55: fights mode applies only fights and deal outcomes; the rest is recorded as in shadow.
+            $applied = $mode === 'enabled' || ($mode === 'fights' && stobeSocialAppliesInFights($this->rules, $component));
             if ($applied && $effect['delta'] !== 0) {
-                $updates = stobeApplyRelationshipUpdatesMap($map,[['target'=>$b['name'],'aff_delta'=>$effect['delta'],'note'=>strval($belief['note'] ?? $component)]]);
-                if (($updates['updated'] ?? 0) !== 1) throw new RuntimeException('Canonical relationship update refused');
+                // The map update caps one change at 80 (B 55 closeness can charge up to 100): apply it in steps.
+                $updates = ['map'=>$map]; $remaining = (int)$effect['delta'];
+                while ($remaining !== 0) {
+                    $step = max(-80, min(80, $remaining)); $remaining -= $step;
+                    $updates = stobeApplyRelationshipUpdatesMap($updates['map'],[['target'=>$b['name'],'aff_delta'=>$step,'note'=>strval($belief['note'] ?? $component)]]);
+                    if (($updates['updated'] ?? 0) !== 1) throw new RuntimeException('Canonical relationship update refused');
+                }
                 $previous = $GLOBALS['gameRequest'] ?? null;
                 $GLOBALS['gameRequest'] = ['social',0,$event['game_ts']];
                 try {
@@ -179,7 +203,7 @@ final class SocialStore
      */
     public function recordInternal(array $scope, string $mode, string $eventId, int $gameTs, ?array $actor, ?array $target, array $facts): ?array
     {
-        if (!in_array($mode, ['shadow', 'enabled'], true)) return null;
+        if (!in_array($mode, ['shadow', 'enabled', 'fights'], true)) return null;
         return $this->transaction(function () use ($scope, $mode, $eventId, $gameTs, $actor, $target, $facts): ?array {
             $this->lock($scope['campaign_id']);
             if ($this->row('SELECT 1 AS x FROM social_event_inbox WHERE campaign_id=$1 AND timeline_epoch=$2 AND event_id=$3', [$scope['campaign_id'], $scope['timeline_epoch'], $eventId])) return null;
@@ -191,6 +215,71 @@ final class SocialStore
                 [$event['campaign_id'], $event['timeline_epoch'], $event['event_id'], 'server', $event['sequence'], $event['game_ts'], $event['incident_id'], self::json($event), SocialEventContract::hash($event), 'captured', $mode]);
             return $event;
         });
+    }
+
+    /**
+     * B 55 item 1: forgiveness over time, event-based. Each fight incident (per observer -> culprit) is its own grudge;
+     * one with no knockout or worse and an unscaled worst charge of at most SOCIAL_GRUDGE_FADE_THRESHOLD fades back
+     * linearly over SOCIAL_GRUDGE_FADE_DAYS game days (what treatment/deals already won back is not faded twice).
+     * Runs inside ingest at most every fights.fade_check_seconds of game time per load (and after a time jump back).
+     * Each step is its own grudge_fade row at the event's game time, so a rollback removes exactly the later steps.
+     */
+    public function fadeGrudges(array $event, string $mode): array
+    {
+        if (!in_array($mode, ['enabled', 'fights'], true) || !stobeSocialFightRulesOn() || !getSettingBool('SOCIAL_CATEGORY_COMBAT', true)) return [];
+        $ts = (int)$event['game_ts'];
+        $every = max(1, (int)($this->rules->section('fights')['fade_check_seconds'] ?? 600));
+        $throttle = 'STOBE_REL_FADE_' . md5($event['campaign_id'] . '|' . $event['timeline_epoch']);
+        $last = getConfOpt($throttle, '');
+        if ($last !== '' && $ts >= (int)$last && $ts - (int)$last < $every) return [];
+        setConfOpt($throttle, strval($ts));
+        [$threshold, $days] = stobeSocialFadeSettings($this->rules);
+        $span = max(1.0, $days * 86400.0);
+        $fight = stobeSocialPgList(STOBE_SOCIAL_FIGHT_COMPONENTS);
+        $groups = $this->fetchRows("SELECT COALESCE(detail->>'fight_incident', incident_id) AS fi, lower(detail->>'observer_name') AS o, lower(detail->>'culprit_name') AS c,
+              MAX(detail->>'observer_name') AS observer_name, MAX(detail->>'culprit_name') AS culprit_name,
+              MAX(CASE WHEN component = ANY(\$2::text[]) THEN timeline_epoch END) AS epoch,
+              MAX(CASE WHEN component = ANY(\$2::text[]) THEN observer_key END) AS observer_key,
+              MAX(CASE WHEN component = ANY(\$2::text[]) THEN culprit_key END) AS culprit_key,
+              bool_or(component = ANY(\$3::text[]) OR (component = 'accident' AND detail->>'level' IN ('knockout', 'maiming'))) AS never,
+              MIN(CASE WHEN component = ANY(\$2::text[]) THEN COALESCE((detail->>'unscaled')::int, (detail->>'total')::int, delta) END) AS worst,
+              SUM(CASE WHEN component = ANY(\$2::text[]) THEN delta ELSE 0 END) AS charged,
+              SUM(CASE WHEN component = ANY(\$4::text[]) THEN delta ELSE 0 END) AS relief,
+              SUM(CASE WHEN component = 'grudge_fade' THEN delta ELSE 0 END) AS faded,
+              MIN(CASE WHEN component = ANY(\$2::text[]) THEN game_ts END) AS first_ts
+            FROM social_effect WHERE campaign_id=\$1 AND applied AND game_ts <= \$5
+              AND (component = ANY(\$2::text[]) OR component = ANY(\$4::text[]) OR component = 'grudge_fade')
+            GROUP BY 1,2,3 HAVING SUM(CASE WHEN component = ANY(\$2::text[]) THEN delta ELSE 0 END) < 0",
+            [$event['campaign_id'], $fight, stobeSocialPgList(STOBE_SOCIAL_NEVER_FADE), stobeSocialPgList(STOBE_SOCIAL_FIGHT_RELIEF), $ts]);
+        $out = [];
+        foreach ($groups as $g) {
+            if ($g['never'] === 't' || (int)$g['worst'] < -$threshold || $g['observer_key'] === null) continue;
+            $owed = -(int)$g['charged'] - (int)$g['relief'];
+            if ($owed <= 0) continue;
+            $fraction = $days <= 0 ? 1.0 : min(1.0, max(0.0, ($ts - (int)$g['first_ts']) / $span));
+            $inc = min(100, (int)floor($owed * $fraction) - (int)$g['faded']);
+            if ($inc <= 0) continue;
+            $row = getNpcData(strval($g['observer_name']));
+            if (!is_array($row) || (int)($row['id'] ?? 0) < 1) continue;
+            $this->query('SELECT id FROM core_npc WHERE id=$1 FOR UPDATE', [(int)$row['id']]);
+            $fresh = getNpcById((int)$row['id']);
+            $upd = stobeApplyRelationshipUpdatesMap(stobeGetNpcRelationshipMap($fresh), [['target'=>strval($g['culprit_name']), 'aff_delta'=>$inc,
+                'note'=>'The fight with ' . $g['culprit_name'] . ' is fading']]);
+            if (($upd['updated'] ?? 0) !== 1) continue;
+            $previous = $GLOBALS['gameRequest'] ?? null;
+            $GLOBALS['gameRequest'] = ['social', 0, $ts];
+            try {
+                if (!stobePersistNpcRelationshipMap(strval($fresh['name']), $upd['map'], $fresh)) throw new RuntimeException('Relationship write failed (grudge fade)');
+            } finally {
+                if ($previous === null) unset($GLOBALS['gameRequest']); else $GLOBALS['gameRequest'] = $previous;
+            }
+            $detail = ['observer_name'=>$g['observer_name'], 'culprit_name'=>$g['culprit_name'], 'total'=>$inc, 'fight_incident'=>$g['fi'],
+                'fraction'=>round($fraction, 4), 'owed'=>$owed, 'reason'=>'grudge_fade'];
+            $this->query('INSERT INTO social_effect(campaign_id,timeline_epoch,incident_id,observer_key,culprit_key,component,game_ts,delta,detail,applied,rules_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,true,$10) ON CONFLICT DO NOTHING',
+                [$event['campaign_id'], strval($g['epoch']), $g['fi'] . '#fade@' . $ts, $g['observer_key'], $g['culprit_key'], 'grudge_fade', $ts, $inc, self::json($detail), $this->rules->version()]);
+            $out[] = ['status'=>'grudge_fade', 'component'=>'grudge_fade', 'observer'=>$g['observer_name'], 'culprit'=>$g['culprit_name'], 'delta'=>$inc, 'incident'=>$g['fi']];
+        }
+        return $out;
     }
 
     // Interpreter helpers (server-owned; never reachable from client input directly).
