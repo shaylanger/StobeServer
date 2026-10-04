@@ -64,7 +64,7 @@ function stobeWorkGoalEnsureSchema(): void
     $ensured = true;
 }
 
-function stobeWorkGoalRememberBaseLocation(string $baseId, string $baseName, int $gameTs): void
+function stobeWorkGoalRememberBaseLocation(string $baseId, string $baseName, int $gameTs, ?array $townPos = null): void
 {
     $baseId = trim($baseId);
     $baseName = trim($baseName);
@@ -74,7 +74,13 @@ function stobeWorkGoalRememberBaseLocation(string $baseId, string $baseName, int
     stobeWorkGoalEnsureSchema();
     $db = $GLOBALS['db'];
 
-    $location = $db->fetchOne(
+    // m23: Stobe sends the base's own town position: use it. The fallback below (newest zone seen by
+    // anyone) can be another town, or a same-named base from another save (ids repeat across saves).
+    $location = (is_array($townPos) && is_numeric($townPos['x'] ?? null) &&
+                 is_numeric($townPos['y'] ?? null) && is_numeric($townPos['z'] ?? null))
+        ? ['x' => floatval($townPos['x']), 'y' => floatval($townPos['y']), 'z' => floatval($townPos['z']),
+           'zone_name' => $baseName, 'city_name' => $baseName]
+        : $db->fetchOne(
         "SELECT zone_name, city_name, x, y, z
          FROM location_zones
          WHERE x IS NOT NULL AND y IS NOT NULL AND z IS NOT NULL

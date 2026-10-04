@@ -225,6 +225,15 @@ function stobeNormalizePlayerBaseSnapshot(mixed $value, bool $stampObservation =
     if ($normalized['name'] === '') {
         $normalized['name'] = 'Player Base';
     }
+    // m23: the base's real town position (Stobe 'town_x/y/z'); base ids repeat across saves.
+    $tx = $value['town_x'] ?? null; $ty = $value['town_y'] ?? null; $tz = $value['town_z'] ?? null;
+    if (is_numeric($tx) && is_numeric($ty) && is_numeric($tz)) {
+        $tx = floatval($tx); $ty = floatval($ty); $tz = floatval($tz);
+        if (is_finite($tx) && is_finite($ty) && is_finite($tz) &&
+            abs($tx) < 10000000.0 && abs($ty) < 10000000.0 && abs($tz) < 10000000.0) {
+            $normalized['town_x'] = $tx; $normalized['town_y'] = $ty; $normalized['town_z'] = $tz;
+        }
+    }
     return $normalized;
 }
 
@@ -433,7 +442,10 @@ function stobeStorePlayerBaseState(array $payload): array
             stobeWorkGoalRememberBaseLocation(
                 strval($base['base_id'] ?? ''),
                 strval($base['name'] ?? 'Player Base'),
-                $gameTs
+                $gameTs,
+                isset($base['town_x'], $base['town_y'], $base['town_z'])
+                    ? ['x' => $base['town_x'], 'y' => $base['town_y'], 'z' => $base['town_z']]
+                    : null
             );
         } catch (Throwable $exception) {
             if (function_exists('stobeLogWarn')) {

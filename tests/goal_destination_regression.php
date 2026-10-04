@@ -38,6 +38,14 @@ $db->exec("INSERT INTO player_base_locations (base_id, base_name, x, y, z) VALUE
 $f = stobeWorkGoalResolveDestination('GdTest Fortress');
 check('item 66: a stored base resolves to its position', is_array($f) && floatval($f['x']) === 10.0, $f);
 $db->exec("DELETE FROM player_base_locations WHERE base_name='GdTest Fortress'");
+// m23 (16-fullbase): the base is remembered at the town position Stobe sends, not the newest zone seen
+$db->exec("INSERT INTO player_base_locations (base_id, base_name, x, y, z) VALUES ('gdtest-fortress', 'GdTest Fortress', -62461, 324, 16346)");
+stobeWorkGoalRememberBaseLocation('gdtest-fortress', 'GdTest Fortress', 5, ['x' => -76592.5, 'y' => 332.0, 'z' => 33017.0]);
+$f = stobeWorkGoalResolveDestination('GdTest Fortress');
+check('m23: a base snapshot with town_x/y/z moves a stale base row to the town', is_array($f) && floatval($f['x']) === -76592.5 && floatval($f['z']) === 33017.0, $f);
+$n = stobeNormalizePlayerBaseSnapshot(['inside' => true, 'base_id' => 'gdtest-fortress', 'name' => 'GdTest Fortress', 'town_x' => -76592.5, 'town_y' => 332, 'town_z' => '33017']);
+check('m23: the base snapshot keeps negative town coords', ($n['town_x'] ?? null) === -76592.5 && ($n['town_z'] ?? null) === 33017.0, $n);
+$db->exec("DELETE FROM player_base_locations WHERE base_name='GdTest Fortress'");
 $db->exec("DELETE FROM player_bases WHERE base_id='gdtest-fortress'");
 // 66: the area the game last reported
 $db->exec("INSERT INTO eventlog (type, ts, gamets, data, sess, localts, people, location) VALUES ('info',$1,1000,'GdTest area','pending',$1,'','Gdtestshire, Border Zone')", [time()]);
