@@ -134,3 +134,12 @@ stobe.log and `inspect --events 100 --effects 100` output with it.
 `bash rel-enslaved.sh <outdir> [Izumi] [Daphnilis]` loads kah-enslaved, finds the slave from Stobe's sweep, fills the
 templates REL-p7-03..06 and runs them in order (shadow, shadow, enabled, enabled; mode off at the end). Guards: camp
 factions get `relation 100` before p7-04 (camp-factions.txt / guards.txt); nothing is killed. Results in <outdir>/rel-enslaved.log.
+
+## m18: theft caught (SR09/SR13/SR14), SR07 sever, SR06/SR30 test switches (auto-home, Capture=1)
+`bash rel-m18.sh <outdir>` runs, in order: REL-p5-03-theft-owned-seen (shadow), REL-p5-04-theft-owned-unseen (shadow),
+REL-p3-06-ko-loot-witnessed (shadow), REL-p3-05b-defensive-limb-loss-sever (shadow), REL-p2-01 + REL-p2-04b-repeat-assault-forced
+(shadow, switch SOCIAL_TEST_FORCE_FIRST_STRIKE=Shay around p2-04b), REL-p7-01b/-01c recruit forced (ENABLED, switch
+SOCIAL_TEST_FORCE_JOIN_ATTEMPT=true; between them --set-relation "Rel Rook" Shay 80 + --add-trust "Rel Rook" Shay lifesaving 25).
+Reloads auto-home before each fresh block, writes VERDICT lines to <outdir>/verdicts.txt, leaves mode and both switches off.
+Needs Stobe with pending-fixes/rel_theft_caught_native.py, harness e8b4688+ (`drop ... owned`), server 2fbd947+.
+Owned item = `give` the NPC a plate, `drop <npc> "Iron Plates" owned`, then `pickup Shay` = the game's own theft path (KAH 22).

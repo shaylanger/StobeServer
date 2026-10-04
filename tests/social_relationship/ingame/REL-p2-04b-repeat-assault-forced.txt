@@ -1,0 +1,44 @@
+# id: REL-p2-04b-repeat-assault-forced
+# covers: SR06 (a second distinct assault after the encounter ended counts again, x1.15 max) with the test switch
+#   SOCIAL_TEST_FORCE_FIRST_STRIKE=Shay: Rel Vorn turned hostile after p2-01 and targets Shay, which made Shay's new
+#   strike "victim_already_engaged" (m8, m16). The switch makes the NEW encounter Shay's first strike; nothing else changes.
+# fixture: auto-home
+# reset: keep  (right after REL-p2-01 WITHOUT reloading: it uses p2-01's bandit "Rel Vorn")
+# needs: server cb3bc44+; before: php tools/social_relationship_inspect.php --set-switch SOCIAL_TEST_FORCE_FIRST_STRIKE Shay
+#   after: --set-switch SOCIAL_TEST_FORCE_FIRST_STRIKE off (rel-m18.sh does both); Capture=1; mode shadow
+# verify: php tools/social_relationship_inspect.php --pair-effects --effects 20 --interpret-log 40 --log-filter "Rel Vorn" --check-shadow -> exit 0
+#   "<TNAME>" -> "Shay" lists TWO aggression rows (two combat:<seq> incidents), the second within [-18,-9];
+#   grep "SOCIAL_TEST_FORCE_FIRST_STRIKE" log/stobeserver.log: the switch fired (only if he was targeting Shay).
+@set BANDIT where "Rel Vorn" ~ (#\d+/\d+)
+@set BANDIT_S where ${BANDIT} ~ (#\d+)/\d+
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
+@set TNAME where ${BANDIT} ~ ^(.+?) #\d+
+time ~ game_hours=
+teleport ${BANDIT} Shay dist 15
+health ${BANDIT} 100
+# m16 batch 8: he was still KO from p2-01 (the second attack was pending_awareness): wake him with a short protect
+protect ${BANDIT} on
+speed 1
+@sleep 3
+speed 0
+protect ${BANDIT} off
+where ${BANDIT} ~ dist=[0-9.]+$
+# calm his faction during the wait (he still may target Shay: the switch covers that)
+relation ${BANDIT} 60
+teleport ${BANDIT} Shay dist 300
+speed 10
+@wait-game 15 600
+speed 0
+time ~ game_hours=
+teleport ${BANDIT} Shay dist 2
+where ${BANDIT} ~ dist=[0-9.]+$
+protect Shay on
+attack Shay ${BANDIT}
+speed 1
+@sleep 8
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=attack seq=\d+ load=\d+ actor=${SHAY_S} target=${BANDIT_S} witnesses=\d+ facts="victim_targeting_actor":(true|false)
+ko ${BANDIT} 30
+teleport ${BANDIT} Shay dist 300
+protect Shay off
