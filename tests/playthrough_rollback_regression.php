@@ -452,6 +452,24 @@ try {
     stobePlaythroughRestoreUnlockedNpcs(1500);
     ptAssert(!$db->fetchOne('SELECT id FROM core_npc WHERE id = $1', [$futureNpcId]), 'Disabled preservation must retain future-only NPC deletion');
 
+    // m25 (A8): a future-only NPC of the player's own faction (a squad member) is never deleted.
+    $squadIdentity = getCurrentPlayerFactionIdentity();
+    $squadFaction = trim(strval($squadIdentity['name'] ?? 'Nameless'))
+        . (trim(strval($squadIdentity['id'] ?? '')) !== '' ? ' [' . trim(strval($squadIdentity['id'])) . ']' : '');
+    $futureSquadNpc = $prefix . '_FUTURE_SQUAD';
+    storeNpcProfile($futureSquadNpc, ['race' => 'Greenlander', 'faction' => $squadFaction, 'gender' => 'female']);
+    $futureSquadRow = $db->fetchOne('SELECT * FROM core_npc WHERE name = $1 LIMIT 1', [$futureSquadNpc]);
+    $futureSquadId = intval($futureSquadRow['id'] ?? 0);
+    ptAssert($futureSquadId > 0 && npcIsInPlayerFaction($futureSquadRow), 'm25: future-only squad NPC should exist in the player faction');
+    $db->exec('UPDATE core_npc SET lock_profile = FALSE, gamets_last_updated = 2000 WHERE id = $1', [$futureSquadId]);
+    $db->exec('DELETE FROM core_npc_master_history WHERE npc_id = $1', [$futureSquadId]);
+    $squadRollback = stobePlaythroughRestoreUnlockedNpcs(1500);
+    ptAssert($squadRollback['errors'] === 0, 'm25: rollback with a future-only squad NPC should succeed');
+    $squadAfter = $db->fetchOne('SELECT faction FROM core_npc WHERE id = $1', [$futureSquadId]);
+    ptAssert(is_array($squadAfter), 'm25: rollback must not delete a future-only squad NPC');
+    ptAssert(strval($squadAfter['faction'] ?? '') === $squadFaction, 'm25: the kept squad NPC keeps its faction');
+    $db->exec('DELETE FROM core_npc WHERE id = $1', [$futureSquadId]);
+
     // Item 110: a snapshot whose name another NPC row owns now (bug 117 renames) is skipped,
     // not a failed UPDATE on core_npc_name_key that fails the whole rollback.
     $nameOwnerNpc = $prefix . '_NAME_OWNER';

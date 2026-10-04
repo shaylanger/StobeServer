@@ -1016,6 +1016,17 @@ function stobePlaythroughRestoreUnlockedNpcs(int $cutoffGamets): array
                 $skipped++;
                 continue;
             }
+            // m25 (A8): never delete a member of the player's own faction. The squad is in the
+            // loaded save; deleting the row made the next chat re-create it with no faction, so
+            // orders to a squad member were treated as a stranger's ("make 2 bread": no goal).
+            if (function_exists('npcIsInPlayerFaction') && trim(strval($row['faction'] ?? '')) !== ''
+                && npcIsInPlayerFaction($row)) {
+                $skipped++;
+                stobeLogInfo('PLAYTHROUGH: kept future-only squad NPC (m25)', [
+                    'npc_id' => $npcId, 'name' => strval($row['name'] ?? ''), 'gamets' => $rowGamets, 'cutoff' => $cutoff,
+                ]);
+                continue;
+            }
             if (function_exists('stobeInsertNpcHistorySnapshotFromRow')) {
                 stobeInsertNpcHistorySnapshotFromRow($row, 'rollback_delete_future_npc');
             }
