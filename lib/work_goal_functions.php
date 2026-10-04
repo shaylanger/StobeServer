@@ -199,6 +199,12 @@ function stobeGoalNameIsContainer(string $name): bool
     return preg_match('/\b(?:storage|chest|chests|box|boxes|crate|crates|barrel|barrels|container|stash|shelf|shelves|rack|cabinet|locker|cupboard|warehouse|silo|trunk|sack)\b/i', $name) === 1;
 }
 
+/** A8 (m22): a crafting station / base building name ("Campfire", "Bread Oven", "Wheat Farm", "the well"). */
+function stobeGoalNameIsWorkstation(string $name): bool
+{
+    return preg_match('/\b(?:camp\s*fires?|fires?|fire\s*pits?|ovens?|stoves?|bench(?:es)?|workbench(?:es)?|furnaces?|smelters?|forges?|anvils?|looms?|refiner(?:y|ies)|distiller(?:y|ies)|brewer(?:y|ies)?|mills?|press(?:es)?|generators?|wells?|farms?|plots?|fields?|kitchen|cooking\s+(?:pot|station)|station|machine|grinder|tanner(?:y)?|cooker)\b/i', $name) === 1;
+}
+
 /**
  * Item 68: FETCH/DELIVER with the person and the container swapped
  * (target "Shay", destination "General Camp Storage Chest"): [target, destination] put right.
@@ -229,6 +235,7 @@ function stobeGoalDestinationFallback(string $requested): string
     if ($req === '') return '';
     if (preg_match('/^(?:me|myself|us|player|the\s+player|you|yourself|here|there)$/', $req)) return 'person';
     if (stobeGoalNameIsContainer($req)) return 'container'; // item 68: a chest/storage is no place to travel to
+    if (stobeGoalNameIsWorkstation($req)) return 'workstation'; // A8 (m22): a station/building of the base is no place to travel to
     $player = function_exists('getSetting') ? strtolower(trim(strval(getSetting('PLAYER_NAME', '')))) : '';
     if ($player !== '' && $req === $player) return 'person';
     if (function_exists('stobePlayerActorName') && $req === strtolower(stobePlayerActorName())) return 'person'; // Item 100

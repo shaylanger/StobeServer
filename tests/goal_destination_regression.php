@@ -133,6 +133,11 @@ $db->exec("INSERT INTO core_npc_master (name, metadata, created_at, updated_at) 
 check('item 79: a known NPC out of sight as destination is a person -> here, no base lookup',
     stobeGoalDestinationFallback('GdTest Trader79') === 'person' && $here(stobeWorkGoalResolveDestination('GdTest Trader79')));
 $db->exec("DELETE FROM core_npc_master WHERE name='GdTest Trader79'");
+// A8 (m22 batch N): "make 2 bread" -> WORK_GOAL destination "Campfire" -> destination_not_known
+check('A8 (m22): "Campfire" as destination -> here (workstation)', stobeGoalDestinationFallback('Campfire') === 'workstation' && $here(stobeWorkGoalResolveDestination('Campfire')));
+check('A8 (m22): "the Bread Oven" -> here', $here(stobeWorkGoalResolveDestination('the Bread Oven')));
+check('A8 (m22): "Wheat Farm L" -> here', $here(stobeWorkGoalResolveDestination('Wheat Farm L')));
+check('A8 (m22): an unknown town still fails', stobeWorkGoalResolveDestination('Gdtest Nowhere City') === false);
 check('item 73: a non-faction NPC -> nothing', stobeInferFetchFromAgreedRequest($line73, $npc73, [], $reply73, false) === '');
 
 echo "\n$pass passed, $fail failed\n";
