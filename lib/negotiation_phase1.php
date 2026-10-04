@@ -1209,6 +1209,21 @@ function stobeDealProgressAmountCheck(string $text, string $npc, string $playerM
     return ['line'=>$line, 'spoken'=>$spoken, 'wrong'=>$wrong, 'allowed'=>array_keys($allowed)];
 }
 
+/** Item 29: the held-back part of a corrected line: sentences already spoken before the hold are not said again. */
+function stobeDealDropSpokenSentences(string $line, string $spoken): string {
+    $norm = static fn(string $s): string => strtolower(trim(preg_replace('/\s+/', ' ', $s) ?? $s));
+    $done = [];
+    foreach (preg_split('/(?<=[.!?])\s+/', trim($spoken)) ?: [] as $s) {
+        if (trim($s) !== '') $done[$norm($s)] = true;
+    }
+    $kept = [];
+    foreach (preg_split('/(?<=[.!?])\s+/', trim($line)) ?: [] as $s) {
+        if (trim($s) === '' || isset($done[$norm($s)])) continue;
+        $kept[] = trim($s);
+    }
+    return implode(' ', $kept);
+}
+
 function stobeDealSpeechAmountCheck(string $text, string $npc, array $dealResult, string $playerMessage = ''): ?array {
     $decision = strtoupper(strval($dealResult['decision'] ?? ''));
     if (!in_array($decision, ['ACCEPT','COUNTER','PROPOSE'], true)) return null;

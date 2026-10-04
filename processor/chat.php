@@ -1545,8 +1545,11 @@ if ($manualActionActive && $manualActionCannotSpeak) {
                         'spoken'=>$amountCheck['spoken'], 'wrong'=>$amountCheck['wrong'], 'line'=>$amountCheck['line'],
                     ]);
                     if (!$alreadyStreamed) {
-                        $responseText = trim($streamSpokenPrefix . ' ' . $amountCheck['line']);
-                        if ($streamSpokenPrefix !== '') $streamSpeakOverride = $amountCheck['line'];
+                        // Item 29: what was spoken before the hold is not said again.
+                        $heldLine = $streamSpokenPrefix !== '' && function_exists('stobeDealDropSpokenSentences')
+                            ? stobeDealDropSpokenSentences(strval($amountCheck['line']), $streamSpokenPrefix) : strval($amountCheck['line']);
+                        $responseText = trim($streamSpokenPrefix . ' ' . $heldLine);
+                        if ($streamSpokenPrefix !== '') $streamSpeakOverride = $heldLine;
                     }
                 }
             }

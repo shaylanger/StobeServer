@@ -970,6 +970,13 @@ $noteA12 = stobeNegPlayerRefusal('NegTestSenlinA12', $player, "Thanks. I'm not g
 check('A12: "not going to heal you" is a refusal of the heal term', $noteA12 !== '' && termStatus($idA12, 0) === 'UNMET', [$noteA12, termStatus($idA12, 0)]);
 $db->exec("DELETE FROM core_npc_master WHERE name='NegTestSenlinA12'");
 
+// ---------------------------------------------------------------- item 29: a corrected held-back line doesn't repeat the spoken start
+check('item 29: spoken sentences are not said again', function_exists('stobeDealDropSpokenSentences')
+    && stobeDealDropSpokenSentences("Sure thing. The road north is quiet tonight. Then we're done.", 'Sure thing.  The road north is quiet tonight.') === "Then we're done.");
+check('item 29: nothing spoken yet -> the whole line', function_exists('stobeDealDropSpokenSentences')
+    && stobeDealDropSpokenSentences('You still owe me 100 Cats.', '') === 'You still owe me 100 Cats.');
+check('item 29: chat.php speaks only the unspoken part', str_contains(file_get_contents(dirname(__DIR__) . '/processor/chat.php'), 'stobeDealDropSpokenSentences('));
+
 // ---------------------------------------------------------------- cleanup
 $db->exec("DELETE FROM stobe_social_contract WHERE player_name=$1", [$player]);
 $db->exec("DELETE FROM stobe_negotiation_directive");
