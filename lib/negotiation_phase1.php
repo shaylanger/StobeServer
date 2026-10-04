@@ -207,6 +207,8 @@ function stobeDealShouldNegotiate(string $npc, array|false $npcData, string $mes
     } catch (Throwable $e) {
         stobeDealLog('warn', 'Negotiation open-deal lookup failed', ['npc'=>$npc, 'error'=>$e->getMessage()]);
     }
+    // C26: she agreed in words last turn and nothing was recorded: this turn carries the reminder.
+    if (stobeDealHasUnrecordedAgreement($npc)) return true;
     if (stobeDealNpcFightingPlayer($npcData)) return stobeDealLooksNegotiableMessage($message);
     return function_exists('stobeNegLooksLikeSocialOffer') && stobeNegLooksLikeSocialOffer($message);
 }
@@ -1638,6 +1640,12 @@ function stobeDealSpeechAgrees(string $text): bool {
 function stobeDealRememberUnrecordedAgreement(string $npc, string $playerMessage, string $reply, string $decision = 'ACCEPT'): void {
     setConfOpt('STOBE_NEG_UNRECORDED_' . strtolower($npc), json_encode(['offer'=>$playerMessage, 'reply'=>$reply, 'at'=>time(), 'decision'=>$decision], JSON_UNESCAPED_UNICODE));
     stobeDealLog('warn', 'Negotiation: NPC agreed in words but recorded no deal (reminder queued for next turn)', ['npc'=>$npc, 'offer'=>$playerMessage, 'reply'=>$reply]);
+}
+
+/** C26: a fresh unrecorded agreement is waiting for its reminder (not consumed). */
+function stobeDealHasUnrecordedAgreement(string $npc): bool {
+    $row = json_decode(strval(getConfOpt('STOBE_NEG_UNRECORDED_' . strtolower($npc), '')), true);
+    return is_array($row) && time() - intval($row['at'] ?? 0) <= 180;
 }
 
 /** One-shot note for the next negotiation turn, or ''. */
