@@ -15,7 +15,7 @@
 #          the first bandit's entry is back to 0                                                           (item 1)
 #   chat   KO a bandit, let him wake, talk kindly: "SOCIAL_DIALOGUE filtered ... fight_cooldown" (if the evaluator
 #          proposed a gain) and the <memory> line in his prompt                                           (items 4, 6)
-#   bleed  KO + blood 25 % + deep wound, wake: critical_harm row (-55..-65 band)                         (item 7)
+#   bleed  KO + deep arm wound (-70 %), blood kept above collapse, wake: critical_harm row (-55..-65 band) (item 7)
 #   accident  (harness b3ae609+ `hit`) Shay's hit KOs Malzin, no combat event: Malzin -> Shay drops 0.25 x KO x closeness,
 #          unchanged after a 90 game-min fade window; then an injury hit inside a real fight vs a bandit (item 7)
 #   deal   rel-surrender.sh kept with SOCIAL_TEST_FORCE_FIRST_STRIKE=Shay: deal_forgiveness row               (item 2)
@@ -207,17 +207,25 @@ bleed)
   ratio=$(stobe-auto hp "$h" | tee -a "$O/bleed.setup.txt" | grep -o " $idx:[-0-9.]*/[0-9.]*" | head -1 | awk -F'[:/]' '{ if ($3 > 0) printf "%d", 100 * $2 / $3 }')
   if [ -z "$ratio" ] || [ "$ratio" -gt -50 ] || [ "$ratio" -le -95 ]; then
     v "bleed: SETUP FAIL arm wound ${ratio:-?}% (want -50..-95; bleed.setup.txt)"; stobe-auto speed 0 >/dev/null; away "$h"; continue; fi
-  stobe-say speed 3 >/dev/null
+  # M24_F15: m22 H he never woke: the fightko leg cuts bleed and 40 % blood is below the game's collapse point, so the
+  # KO never ended. Blood stays above collapse (+15 %); near death on waking comes from the -70 % arm alone.
+  bl=$(stobe-auto blood "$h" 100%); echo "$bl" >> "$O/bleed.setup.txt"
+  col=$(echo "$bl" | grep -o 'blood [-0-9.]* -> [0-9.]*/[0-9.]* (collapse below [0-9.]*' | awk '{ split($4, m, "/"); if (m[2] > 0) printf "%d", 100 * $NF / m[2] }')
+  [ -n "$col" ] || col=60
+  floor=$((col + 15))
+  stobe-say speed 3 >/dev/null; bf=""
   for i in $(seq 1 80); do hl=$(stobe-auto hp "$h"); echo "$hl" | grep -q ' KO' || break
     bf=$(echo "$hl" | grep -o 'blood=[0-9.]*/[0-9.]*' | head -1 | awk -F'[=/]' '{ if ($3 > 0) printf "%d", 100 * $2 / $3 }')
-    if [ -n "$bf" ] && [ "$bf" -lt 30 ]; then stobe-auto blood "$h" 40% >/dev/null; echo "watchdog: blood $bf% -> 40%" >> "$O/bleed.setup.txt"; fi
+    if [ -n "$bf" ] && [ "$bf" -lt "$floor" ]; then stobe-auto blood "$h" 100% >/dev/null; echo "watchdog: blood $bf% -> 100% (collapse $col%)" >> "$O/bleed.setup.txt"; fi
     sleep 2; done
+  stillko=0; stobe-auto where "$h" | grep -q ' KO' && stillko=1
   sleep 10; stobe-auto speed 0 >/dev/null
   since $L $l0 | grep -a "structured kind=recovered" | head -2 > "$O/bleed.stobe.txt"
   since $WL $w0 | grep -a "SOCIAL_INTERPRET" | grep -a "Rel Vex" > "$O/bleed.log.txt"
   r=$(aff "Rel Vex" Shay)
   if grep -q critical_harm "$O/bleed.log.txt" && [ -n "$r" ] && [ "$r" -le -55 ]; then v "bleed: PASS critical_harm, Rel Vex -> Shay $r"
   elif grep -a -q -e '"level":"death"' -e '"kind":"death"' "$O/bleed.log.txt" || stobe-auto where "$h" | grep -q ' DEAD'; then v "bleed: INCONCLUSIVE Rel Vex died before waking (bleed.log.txt)"
+  elif [ "$stillko" = 1 ]; then v "bleed: SETUP FAIL Rel Vex still KO after the window (blood ${bf:-?}%, collapse ${col}%; bleed.setup.txt)"
   elif ! grep -q '"known"' "$O/bleed.stobe.txt"; then v "bleed: FAIL no recovered fact with vitals in stobe.log after the KO: he never woke in the window? (bleed.stobe.txt)"
   else v "bleed: FAIL Rel Vex -> Shay '${r:-none}' (bleed.log.txt, bleed.stobe.txt: blood on waking above 0.5 / no bleeding?)"; fi
   away "$h" ;;
