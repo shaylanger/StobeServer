@@ -74,10 +74,12 @@ teleport ${W} ${V} dist 3
 # hears_actor all false). She idles (as Rel Tess in p5-03, who saw the take); the take waits until her AI sees Malzin.
 # A failed poll here is a SETUP failure (rel-m18.sh reports it), not a product FAIL.
 order ${W} IDLE
+# m25: in m22 run j she stood 8.4 m away facing away (fov=0, sees=0 for 30 s): turn her toward Malzin
+# (harness face, d91fe88) and poll her sight in the same step; the AI may turn her back, so each poll re-turns her
 speed 1
-@until 30 senses ${W} Malzin ~ sees=1
+@until 30 face ${W} Malzin ~ sees=1
 speed 0
-senses ${W} Malzin
+senses ${W} Malzin ~ sees=1
 where ${W}
 transfer ${V} Malzin "Iron Plates"
 @sleep 5
