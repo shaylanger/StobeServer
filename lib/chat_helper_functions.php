@@ -15699,6 +15699,15 @@ function stobePlayerOrderGate(string $actor, array|false $npcData, string $norma
     if (function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData)) return '';
     $at = strpos($normalizedAction, '@');
     $cmd = strtoupper(trim($at === false ? $normalizedAction : substr($normalizedAction, 0, $at)));
+    // Item 120: patching the player up is a favour, not a work order: at r >= +30 or under a deal.
+    if ($cmd === 'FIRST_AID' && function_exists('stobeRelFirstAidForPlayerAllowed') && function_exists('stobeIsPlayerSideName')) {
+        $faTarget = $at === false ? '' : trim(substr($normalizedAction, $at + 1));
+        $faPlayer = strval($GLOBALS['STOBE_PLAYER_ACTOR'] ?? '');
+        if ($faPlayer === '') $faPlayer = normalizeParticipantNameToken(strval(getSetting('PLAYER_NAME', '')));
+        if ($faTarget !== '' && $faPlayer !== '' && stobeIsPlayerSideName($faTarget, $faPlayer)) {
+            return stobeRelFirstAidForPlayerAllowed($actor, $npcData, $faPlayer) ? '' : stobeRelFavourRefusalLine('heal');
+        }
+    }
     if (in_array($cmd, stobeNonFactionWorkOrderCommands(), true)) {
         return "I don't take orders like that from you - I'm not one of yours.";
     }

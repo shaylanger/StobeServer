@@ -1367,7 +1367,8 @@ function stobeNegNpcHasDealContext(string $npc): bool {
         $row = $GLOBALS['db']->fetchOne(
             "SELECT 1 AS hit FROM stobe_social_contract WHERE LOWER(npc_name)=LOWER($1)
                AND (status IN ('PROPOSED','COUNTERED','ACCEPTED','AWAITING_PERFORMANCE')
-                    OR COALESCE(resolved_at, updated_at) > NOW() - INTERVAL '10 minutes') LIMIT 1",
+                    OR (status NOT IN ('CANCELLED','EXPIRED','REJECTED') -- item 120: nothing owed on these
+                        AND COALESCE(resolved_at, updated_at) > NOW() - INTERVAL '10 minutes')) LIMIT 1",
             [$npc]
         );
         $hit = is_array($row);

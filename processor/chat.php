@@ -1369,6 +1369,10 @@ $negotiationKind = $negotiationActive ? stobeDealKindFor($npcData) : '';
 $negotiationOpenDeal = $negotiationActive ? stobeDealOpenForNpc($targetNpc) : null;
 $negotiationDefer = $negotiationActive
     && ($negotiationOpenDeal === null || in_array(strval($negotiationOpenDeal['status'] ?? ''), ['PROPOSED','COUNTERED'], true));
+// Item 120: a free ask (favour, gift, pay-later) to an outsider: her reply is checked before she speaks it.
+$relFreeAskDefer = !$narratorMode && strcasecmp($speaker, $playerName) === 0 && is_array($npcData)
+    && !npcIsInPlayerFaction($npcData) && function_exists('stobeRelFreeAskKind') && stobeRelFreeAskKind($message) !== '';
+$GLOBALS['STOBE_BLOCKED_UNPAID_GIFT'] = false;
 // Handing over goods under an already agreed deal is not a gift.
 if ($negotiationOpenDeal !== null && in_array(strval($negotiationOpenDeal['status'] ?? ''), ['ACCEPTED','AWAITING_PERFORMANCE'], true)) {
     $actionConfig['deal_sanctioned_give'] = true;
@@ -1463,7 +1467,7 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             'stream_listener' => $speaker, // bug 95: replies go to whoever spoke
             'player_message' => strval($message ?? ''), // item 41
             'stream_gamets' => $gamets,
-            'defer_structured_stream' => $negotiationDefer,
+            'defer_structured_stream' => $negotiationDefer || $relFreeAskDefer, // item 120
             'hold_stream_on_money' => $negotiationActive && !$negotiationDefer,
             // Test switch NEG_TEST_INJECT (off by default): forced/malformed reply fields for this turn.
             'stobe_test_inject' => (!$narratorMode && function_exists('stobeNegTestTakeInjection'))
@@ -1712,6 +1716,21 @@ if (!$narratorMode && function_exists('stobeInferMissingHandovers')
         $responseActions = array_merge($responseActions, $missingHandovers);
         stobeLogInfo($hadGiveItem ? 'Two-part hand-over: missing GIVE_ITEM added (item 43)'
             : 'Agreed hand-over without action: GIVE_ITEM added (item 67)', ['npc'=>$targetNpc, 'added'=>$missingHandovers]);
+    }
+}
+// Item 120: willingness lines on a plain chat turn (free favour < +30, free gift < gift threshold, pay-later < 0);
+// an agreed heal at >= +30 is real first aid.
+if (!$narratorMode && function_exists('stobeRelFreeAskGuard') && strcasecmp($speaker, $playerName) === 0) {
+    try {
+        $relOpenDeal = $negotiationOpenDeal ?? (function_exists('stobeDealOpenForNpc') ? stobeDealOpenForNpc($targetNpc) : null);
+        $freeAsk = stobeRelFreeAskGuard($targetNpc, $npcData, $playerName, strval($message ?? ''), strval($responseText ?? ''), $responseActions, [
+            'decision' => $dealTurnDecision, 'open_deal' => $relOpenDeal !== null,
+            'blocked_gift' => !empty($GLOBALS['STOBE_BLOCKED_UNPAID_GIFT']), 'already_streamed' => !empty($alreadyStreamed),
+        ]);
+        $responseText = $freeAsk['text'];
+        $responseActions = $freeAsk['actions'];
+    } catch (Throwable $freeAskError) {
+        stobeLogWarn('Free-ask guard failed (item 120)', ['npc'=>$targetNpc, 'error'=>$freeAskError->getMessage()]);
     }
 }
 if (!$narratorMode && function_exists('stobeNegAttachPendingForChat')) {
