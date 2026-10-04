@@ -60,7 +60,8 @@ setup(){ # one attempt; sets r (handle) and deal; returns 1 when no offer came
     log "relation $NAME -> Shay = -85"
   fi
   for i in $(seq 1 15); do # until he really swings at Shay
-    stobe-auto attack "$r" Shay >/dev/null; stobe-auto attack Shay "$r" >/dev/null
+    if [ "${SHAY_FIRST:-0}" = 1 ]; then stobe-auto attack Shay "$r" >/dev/null; sleep 2; stobe-auto attack "$r" Shay >/dev/null   # B55 deal: Shay strikes first
+    else stobe-auto attack "$r" Shay >/dev/null; stobe-auto attack Shay "$r" >/dev/null; fi
     sleep 4
     tail -n +"$base" "$L" | grep -a -F "[EVENT] combat: $NAME" | grep -a -q -- "-> Shay" && break
   done
