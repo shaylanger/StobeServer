@@ -12,14 +12,22 @@ teleport ${FREE} ${SLAVE} dist 3
 speed 1
 @sleep 6
 speed 0
-# m31 (batch P: the order was never carried out, the slave state never moved): setup check, then progress
-#   (chains off, or Stobe's 'liberation task' line for the freer) within 60 s, else the order once more
+# m31 (batch P: the order was never carried out, the slave state never moved): setup check first.
+# m31c (batch Q: the pick task started 4 s after the order, the chains never came off in 210 s): wait for the
+#   chains themselves; 45 s without them -> record who works the lock (crime/where) and order again; another
+#   45 s -> teleport the freer back and order again. Every retry is skipped once the chains are off.
 chance ${FREE} lockpick ${SLAVE} ~ lockpick_chance=(0\.0*[1-9]|[1-9])
 order ${FREE} PICK_LOCK_ON_SHACKLES target ${SLAVE}
 speed 2
-@any @log-wait 60 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ (slave state serial=\d+ name=__SLAVE__ chained=1->0|liberation task serial=\d+ name=__FREE__ task=) || order ${FREE} PICK_LOCK_ON_SHACKLES target ${SLAVE}
-# m26: poll (the lock pick takes a while) instead of a fixed 60 s
-@log-wait 180 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0
+@any @log-wait 45 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0 || crime ${SLAVE} radius 50
+@any @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0 || where ${FREE}
+@any @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0 || order ${FREE} PICK_LOCK_ON_SHACKLES target ${SLAVE}
+@any @log-wait 45 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0 || crime ${SLAVE} radius 50
+@any @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0 || speed 0
+@any @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0 || teleport ${FREE} ${SLAVE} dist 3
+@any @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0 || order ${FREE} PICK_LOCK_ON_SHACKLES target ${SLAVE}
+@any @log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0 || speed 2
+@log-wait 120 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0
 @log-wait 30 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator":\{[^}]*"name":"__FREE__"
 speed 0
 # m16: freeing her squad mate re-squads the freer too (new handle): look her up again
