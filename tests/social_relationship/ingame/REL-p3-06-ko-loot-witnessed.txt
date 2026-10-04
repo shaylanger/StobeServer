@@ -70,11 +70,14 @@ where ${V}
 where Malzin
 # M23_F8_REL: W 3 m from the body at the take; paused 5 s so the sweep (runs while paused) lists her before she walks off
 teleport ${W} ${V} dist 3
-# M24_F12: a teleport leaves her senses stale (m22 F: 3 m away, sees_actor=false): she follows Malzin (faces her) 2 s first
-order ${W} FOLLOW_WHILE_TALKING target Malzin
+# M24_F15: FOLLOW_WHILE_TALKING walked her 14 m off and her AI never listed Malzin (m22 H: sees_actor, sees_target,
+# hears_actor all false). She idles (as Rel Tess in p5-03, who saw the take); the take waits until her AI sees Malzin.
+# A failed poll here is a SETUP failure (rel-m18.sh reports it), not a product FAIL.
+order ${W} IDLE
 speed 1
-@sleep 2
+@until 30 senses ${W} Malzin ~ sees=1
 speed 0
+senses ${W} Malzin
 where ${W}
 transfer ${V} Malzin "Iron Plates"
 @sleep 5

@@ -60,7 +60,9 @@ insp --set-mode shadow >/dev/null; fresh SR09
 run REL-p3-06-ko-loot-witnessed.txt
 V=$(val VNAME REL-p3-06-ko-loot-witnessed); [ -z "$V" ] && V="Rel Vale"
 insp --pair-effects --incidents 10 --interpret-log 60 --log-filter "$V" --check-shadow > "$O/p3-06.inspect.txt" 2>&1
-if grep -q '"known_thief"' "$O/p3-06.inspect.txt" || grep -q "known_thief" "$O/p3-06.inspect.txt"; then v "SR09: known thief recorded (check $V -> Malzin theft, $V -> Shay no theft in p3-06.inspect.txt)"; else v "SR09: FAIL no known_thief"; fi
+# M24_F15: the witness's AI must see Malzin before the take (harness senses poll); else the row is a SETUP failure
+if grep -q '^FAIL .*senses .* Malzin' "$O/REL-p3-06-ko-loot-witnessed.out"; then v "SR09: SETUP FAIL witness never saw Malzin before the take ($(grep -m1 '^FAIL .*senses' "$O/REL-p3-06-ko-loot-witnessed.out" | cut -c1-160))"
+elif grep -q '"known_thief"' "$O/p3-06.inspect.txt" || grep -q "known_thief" "$O/p3-06.inspect.txt"; then v "SR09: PASS known thief recorded (check $V -> Malzin theft, $V -> Shay no theft in p3-06.inspect.txt)"; else v "SR09: FAIL no known_thief"; fi
 fi
 
 # --- SR07 sever (shadow) ---
