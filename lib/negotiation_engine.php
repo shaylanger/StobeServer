@@ -534,7 +534,10 @@ function stobeNegCharMatches(string $a, string $b): bool {
 function stobeNegRecipientMatches(string $recipient, string $npc, int $serial = 0): bool {
     if (stobeNegCharMatches($recipient, $npc)) return true;
     if ($serial <= 0 || !preg_match('/^.+\[\s*(.+?)\s*\]$/', trim($recipient), $bm)) return false;
-    if (strcasecmp($bm[1], trim($npc)) !== 0) return false;
+    // C49b: the deal may carry an earlier auto-name ("Dalx 2 [Dust Bandit]"): compare templates.
+    $npcTemplate = preg_match('/^.+\[\s*(.+?)\s*\]$/', trim($npc), $nm) ? $nm[1] : trim($npc);
+    if (strcasecmp($bm[1], $npcTemplate) !== 0) return false;
+    if (function_exists('stobeResolveLiveParticipantSerial') && stobeResolveLiveParticipantSerial(trim($recipient)) === $serial) return true;
     $row = $GLOBALS['db']->fetchOne(
         "SELECT metadata->>'storage_id' AS sid FROM core_npc_master WHERE LOWER(name)=LOWER($1) LIMIT 1", [trim($recipient)]);
     return is_array($row) && strval($row['sid'] ?? '') === 'hand_' . $serial;

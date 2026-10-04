@@ -848,6 +848,12 @@ check('item 49: named after the deal, same serial: his payment counts', stobeNeg
 check('item 49: another serial (a gang-mate or an old deal) does not', stobeNegRecipientMatches('Weth49 [Dust Bandit]', 'Dust Bandit', 4950) === false);
 check('item 49: no serial, no rename match', stobeNegRecipientMatches('Weth49 [Dust Bandit]', 'Dust Bandit', 0) === false);
 check('item 49: attacks/actor matching stays exact', stobeNegCharMatches('Yarel [Dust Bandit]', 'Dust Bandit') === false);
+check('C49b: deal made with an earlier auto-name, paid after a second rename', stobeNegRecipientMatches('Weth49 [Dust Bandit]', 'Dalx49 2 [Dust Bandit]', 4949) === true);
+check('C49b: earlier auto-name, another serial does not', stobeNegRecipientMatches('Weth49 [Dust Bandit]', 'Dalx49 2 [Dust Bandit]', 4950) === false);
+check('C49b: other template with the same serial does not', stobeNegRecipientMatches('Weth49 [Dust Bandit]', 'Dalx49 2 [Hungry Bandit]', 4949) === false);
+$GLOBALS['CACHE_PEOPLE'] = json_encode(['Shay|hand_1', 'Weth49b [Dust Bandit]|hand_4951']);
+check('C49b: no stored row yet, live people-list serial counts', stobeNegRecipientMatches('Weth49b [Dust Bandit]', 'Dalx49 2 [Dust Bandit]', 4951) === true);
+unset($GLOBALS['CACHE_PEOPLE']);
 $db->exec("DELETE FROM core_npc_master WHERE name='Weth49 [Dust Bandit]'");
 
 // ---------------------------------------------------------------- 12m. item 50: reputation key ignores case
