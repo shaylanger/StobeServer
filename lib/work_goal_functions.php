@@ -357,7 +357,7 @@ function stobeQueueWorkGoalRequest(
 function stobeWorkGoalSyncStatusFile(): void
 {
     stobeWorkGoalEnsureSchema();
-    $path = '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_work_goal.status';
+    $path = strval(getenv('STOBE_WORK_GOAL_STATUS_FILE') ?: '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_work_goal.status');
     if (!is_file($path) || filesize($path) <= 0) {
         return;
     }
@@ -384,7 +384,11 @@ function stobeWorkGoalSyncStatusFile(): void
         if ($existing) {
             $GLOBALS['db']->exec(
                 "UPDATE stobe_work_goal
-                 SET status=$2, completed=$3, current_step=$4, reason=$5, updated_at=NOW()
+                 SET status=$2, completed=$3, current_step=$4, reason=$5,
+                     -- M24_F13: an unchanged line keeps its age (every prompt syncs; NOW() made ended goals read 0 min old)
+                     updated_at=CASE WHEN status IS DISTINCT FROM $2 OR completed IS DISTINCT FROM $3
+                                       OR current_step IS DISTINCT FROM $4 OR reason IS DISTINCT FROM $5
+                                     THEN NOW() ELSE updated_at END
                  WHERE goal_id=$1",
                 [
                     $goalId,
@@ -395,6 +399,11 @@ function stobeWorkGoalSyncStatusFile(): void
                 ]
             );
         } else {
+            // M24_F13: an ended goal missing from the DB was rolled back (item 109) or pruned: don't resurrect it
+            // as a fresh "ended 0 min ago" blocker (16-fullbase m22 G: stale BLOCKED Junkbow -> Avarek refused).
+            if (stobeGoalStatusEnded($status)) {
+                continue;
+            }
             $safeActor = normalizeParticipantNameToken($actor);
             $safeItem = substr(trim(strval($item)), 0, 160);
             $safeDestination = substr(trim(strval($destination)), 0, 160);

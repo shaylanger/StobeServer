@@ -136,7 +136,7 @@ function stobeTaskGoalQueue(
 function stobeTaskGoalSyncStatusFile(): void
 {
     stobeTaskGoalEnsureSchema();
-    $path='/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_task_goal.status';
+    $path=strval(getenv('STOBE_TASK_GOAL_STATUS_FILE') ?: '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_task_goal.status');
     if (!is_file($path) || filesize($path)<=0) return;
     $lines=@file($path,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES);
     if (!is_array($lines)) return;
@@ -153,12 +153,17 @@ function stobeTaskGoalSyncStatusFile(): void
             $db->exec(
                 "UPDATE stobe_task_goal_runtime SET status=$2,completed=$3,current_step=$4,reason=$5,
                         destination_name=CASE WHEN $6<>'' THEN $6 ELSE destination_name END,
-                        max_spend=GREATEST(max_spend,$7),spent=$8,approved_purchase=$9,updated_at=NOW()
+                        max_spend=GREATEST(max_spend,$7),spent=$8,approved_purchase=$9,
+                        updated_at=CASE WHEN status IS DISTINCT FROM $2 OR completed IS DISTINCT FROM $3 OR current_step IS DISTINCT FROM $4
+                                          OR reason IS DISTINCT FROM $5 OR spent IS DISTINCT FROM $8 OR approved_purchase IS DISTINCT FROM $9
+                                        THEN NOW() ELSE updated_at END
                  WHERE goal_id=$1",
                 [trim($id),$status,max(0,intval($done)),substr(trim($step),0,700),substr(trim($reason),0,900),
                  substr(trim($dest),0,160),max(0,$maxSpend),max(0,$spent),$approved]
             );
         } else {
+            // M24_F13: an ended goal missing from the DB was rolled back or pruned: don't resurrect it as fresh.
+            if(stobeGoalStatusEnded($status))continue;
             // Includes automatic last-resort purchase approvals spawned by KenshiFP.
             $db->exec(
                 "INSERT INTO stobe_task_goal_runtime (

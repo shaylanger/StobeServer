@@ -56,6 +56,25 @@ $db->exec("INSERT INTO stobe_task_goal_runtime (goal_id, actor_name, kind, item_
 $t = stobeBuildTaskGoalStateBlock('R121Task');
 check('task_goals: cancelled reason not shown, age shown', !str_contains($t, 'has no Wheatstraw') && str_contains($t, 'ended_minutes_ago="4"'), $t);
 
+// M24_F13 (16-fullbase m22 G): the status-file sync must not resurrect a goal the rollback deleted, nor make an
+// unchanged ended goal read "0 min ago".
+$sf = tempnam(sys_get_temp_dir(), 'wgs'); putenv('STOBE_WORK_GOAL_STATUS_FILE=' . $sf);
+file_put_contents($sf, "r121-g\tR121Sync\tBLOCKED\tJunkbow\t2\t0\tYour Outpost\tTraveling\tno usable mine, farm, production machine, crafting bench, or approved nearby purchase route can provide Junkbow\n");
+$s = stobeBuildWorkGoalStateBlock('R121Sync');
+check('sync: a rolled-back ended goal is not resurrected', !str_contains($s, 'Junkbow'), $s);
+$wg('r121-h', 'R121Sync2', 'Junkbow', 'BLOCKED', 'Traveling', 'no crafting bench can provide Junkbow', 60);
+file_put_contents($sf, "r121-h\tR121Sync2\tBLOCKED\tJunkbow\t2\t0\tHome\tTraveling\tno crafting bench can provide Junkbow\n");
+$s2 = stobeBuildWorkGoalStateBlock('R121Sync2');
+check('sync: an unchanged ended goal keeps its age', str_contains($s2, 'ended_minutes_ago="60"') && !str_contains($s2, 'crafting bench'), $s2);
+$tf = tempnam(sys_get_temp_dir(), 'tgs'); putenv('STOBE_TASK_GOAL_STATUS_FILE=' . $tf);
+file_put_contents($tf, "r121-t1\tR121Task\tCANCELLED\tFETCH\tWheatstraw\t20\t0\tStorage Chest\t\tWalking to Storage Chest\tStorage Chest has no Wheatstraw\t0\t0\t0\n"
+    . "r121-t2\tR121Task2\tBLOCKED\tFETCH\tNails\t2\t0\tStorage Chest\t\tWalking\tStorage Chest has no Nails\t0\t0\t0\n");
+$t2 = stobeBuildTaskGoalStateBlock('R121Task');
+check('task sync: an unchanged ended goal keeps its age', str_contains($t2, 'ended_minutes_ago="4"'), $t2);
+$t3 = stobeBuildTaskGoalStateBlock('R121Task2');
+check('task sync: a rolled-back ended goal is not resurrected', !str_contains($t3, 'Nails'), $t3);
+putenv('STOBE_WORK_GOAL_STATUS_FILE'); putenv('STOBE_TASK_GOAL_STATUS_FILE'); @unlink($sf); @unlink($tf);
+
 echo "SUMMARY pass=$pass fail=$fail\n";
 echo 'RESULT item121 ' . ($fail === 0 ? 'PASS' : 'FAIL') . " ended-goal history pass=$pass fail=$fail\n";
 exit($fail === 0 ? 0 : 1);
