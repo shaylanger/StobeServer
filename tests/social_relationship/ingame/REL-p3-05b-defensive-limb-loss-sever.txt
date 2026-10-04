@@ -19,6 +19,11 @@ spawn "Hungry Bandit" Drifters near Shay dist 20 count 1 ~ spawned 1/1
 @set L_S where ${L} ~ (#\d+)/\d+
 setname ${L} "Rel Lark" ~ ^([^ ].* \[)?Hungry Bandit\]? -> 
 @set LNAME where ${L} ~ ^(.+?) #\d+
+# m21: initialize the observed NPC's intact limb baseline before the forced cut.
+stobe_say "Rel Lark" "Lark, wait here a moment."
+speed 1
+@sleep 10
+speed 0
 # Shay must survive whatever he does; Malzin stays out (she would join and blur the attribution)
 protect Shay on
 teleport Malzin Shay dist 60

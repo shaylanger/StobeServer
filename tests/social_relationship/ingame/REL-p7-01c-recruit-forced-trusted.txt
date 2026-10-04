@@ -12,5 +12,8 @@ stobe_say "Rel Rook" "Rook, you saved my life. Join my squad, come with us."
 speed 1
 @sleep 25
 speed 0
-@until 30 where ${R} ~ \[(?!Drifters)[^\]]+\]
+# m21: normal recruitment can recreate the character; reacquire by exact name.
+@until 30 where "Rel Rook" ~ \[(?!Drifters)[^\]]+\]
+@set R where "Rel Rook" ~ (#\d+/\d+)
+state ${R}
 select Shay
