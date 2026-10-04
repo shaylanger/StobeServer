@@ -78,6 +78,14 @@ function stobeCallLLMStream(
     callable $onTextDelta,
     array $meta = []
 ): string|false {
+    if (is_array($meta['stobe_test_inject'] ?? null) && function_exists('stobeNegTestStreamInjected')) {
+        // Test switch NEG_TEST_INJECT (off by default): the model's reply with the injected fields.
+        $inject = $meta['stobe_test_inject'];
+        unset($meta['stobe_test_inject']);
+        return stobeNegTestStreamInjected($inject,
+            static fn(callable $collector) => stobeCallLLMStream($messages, $config, $collector, $meta), $onTextDelta);
+    }
+    unset($meta['stobe_test_inject']);
     $runtime = stobePrepareLlmRuntimeConfig($config);
     $connectorType = strval($runtime['connector_type'] ?? 'openaijson');
 

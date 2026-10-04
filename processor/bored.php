@@ -331,6 +331,9 @@ $streamResult = stobeStreamDialogueViaLlm(
         'stream_listener' => $listener, // bug 95: the turn's real addressee
         'stream_gamets' => $gamets,
         'defer_structured_stream' => is_array($negDirective),
+        // Test switch NEG_TEST_INJECT (off by default), context "directive".
+        'stobe_test_inject' => (is_array($negDirective) && function_exists('stobeNegTestTakeInjection'))
+            ? stobeNegTestTakeInjection('directive', $speakerNpc, $speakerData, $playerName) : null,
         'response_format' => (is_array($negDirective) && in_array(strval($negDirective['kind']), ['surrender','assist'], true))
             ? stobeDealResponseFormat(stobeBuildStructuredDialogueResponseFormat($speakerNpc, $speakerData, false, 'bored'))
             : stobeBuildStructuredDialogueResponseFormat($speakerNpc, $speakerData, npcIsInPlayerFaction($speakerData), 'bored'),

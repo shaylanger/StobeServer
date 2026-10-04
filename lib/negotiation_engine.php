@@ -1878,7 +1878,9 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
         );
         $surrenderReady = ($now - intval($recentSurrender['t'] ?? 0)) >= STOBE_NEG_INITIATIVE_GLOBAL_COOLDOWN;
         $assistReady = ($now - intval($recentAssist['t'] ?? 0)) >= STOBE_NEG_INITIATIVE_GLOBAL_COOLDOWN;
-        if (!$surrenderReady && !$assistReady) return;
+        // Test switch NEG_TEST_FORCE_INITIATIVE (off by default): skips the cooldown/health gates once.
+        $forcedAny = function_exists('stobeNegTestSwitchRead') ? stobeNegTestSwitchRead('NEG_TEST_FORCE_INITIATIVE') : null;
+        if (!$surrenderReady && !$assistReady && $forcedAny === null) return;
 
         $names = [];
         if (preg_match('/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)/', trim($eventData), $m)) {
@@ -1896,7 +1898,8 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 "SELECT MAX(created_unix) AS t FROM stobe_negotiation_directive WHERE kind IN ('surrender','assist') AND LOWER(npc_name)=LOWER($1)",
                 [$name]
             );
-            if (($now - intval($recentNpc['t'] ?? 0)) < STOBE_NEG_INITIATIVE_NPC_COOLDOWN) continue;
+            $forced = $forcedAny !== null ? stobeNegTestForcedInitiative($name) : null;
+            if (($now - intval($recentNpc['t'] ?? 0)) < STOBE_NEG_INITIATIVE_NPC_COOLDOWN && $forced === null) continue;
             if (stobeDealOpenForNpc($name) !== null) continue;
             $row = stobeNegNpcRow($name);
             $ratio = stobeNegHealthRatio($row);
@@ -1927,8 +1930,10 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 ? 'You carry about ' . $offerCarried . ' Cats; if you offer Cats, offer at most ' . $offerCap . ' (keep it modest). '
                 : 'You have next to no Cats: offer an item, information or just beg - do not offer Cats. ');
             stobeLogDebug('Initiative check', ['npc'=>$name, 'ratio'=>round($ratio, 2), 'hostile_to_player'=>$hostileToPlayer, 'fighting_others'=>$fightingOthers, 'surrender_ready'=>$surrenderReady, 'threshold'=>round(stobeNegCourageThreshold($personality, 0.35), 2)]);
-            if ($surrenderReady && $hostileToPlayer && stobeNegPhaseEnabled(4) && $ratio < stobeNegCourageThreshold($personality, 0.35)) {
-                stobeNegQueueDirective($name, 'surrender', '', [
+            $queueAs = $forced !== null ? stobeNegTestInitiativeQueueName($forced, $name) : $name; // row 25 test switch
+            if ($hostileToPlayer && stobeNegPhaseEnabled(4)
+                && (($forced['kind'] ?? '') === 'surrender' || ($surrenderReady && $ratio < stobeNegCourageThreshold($personality, 0.35)))) {
+                stobeNegQueueDirective($queueAs, 'surrender', '', [
                     'health_ratio'=>round($ratio, 2),
                     'instruction'=>'You are losing this fight against ' . $player . ' (your health is about ' . intval($ratio * 100) . '%). '
                         . 'In character, decide whether to beg for your life or offer something (Cats, items, surrender) in exchange for being spared. '
@@ -1936,17 +1941,19 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                         . 'If you make an offer, set deal_decision to PROPOSE and list the terms (include your own STOP_ATTACK and the player SPARE). '
                         . 'If you would rather fight to the end, just say so and use deal_decision NONE.',
                 ], true);
+                if ($forced !== null) stobeNegTestInitiativeFired($forced, $name, $queueAs);
                 return;
             }
-            if ($assistReady && !$hostileToPlayer && $fightingOthers && $playerNearby && stobeNegPhaseEnabled(5)
-                && !npcIsInPlayerFaction($data) && $ratio < stobeNegCourageThreshold($personality, 0.6)) {
-                stobeNegQueueDirective($name, 'assist', '', [
+            if (!$hostileToPlayer && $fightingOthers && $playerNearby && stobeNegPhaseEnabled(5) && !npcIsInPlayerFaction($data)
+                && (($forced['kind'] ?? '') === 'assist' || ($assistReady && $ratio < stobeNegCourageThreshold($personality, 0.6)))) {
+                stobeNegQueueDirective($queueAs, 'assist', '', [
                     'health_ratio'=>round($ratio, 2),
                     'instruction'=>'You are losing a fight (health about ' . intval($ratio * 100) . '%) and ' . $player . ' is nearby. '
                         . 'In character, call out to ' . $player . ' for help. You may promise a reward that you can actually give. '
                         . $offerLine
                         . 'If you offer a deal, set deal_decision to PROPOSE with terms: player PROTECT (target npc), and your reward terms with "when":"after_player".',
                 ], true);
+                if ($forced !== null) stobeNegTestInitiativeFired($forced, $name, $queueAs);
                 return;
             }
         }

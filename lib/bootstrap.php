@@ -93,6 +93,7 @@ require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'work_goal_functions.ph
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'task_goal_functions.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'negotiation_phase1.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'negotiation_engine.php');
+require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'negotiation_test_switches.php'); // test switches, off by default
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'negotiation_voice.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'tts_warmup.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'world_state_runtime.php');

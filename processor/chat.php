@@ -1465,6 +1465,9 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             'stream_gamets' => $gamets,
             'defer_structured_stream' => $negotiationDefer,
             'hold_stream_on_money' => $negotiationActive && !$negotiationDefer,
+            // Test switch NEG_TEST_INJECT (off by default): forced/malformed reply fields for this turn.
+            'stobe_test_inject' => (!$narratorMode && function_exists('stobeNegTestTakeInjection'))
+                ? stobeNegTestTakeInjection('chat', $targetNpc, $npcData, $playerName) : null,
             'response_format' => $chatResponseFormat,
         ]
     );
