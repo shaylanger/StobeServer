@@ -6,7 +6,7 @@
 #   (enabled)  -> p7-06 gate at affinity 80 without trust evidence (enabled). Mode is set back to off at the end.
 # Guards: every non-squad faction within 150 gets `relation <member> 100` before p7-04 (logged); never kill.
 O="${1:?outdir}"; A="${2:-Izumi}"; B="${3:-Daphnilis}"
-I=/root/stobe-work/social-phase1/server/tests/social_relationship/ingame
+I="$(cd "$(dirname "$0")" && pwd)"
 S=/var/www/html/StobeServer
 L=/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe.log
 mkdir -p "$O"; LOG="$O/rel-enslaved.log"; : > "$LOG"
@@ -18,6 +18,23 @@ run(){ # template tag
   sleep 20
   insp --pair-effects --effects 40 --beliefs 20 --incidents 10 --interpret-log 60 --events 60 --check-shadow > "$O/$1.inspect.txt" 2>&1
   log "$1: $(tail -1 "$O/$1.out" | cut -c1-60)"
+  local s; s=$(grep -a '^== ' "$O/$1.out" | tail -1)
+  case "$s" in
+    "== "*" 0 failed"*) echo "RESULT $1 PASS ${s#== }" ;;
+    *) echo "RESULT $1 FAIL ${s:-no summary} | $(grep -a '^FAIL' "$O/$1.out" | head -2 | cut -c1-110 | tr '\n' ' ') log=$O/$1.out" ;;
+  esac
+}
+# m26: the Slave Traders camp attacks whoever picks a slave's shackles (m18: 33 guards knocked Daphnilis out, nothing
+# freed). KO every Slave Trader within 1000 m of the squad (filter before the 40 cap; passes until none is awake). Never kill.
+koslavers(){
+  local n=0 p h
+  for p in 1 2 3 4; do
+    stobe-auto chars 1000 "[slave traders]" | tr '|' '\n' | grep '\[Slave Traders\]' > "$O/slavers-$1.txt"
+    grep -v -e ' KO' -e ' DEAD' "$O/slavers-$1.txt" | grep -o '#[0-9]*/[0-9]*' > "$O/slavers-$1.todo"
+    [ -s "$O/slavers-$1.todo" ] || break
+    while read -r h; do stobe-auto ko "$h" 1500 >> "$O/guards.txt" 2>&1; n=$((n + 1)); done < "$O/slavers-$1.todo"
+  done
+  log "$1: knocked out $n Slave Traders for 1500 s ($(grep -c . "$O/slavers-$1.txt") listed, 40 = cap; awake left: $(grep -c . "$O/slavers-$1.todo"))"
 }
 gate(){ grep -a "REL recruitment gate blocked JoinParty" $S/log/stobeserver.log | grep -F "Rel Nima" | tail -2; }
 
@@ -29,7 +46,8 @@ stobe-auto speed 0 >/dev/null
 tail -n +"$base" "$L" | grep -a "first seen already enslaved" > "$O/first-seen-enslaved.txt"
 if grep -q "name=$A " "$O/first-seen-enslaved.txt"; then SLAVE="$A"; FREE="$B"
 elif grep -q "name=$B " "$O/first-seen-enslaved.txt"; then SLAVE="$B"; FREE="$A"
-else log "FAIL SR12: neither $A nor $B was seen enslaved after the load (see first-seen-enslaved.txt)"; insp --set-mode off >/dev/null; exit 1; fi
+else log "FAIL SR12: neither $A nor $B was seen enslaved after the load (see first-seen-enslaved.txt)"
+  echo "RESULT REL-p7-03-enslaved-real-load FAIL neither $A nor $B first seen enslaved log=$O/first-seen-enslaved.txt"; insp --set-mode off >/dev/null; exit 1; fi
 NS=$(grep -v -E "name=($A|$B) " "$O/first-seen-enslaved.txt" | head -1 | grep -o 'serial=[0-9]*' | sed 's/serial=/#/')
 log "slave=$SLAVE free=$FREE non-squad slave=${NS:-none} ($(grep -c . "$O/first-seen-enslaved.txt") first-seen slaves)"
 stobe-auto chars 150 > "$O/chars-after-load.txt" 2>&1
@@ -37,17 +55,15 @@ stobe-auto chars 150 > "$O/chars-after-load.txt" 2>&1
 run REL-p7-03-enslaved-real-load
 stobe-auto chars 150 | tr '|' '\n' | grep -o '#[0-9]*/[0-9]* \[[^]]*\]' | grep -v '\[Nameless\]' | sort -u -t'[' -k2,2 > "$O/camp-factions.txt"
 while read -r h f; do stobe-auto relation "$h" 100 >> "$O/guards.txt" 2>&1; done < "$O/camp-factions.txt"
-# m16: the escape still turned the slavers on the freer (CAPTURE_ESCAPING_SLAVES); knock the Slave Traders near the
-# squad out for the freeing steps (never kill). Other camp factions (Outlaws) can be slaves themselves.
-stobe-auto chars 150 | tr '|' '
-' | grep '\[Slave Traders\]' | grep -v -e ' KO' -e ' DEAD' | grep -o '#[0-9]*/[0-9]*' > "$O/slavers.txt"
-while read -r h; do stobe-auto ko "$h" 300 >> "$O/guards.txt" 2>&1; done < "$O/slavers.txt"
-log "slavers knocked out for 300 s: $(wc -l < "$O/slavers.txt")"
+# m16: the escape still turned the slavers on the freer (CAPTURE_ESCAPING_SLAVES): knock the camp's Slave Traders out
+# for the freeing steps (never kill). Other camp factions (Outlaws) can be slaves themselves.
+koslavers p7-04
 log "guards: relation 100 for $(wc -l < "$O/camp-factions.txt") camp factions: $(cut -d' ' -f2- "$O/camp-factions.txt" | tr '\n' ' ')"
 run REL-p7-04-enslaved-real-liberator
 if [ -n "$NS" ]; then
   insp --set-mode enabled >/dev/null
   g0=$(gate | wc -l)
+  koslavers p7-05
   run REL-p7-05-enslaved-free-recruit
   gate > "$O/gate-low.txt"; log "gate at low trust: $(tail -1 "$O/gate-low.txt" | cut -c1-200)"
   insp --set-relation "Rel Nima" "$FREE" 80 > "$O/setrel-80.txt" 2>&1

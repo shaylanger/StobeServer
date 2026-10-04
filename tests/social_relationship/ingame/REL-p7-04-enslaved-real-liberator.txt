@@ -14,10 +14,10 @@ speed 1
 speed 0
 order ${FREE} PICK_LOCK_ON_SHACKLES target ${SLAVE}
 speed 2
-@sleep 60
+# m26: poll (the lock pick takes a while) instead of a fixed 60 s
+@log-wait 180 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0
+@log-wait 30 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator":\{[^}]*"name":"__FREE__"
 speed 0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ EVENT_SCAN: slave state serial=\d+ name=__SLAVE__ chained=1->0
-@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator":\{[^}]*"name":"__FREE__"
 # m16: freeing her squad mate re-squads the freer too (new handle): look her up again
 @set FREE2 where "__FREE__" ~ (#\d+/\d+)
 protect ${FREE2} off
