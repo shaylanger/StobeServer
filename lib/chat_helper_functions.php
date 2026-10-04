@@ -15472,12 +15472,18 @@ function stobeInferBuyFromAgreedRequest(string $playerLine, array|false $npcData
     }
     $line = trim(function_exists('stobeNegWordsToNumbers') ? stobeNegWordsToNumbers($playerLine) : $playerLine);
     if ($line === '' || str_contains($line, '?') || preg_match("/\b(don'?t|do\s+not|never|stop|cancel)\b/i", $line)) return '';
-    if (!preg_match("/\b(?i:buy)\s+(?:me\s+|us\s+)?(?:(\d{1,4})\s+)?(?:(?:a|an|the|some)\s+)?([A-Za-z][A-Za-z' -]{1,60}?)\s+from\s+(?:the\s+)?([A-Z][A-Za-z' -]{1,60}?)(?=\s*(?:\band\b|\bfor\b|[,.!;]|$))/", $line, $m)) return '';
+    $anyShop = false;
+    if (!preg_match("/\b(?i:buy)\s+(?:me\s+|us\s+)?(?:(\d{1,4})\s+)?(?:(?:a|an|the|some)\s+)?([A-Za-z][A-Za-z' -]{1,60}?)\s+from\s+(?:the\s+)?([A-Z][A-Za-z' -]{1,60}?)(?=\s*(?:\band\b|\bfor\b|[,.!;]|$))/", $line, $m)) {
+        // Item 111: "from the shop here" = whichever trader is nearest (KenshiFP picks it).
+        if (!preg_match("/\b(?i:buy)\s+(?:me\s+|us\s+)?(?:(\d{1,4})\s+)?(?:(?:a|an|the|some)\s+)?([A-Za-z][A-Za-z' -]{1,60}?)\s+(?i:from|at)\s+(?i:the|a|this|that)\s+(?i:shop|store|trader|merchant|vendor|market|stall|counter)(?:\s+(?i:here|nearby|over there|in town))?(?=\s*(?:\band\b|\bfor\b|[,.!;]|$))/", $line, $m)) return '';
+        $anyShop = true;
+        $m[3] = '';
+    }
     $item = trim(preg_replace('/\s+/', ' ', $m[2]) ?? '');
     $trader = trim(preg_replace('/\s+/', ' ', $m[3]) ?? '');
-    if ($item === '' || $trader === '' || preg_match('/^(it|them|that|this|something|stuff)$/i', $item)) return '';
-    $known = $traderKnown !== null ? boolval($traderKnown($trader))
-        : (function_exists('getNpcData') && is_array(getNpcData($trader)));
+    if ($item === '' || ($trader === '' && !$anyShop) || preg_match('/^(it|them|that|this|something|stuff)$/i', $item)) return '';
+    $known = $anyShop || ($traderKnown !== null ? boolval($traderKnown($trader))
+        : (function_exists('getNpcData') && is_array(getNpcData($trader))));
     if (!$known) return '';
     if (!function_exists('stobeReplyAgreesToErrand') || !stobeReplyAgreesToErrand($reply)) return '';
     $qty = ($m[1] ?? '') !== '' ? max(1, min(1000, intval($m[1]))) : 1;

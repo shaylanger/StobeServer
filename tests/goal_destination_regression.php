@@ -82,6 +82,12 @@ check('item 82: "... and bring it to me" -> the bought kit goes to the player',
 check('item 74: a number is kept', stobeInferBuyFromAgreedRequest('Buy 2 bread from Apothecary Abia.', $npc73, [], 'Will do.', true, $known74) === 'TASK_GOAL@BUY@Apothecary Abia@bread@2@@0');
 check('item 74: an unknown trader -> nothing', stobeInferBuyFromAgreedRequest('Go buy a kit from Nobody Here.', $npc73, [], "I'll go.", true, $known74) === '');
 check('item 74: a refusal -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, [], "No, I'm not wasting cats on that.", true, $known74) === '');
+// 111: "from the shop here" (m18 Squin) -> unnamed BUY, KenshiFP picks the nearest trader
+check('item 111: "buy one X from the shop here" + agreement -> TASK_GOAL@BUY with no trader',
+    stobeInferBuyFromAgreedRequest('Kint, go buy one Limited-sight Scrap Helm from the shop here.', $npc73, ['MOVE_TO@Beak'], "Aye, I'll see what the armor trader's got.", true, $known74)
+    === 'TASK_GOAL@BUY@@Limited-sight Scrap Helm@1@@0',
+    stobeInferBuyFromAgreedRequest('Kint, go buy one Limited-sight Scrap Helm from the shop here.', $npc73, ['MOVE_TO@Beak'], "Aye, I'll see what the armor trader's got.", true, $known74));
+check('item 111: "from the trader" refused -> nothing', stobeInferBuyFromAgreedRequest('Buy 2 bread from the trader.', $npc73, [], "No, I'm not wasting cats on that.", true, $known74) === '');
 check('item 74: a question from the player -> nothing', stobeInferBuyFromAgreedRequest('Could you buy a kit from Apothecary Abia?', $npc73, [], "Sure.", true, $known74) === '');
 check('item 74: an action already there -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, ['TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@@0'], $reply74, true, $known74) === '');
 check('item 74: a non-faction NPC -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, [], $reply74, false, $known74) === '');
