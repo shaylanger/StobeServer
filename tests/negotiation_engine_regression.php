@@ -422,6 +422,12 @@ check('C49 current roster name overrides stale canonical profile', function_exis
 check('C49 stored canonical still used without current identity', function_exists('stobeNegCanonicalChatTarget') && stobeNegCanonicalChatTarget('Old alias', 'Canonical', 0) === 'Canonical');
 
 
+// C37: initiative runs before the current combat event is persisted.
+$currentFight = function_exists('stobeNegInitiativeFightEvents') ? stobeNegInitiativeFightEvents('NegTestFreshVictim', false, time() + 1, 'NegTestFreshAttacker: Initiated attack (talking to: NegTestFreshVictim)') : [];
+check('C37 first attack supplies real fighting-others evidence before persistence', count($currentFight) === 1 && $currentFight[0]['attacker'] === 'NegTestFreshAttacker' && $currentFight[0]['target'] === 'NegTestFreshVictim', $currentFight);
+$currentFight = function_exists('stobeNegInitiativeFightEvents') ? stobeNegInitiativeFightEvents('NegTestFreshVictim', false, time() + 1, 'NegTestUnrelated: Initiated attack (talking to: NegTestOther)') : [['unrelated']];
+check('C37 unrelated current fight supplies no evidence', $currentFight === [], $currentFight);
+
 // ---------------------------------------------------------------- 12b. bug 119: putting on what she already wears
 $wornNpc = ['equipment'=>'Black Cloth Shirt [Shoddy] x1 value 202, Black Rag Shirt [Shoddy] x1 value 96, Iron Hat [Shoddy] x1 value 526',
     'inventory'=>'Basic First Aid Kit x1 value 67'];

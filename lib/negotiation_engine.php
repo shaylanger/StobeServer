@@ -1858,6 +1858,18 @@ function stobeNegHasHealthData(array $row): bool {
     return is_array($limbs) && count($limbs) > 0;
 }
 
+/** C37: the incoming attack has not been written to eventlog when initiative is checked. */
+function stobeNegInitiativeFightEvents(string $name, array|false $npcData, int $sinceUnix, string $eventData): array {
+    $events = stobeNegFightEventsForNpc($name, $npcData, $sinceUnix);
+    if (preg_match('/^(.+?):\s*Initiated attack\s*\(talking to:\s*(.+?)\)/', trim($eventData), $m)) {
+        $attacker = normalizeParticipantNameToken($m[1]);
+        $target = normalizeParticipantNameToken($m[2]);
+        if (stobeNegNameMatches($attacker, $name) || stobeNegNameMatches($target, $name))
+            $events[] = ['ts'=>time(), 'attacker'=>$attacker, 'target'=>$target];
+    }
+    return $events;
+}
+
 function stobeNegConsiderInitiatives(string $eventType, string $eventData, string $peopleRaw, int $gamets): void {
     if (!stobeNegPhaseEnabled(4) && !stobeNegPhaseEnabled(5)) return;
     try {
@@ -1917,7 +1929,7 @@ function stobeNegConsiderInitiatives(string $eventType, string $eventData, strin
                 if ($live === null || $eventLive < $live) $live = $eventLive;
             }
             if ($live !== null && $live < $ratio) $ratio = $live;
-            $events = stobeNegFightEventsForNpc($name, $data, $now - 90); // item 71
+            $events = stobeNegInitiativeFightEvents($name, $data, $now - 90, $eventData); // C37 / item 71
             $hostileToPlayer = false;
             $fightingOthers = false;
             foreach ($events as $ev) {
