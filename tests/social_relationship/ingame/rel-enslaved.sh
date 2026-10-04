@@ -42,11 +42,14 @@ gate(){ grep -a "REL recruitment gate blocked JoinParty" $S/log/stobeserver.log 
 grep -a -q "SOCIAL_CAPTURE: enabled" "$L" || { log "FAIL setup: this Kenshi launch has Capture off (set StobeCustom.ini [SocialRelationships] Capture=1, relaunch)"
   echo "RESULT REL-p7-enslaved FAIL setup: Capture off in this launch (no 'SOCIAL_CAPTURE: enabled' in stobe.log)"; exit 4; }
 insp --set-mode shadow >/dev/null
-stobe-auto load kah-enslaved >/dev/null; sleep 12; stobe-auto wait-world 240 >/dev/null; sleep 8
-base=$(grep -a -c "" "$L")
-stobe-auto speed 1 >/dev/null; sleep 55   # Stobe's NPC sweep starts ~45 s after a load
+base=$(grep -a -c "" "$L")   # before the load: the squad's first sweep can land right after world-stable
+stobe-auto load kah-enslaved >/dev/null; sleep 12; stobe-auto wait-world 240 >/dev/null
+stobe-auto speed 1 >/dev/null
+for i in $(seq 1 40); do   # bounded poll (<=120 s): the squad is in every sweep once capture is ready
+  tail -n +"$base" "$L" | grep -a "first seen already enslaved" > "$O/first-seen-enslaved.txt"
+  grep -q -E "name=($A|$B) " "$O/first-seen-enslaved.txt" && break; sleep 3
+done
 stobe-auto speed 0 >/dev/null
-tail -n +"$base" "$L" | grep -a "first seen already enslaved" > "$O/first-seen-enslaved.txt"
 if grep -q "name=$A " "$O/first-seen-enslaved.txt"; then SLAVE="$A"; FREE="$B"
 elif grep -q "name=$B " "$O/first-seen-enslaved.txt"; then SLAVE="$B"; FREE="$A"
 else log "FAIL SR12: neither $A nor $B was seen enslaved after the load (see first-seen-enslaved.txt)"
