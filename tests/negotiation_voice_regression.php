@@ -31,6 +31,22 @@ check('bare amount without a debt does not pay', $p('Two hundred cats.')['cats']
 check('not enough Cats', $p('Here are 5000 cats')['reason'] === 'insufficient_cats', $p('Here are 5000 cats'));
 check('item by voice', ($p('Here, take this bread')['items'][0]['name'] ?? '') === 'bread', $p('Here, take this bread'));
 check('item quantity', ($p('Here are 2 bread')['items'][0]['qty'] ?? 0) === 2, $p('Here are 2 bread'));
+// Item 118: offers and ultimatums never pay; hostile NPCs (r <= -80) get nothing by voice.
+$o = $p("Vel, I'll buy your Iron Hat. One cat, take it or leave it.");
+check('item 118: "I\'ll buy your Iron Hat. One cat, take it or leave it." does not pay', $o['cats'] === 0 && $o['reason'] === 'offer_or_future', $o);
+check('item 118: "20 cats, take it or leave it" does not pay', $p('20 cats, take it or leave it.')['cats'] === 0, $p('20 cats, take it or leave it.'));
+check('item 118: "I\'ll buy your hat. 5 cats, take it." does not pay', $p("I'll buy your hat. 5 cats, take it.")['cats'] === 0, $p("I'll buy your hat. 5 cats, take it."));
+check('item 118: "I\'ll pay you 30 cats for it" does not pay', $p("I'll pay you 30 cats for it.")['cats'] === 0);
+check('item 118: "Sell me the hat, 10 cats" does not pay', $p('Sell me the hat, 10 cats.')['cats'] === 0);
+check('item 118: a gift with a clear cue still pays', $p('Here are 50 cats, friend.')['cats'] === 50, $p('Here are 50 cats, friend.'));
+$db->exec("UPDATE core_npc_master SET extended_data=$1::jsonb WHERE name=$2", [json_encode(['relationships'=>[$player=>['aff'=>-80,'type'=>'enemy']]]), $npc]);
+$wire = '';
+ob_start(function (string $chunk) use (&$wire): string { $wire .= $chunk; return ''; });
+$note = stobeNegVoiceHandover($npc, getNpcData($npc) ?: ['name'=>$npc], $player, 'Here are 50 cats', 1000);
+ob_end_flush();
+check('item 118: r=-80 and no deal: nothing dispatched', !str_contains($wire, 'GIVE_CATS'), $wire);
+check('item 118: r=-80 note says nothing changed hands', str_contains($note, 'nothing changed hands'), $note);
+$db->exec("UPDATE core_npc_master SET extended_data='{}'::jsonb WHERE name=$1", [$npc]);
 
 // With a deal where the player owes 200: bare amount and "your money" pay what is owed.
 $r = stobeDealCreate(['parties'=>['npc'=>$npc,'player'=>$player], 'kind'=>'social', 'context'=>[],
@@ -48,6 +64,9 @@ $note = stobeNegVoiceHandover($npc, getNpcData($npc) ?: ['name'=>$npc], $player,
 ob_end_flush();
 check('wire line uses player as actor', str_contains($wire, $player . '|ActionQueue|GIVE_CATS@' . $npc . '@200'), $wire);
 check('NPC gets a context note', str_contains($note, '200 Cats'), $note);
+$o = $p("Here are your 20 cats.");
+check('item 118: "Here are your 20 cats." with an accepted deal pays', $o['cats'] === 20 && $o['reason'] === 'handover', $o);
+check('item 118: offer with an accepted deal still does not pay', $p("I'll buy your hat. 1 cat, take it or leave it.")['cats'] === 0);
 
 $db->exec("DELETE FROM stobe_social_contract WHERE npc_name=$1", [$npc]);
 foreach ([$player, $npc] as $n) { $db->exec("DELETE FROM core_npc_master WHERE name=$1", [$n]); $db->exec("DELETE FROM core_npc WHERE name=$1", [$n]); }

@@ -121,11 +121,14 @@ function stobeNegParseHandover(string $message, string $npc, string $player): ar
     $text = '';
     $fallback = '';
     $reason = 'no_handover';
+    $sawOffer = false; // item 118
     foreach (preg_split('/(?<=[.!?;])\s+|\n+/', $trimmed) ?: [] as $sentence) {
         $sentence = trim($sentence);
         if ($sentence === '') continue;
         if (str_ends_with($sentence, '?')) { $reason = 'question'; continue; }
-        if (preg_match("/\b(if|unless|i'?ll|i will|i would|i'?d|i can|i could|would you|will you|want|wanna|how about|what about|maybe|later|tomorrow|once you|after you|when you)\b/", $sentence)) { $reason = 'offer_or_future'; continue; }
+        if (preg_match("/\b(if|unless|i'?ll|i will|i would|i'?d|i can|i could|would you|will you|want|wanna|how about|what about|maybe|later|tomorrow|once you|after you|when you)\b/", $sentence)) { $reason = 'offer_or_future'; $sawOffer = true; continue; }
+        // Item 118: buying/selling proposals and ultimatums are offers, not payments.
+        if (preg_match("/\b(buy|sell|offer|offering|take it or leave it|or leave it|in exchange|trade you|best price|final price|final offer)\b/", $sentence)) { $reason = 'offer_or_future'; $sawOffer = true; continue; }
         if (preg_match("/\b(no way|not|don'?t|doesn'?t|won'?t|never|nah|isn'?t|ain'?t|can'?t|cannot|refuse)\b/", $sentence)) { $reason = 'negated'; continue; }
         if (preg_match("/\b(offered|said|told|would have|earlier|last time|yesterday|supposed to)\b/", $sentence)) { $reason = 'reported_speech'; continue; }
         if (str_word_count($sentence) > 18) { $reason = 'too_long'; continue; }
@@ -143,6 +146,11 @@ function stobeNegParseHandover(string $message, string $npc, string $player): ar
         return ['reason'=>'offer_or_future'] + $none;
     }
     $cue = preg_match($cuePattern, $text) === 1;
+    // Item 118: "I'll buy your hat. 1 cat, take it." - a weak cue after an offer belongs to the offer.
+    if ($sawOffer && !preg_match("/\b(here'?s|here is|here are|here you go|here,|there you go|as promised|as agreed|i'?m (giving|paying|handing) you|i am (giving|paying|handing) you|i give you|i pay you|handing (you|it) over|keep the change)\b/", $text)
+        && stobeNegPlayerOwedCats($npc) <= 0 && count(stobeNegPlayerOwedItems($npc)) === 0) {
+        return ['reason'=>'offer_or_future'] + $none;
+    }
 
     $cats = 0;
     $owed = stobeNegPlayerOwedCats($npc);
@@ -237,6 +245,16 @@ function stobeNegVoiceHandover(string $npc, array|false $npcData, string $player
             return $player . ' talks as if handing something over, but nothing actually changed hands (no Cats or items were transferred). Do not act as if you were paid.';
         }
         if ($parsed['reason'] !== 'handover') return '';
+        // Item 118 / 103: no trade at r <= STOBE_REL_NO_TRADE_MAX, so nothing moves by voice unless a deal says it's owed.
+        if (function_exists('stobeRelValue') && defined('STOBE_REL_NO_TRADE_MAX')
+            && !(function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData))
+            && stobeNegPlayerOwedCats($npc) <= 0 && count(stobeNegPlayerOwedItems($npc)) === 0) {
+            $rel = stobeRelValue($npcData, $player);
+            if ($rel <= STOBE_REL_NO_TRADE_MAX) {
+                stobeLogInfo('Voice hand-over blocked: no trade at this relationship (item 118)', ['player'=>$player, 'npc'=>$npc, 'r'=>$rel, 'message'=>$message]);
+                return $player . ' talks as if handing something over, but nothing changed hands (no Cats or items were transferred): you will not trade with ' . $player . ' at all. Do not act as if you were paid.';
+            }
+        }
         $actions = [];
         if ($parsed['cats'] > 0) $actions[] = 'GIVE_CATS@' . $npc . '@' . intval($parsed['cats']);
         $display = stobeNegInventoryDisplayNames(strval(stobeNegNpcRow($player)['inventory'] ?? ''));
