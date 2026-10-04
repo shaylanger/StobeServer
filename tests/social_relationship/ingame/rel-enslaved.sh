@@ -38,6 +38,9 @@ koslavers(){
 }
 gate(){ grep -a "REL recruitment gate blocked JoinParty" $S/log/stobeserver.log | grep -F "Rel Nima" | tail -2; }
 
+# setup check: Stobe reads Capture only at launch (the coordinator sets Capture=0 after runs)
+grep -a -q "SOCIAL_CAPTURE: enabled" "$L" || { log "FAIL setup: this Kenshi launch has Capture off (set StobeCustom.ini [SocialRelationships] Capture=1, relaunch)"
+  echo "RESULT REL-p7-enslaved FAIL setup: Capture off in this launch (no 'SOCIAL_CAPTURE: enabled' in stobe.log)"; exit 4; }
 insp --set-mode shadow >/dev/null
 stobe-auto load kah-enslaved >/dev/null; sleep 12; stobe-auto wait-world 240 >/dev/null; sleep 8
 base=$(grep -a -c "" "$L")
