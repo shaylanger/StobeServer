@@ -160,7 +160,9 @@ unset($load);
 $out['kinds'] = $q("SELECT payload->>'event_kind' AS kind, payload->'facts'->>'source' AS source, count(*) AS n
     FROM social_event_inbox WHERE true$sinceSql GROUP BY 1,2 ORDER BY 3 DESC", $sinceParams);
 $out['effects'] = [
-    'applied' => (int)($q('SELECT count(*) AS n FROM social_effect WHERE applied')[0]['n'] ?? 0),
+    // M24_F13: test_setup seed rows (relationship setup for a test, applied by design) are not effects of play
+    'applied' => (int)($q("SELECT count(*) AS n FROM social_effect WHERE applied AND rules_version <> 'test_setup'")[0]['n'] ?? 0),
+    'test_setup' => (int)($q("SELECT count(*) AS n FROM social_effect WHERE applied AND rules_version = 'test_setup'")[0]['n'] ?? 0),
     'shadow' => (int)($q('SELECT count(*) AS n FROM social_effect WHERE NOT applied')[0]['n'] ?? 0),
 ];
 $out['incidents_by_phase'] = $q("SELECT state->>'phase' AS phase, count(*) AS n FROM social_incident GROUP BY 1 ORDER BY 1");
