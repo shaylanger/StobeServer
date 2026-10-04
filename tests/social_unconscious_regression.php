@@ -18,7 +18,7 @@ const PEOPLE = ['Uncon Attacker'=>[201,'Red',false], 'Uncon Looter'=>[202,'Grey'
     'Uncon Victim Four'=>[214,'Blue',false], 'Uncon Victim Five'=>[215,'Blue',false], 'Uncon Victim Six'=>[216,'Blue',false],
     'Uncon Victim Seven'=>[217,'Blue',false], 'Uncon Victim Eight'=>[218,'Blue',false], 'Uncon Squad Victim'=>[219,'Nameless',true],
     'Uncon Squad Mate'=>[220,'Nameless',true], 'Uncon Victim Nine'=>[221,'Blue',false], 'Uncon Victim Ten'=>[222,'Blue',false],
-    'Uncon Witness'=>[223,'Blue',false], 'Uncon Victim Eleven'=>[224,'Blue',false], 'Uncon Victim Twelve'=>[225,'Blue',false], 'Uncon Stranger'=>[226,'Green',false]];
+    'Uncon Witness'=>[223,'Blue',false], 'Uncon Victim Eleven'=>[224,'Blue',false], 'Uncon Victim Twelve'=>[225,'Blue',false], 'Uncon Stranger'=>[226,'Green',false], 'Uncon Victim Thirteen'=>[227,'Blue',false]];
 foreach (['social_event_inbox','social_incident','social_belief','social_effect','social_evidence','social_checkpoint'] as $t) sql("DELETE FROM $t");
 foreach (PEOPLE as $name => [$serial]) {
     sql('DELETE FROM core_npc_master_history WHERE name=$1', [$name]); sql('DELETE FROM core_npc WHERE name=$1', [$name]);
@@ -103,6 +103,14 @@ $e['witnesses'] = [['entity'=>ent('Uncon Stranger'), 'conscious'=>true, 'perceiv
     ['entity'=>ent('Uncon Witness'), 'conscious'=>true, 'perceived'=>true, 'sees_actor'=>false, 'sees_target'=>true, 'hears_actor'=>false]];
 send($e);
 ok(one("SELECT state->'known_thief'->>'name' FROM social_incident WHERE state->>'kind'='ko' AND state->'victim'->>'serial'='225'") === null, 'SR09 no evidence: no known thief');
+// REL_SR09_GAIN_WITNESS_M18: looting a KO'd body shows only the looter's gain (item_gain): the same witness evidence.
+$koAff13 = koBy('Uncon Attacker', 'Uncon Victim Thirteen', 2711, ['Katana'=>1, 'Dried Meat'=>4, 'Hat'=>1]);
+$e = ev('item_gain', ent('Uncon Looter'), null, ['items'=>['Hat'=>1], 'stolen_items'=>[]], 2717);
+$e['witnesses'] = [['entity'=>ent('Uncon Witness'), 'conscious'=>true, 'perceived'=>true, 'sees_actor'=>true, 'sees_target'=>true, 'hears_actor'=>true]];
+send($e);
+ok(str_contains(strval(one("SELECT state->'known_thief'->>'name' FROM social_incident WHERE state->>'kind'='ko' AND state->>'phase'='pending_awareness' AND state->'victim'->>'serial'='227'")), 'Uncon Looter'), 'SR09 an ally saw the looter take from the body (gain only)');
+wake('Uncon Victim Thirteen', ['Katana'=>1, 'Dried Meat'=>4], 2718);
+ok(affOf('Uncon Victim Thirteen', 'Uncon Looter') < 0 && affOf('Uncon Victim Thirteen', 'Uncon Attacker') === $koAff13, 'SR09 gain witness: looter blamed, A not');
 // ... then the ally hunts the looter (the game's HUNT_MY_THIEF): known thief after all.
 send(ev('theft_caught', ent('Uncon Looter'), ent('Uncon Witness'), ['goal'=>'HUNT_MY_THIEF'], 2720));
 ok(str_contains(strval(one("SELECT state->'known_thief'->>'name' FROM social_incident WHERE state->>'kind'='ko' AND state->'victim'->>'serial'='225'")), 'Uncon Looter'), 'SR09 an ally hunting the looter names him');

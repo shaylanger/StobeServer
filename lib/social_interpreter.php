@@ -366,14 +366,7 @@ final class SocialInterpreter
         $ko['state']['objective']['transfers'] = array_slice($ko['state']['objective']['transfers'], -64);
         $this->store->saveIncident($event, $ko['id'], $ko['state']);
         $out = [['status'=>'latent_property', 'incident'=>$ko['id']]];
-        // SR09: a conscious ally of the owner saw the taker do it = verified better evidence for the owner's waking.
-        foreach ($taker ? array_slice($event['witnesses'] ?? [], 0, 12) : [] as $w) {
-            $who = $w['entity'] ?? null;
-            if (!$who || ($w['conscious'] ?? null) !== true || ($w['sees_actor'] ?? null) !== true) continue;
-            if (in_array($who['entity_key'], [$loser['entity_key'], $taker['entity_key']], true)) continue;
-            if (!self::allies($who, $loser) || self::allies($who, $taker)) continue;
-            if ($this->recordKnownThief($event, $loser, $taker)) { $out[] = ['status'=>'known_thief', 'basis'=>'witness', 'witness'=>$who['name']]; break; }
-        }
+        if ($taker && ($known = $this->witnessedTaker($event, $loser, $taker))) $out[] = $known;
         return $out;
     }
 
@@ -396,7 +389,9 @@ final class SocialInterpreter
             'sequence'=>$event['sequence'], 'inferred_from'=>'unmatched_gain'];
         $state['objective']['transfers'] = array_slice($state['objective']['transfers'], -64);
         $this->store->saveIncident($event, $rows[0]['incident_id'], $state);
-        return [['status'=>'latent_property', 'incident'=>$rows[0]['incident_id'], 'basis'=>'unmatched_gain']];
+        $out = [['status'=>'latent_property', 'incident'=>$rows[0]['incident_id'], 'basis'=>'unmatched_gain']];
+        if (!empty($state['victim']) && ($known = $this->witnessedTaker($event, $state['victim'], $taker))) $out[] = $known;
+        return $out;
     }
 
     private function enslaved(array $event, string $mode): array
@@ -550,6 +545,22 @@ final class SocialInterpreter
         if (function_exists('stobeLogWarn')) stobeLogWarn('REL test switch SOCIAL_TEST_FORCE_FIRST_STRIKE: first strike forced (turn it off after the test)',
             ['attacker'=>strval($a['name'] ?? ''), 'victim'=>strval($b['name'] ?? '')]);
         return true;
+    }
+
+    /**
+     * REL_SR09_GAIN_WITNESS_M18 (SR09): a conscious ally of the knocked-out owner saw the taker (native witnesses,
+     * sees_actor) = verified better evidence: the owner will blame the taker on waking. Nearby is not seeing.
+     */
+    private function witnessedTaker(array $event, array $loser, array $taker): ?array
+    {
+        foreach (array_slice($event['witnesses'] ?? [], 0, 12) as $w) {
+            $who = $w['entity'] ?? null;
+            if (!$who || ($w['conscious'] ?? null) !== true || ($w['sees_actor'] ?? null) !== true) continue;
+            if (in_array($who['entity_key'], [$loser['entity_key'], $taker['entity_key']], true)) continue;
+            if (!self::allies($who, $loser) || self::allies($who, $taker)) continue;
+            if ($this->recordKnownThief($event, $loser, $taker)) return ['status'=>'known_thief', 'basis'=>'witness', 'witness'=>$who['name']];
+        }
+        return null;
     }
 
     /** Internal adapter: verified better evidence (e.g. a witnessed theft, phase 6) names the thief of a KO incident. */
