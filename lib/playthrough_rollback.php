@@ -1775,6 +1775,7 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
 
         $playthroughId = stobeDragonBreakPlaythroughIfNeeded($latestLastSeen, $incoming);
         if ($playthroughId < 0) return ['triggered'=>false,'reason'=>'snapshot_failed'];
+        if (function_exists('pgr_begin_writes')) pgr_begin_writes(); // item 110
         $pruneEnabled = stobePlaythroughPruneOnRollbackEnabled();
         $pruneCounts = $pruneEnabled
             ? stobePlaythroughPruneFutureTimeline($incoming)
@@ -1811,7 +1812,9 @@ function stobeHandlePotentialGametsRollback(mixed $incomingGamets, string $event
             stobeDynamicProfileMarkLoadGrace(time(), $grace, 'playthrough_rollback');
         }
 
-        if (!pgr_complete(empty($restoreCounts['errors']) && empty($volatileStateCounts['errors']))) return ['triggered'=>false,'reason'=>'rollback_failed'];
+        $failDetail = (empty($restoreCounts['errors']) ? '' : 'NPC/relationship restore errors=' . intval($restoreCounts['errors']) . '.')
+            . (empty($volatileStateCounts['errors']) ? '' : ' Volatile state errors=' . intval($volatileStateCounts['errors']) . '.');
+        if (!pgr_complete(empty($restoreCounts['errors']) && empty($volatileStateCounts['errors']), trim($failDetail))) return ['triggered'=>false,'reason'=>'rollback_failed'];
 
         stobeLogInfo('PLAYTHROUGH: Rollback completed', [
             'event_type' => $event,

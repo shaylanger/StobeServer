@@ -135,7 +135,7 @@ function pgr_before_rollback(int $previous, int $incoming): int {
         $GLOBALS['pgr_operation'] = ['state'=>$state, 'conn'=>$conn, 'recovered'=>$recovered];
         $previousHandler = null;
         $previousHandler = set_error_handler(static function ($severity,$message,$file,$line) use (&$previousHandler) {
-            if (!empty($GLOBALS['pgr_operation']) && str_contains($message,'pg_')) $GLOBALS['pgr_sql_failed'] = true;
+            pgr_note_sql_warning((string)$message,(string)$file,(int)$line);
             return $previousHandler ? $previousHandler($severity,$message,$file,$line) : false;
         });
         register_shutdown_function(static function () {
@@ -159,6 +159,21 @@ function pgr_before_rollback(int $previous, int $incoming): int {
     }
 }
 
+// Item 110: record which SQL warning marks the rollback as failed (also when suppressed with @).
+function pgr_note_sql_warning(string $message, string $file, int $line): void {
+    if (empty($GLOBALS['pgr_operation']) || !str_contains($message,'pg_')) return;
+    $GLOBALS['pgr_sql_failed'] = true;
+    $GLOBALS['pgr_sql_warnings'][] = trim($message) . ' @ ' . basename($file) . ':' . $line;
+    error_log('Playthrough rollback SQL warning: ' . trim($message) . ' in ' . $file . ':' . $line);
+}
+
+// Item 110: only the rollback's own writes count, not warnings from the request before it.
+function pgr_begin_writes(): void {
+    if (empty($GLOBALS['pgr_operation'])) return;
+    $GLOBALS['pgr_sql_failed'] = false;
+    $GLOBALS['pgr_sql_warnings'] = [];
+}
+
 // Keep the recovery copy pinned after incomplete pruning, without stopping normal processing.
 function pgr_fail(string $reason): void {
     $operation = $GLOBALS['pgr_operation'] ?? null;
@@ -173,11 +188,13 @@ function pgr_fail(string $reason): void {
     pgr_notice($operation['state'],'rollback_failed');
 }
 
-function pgr_complete(bool $success = true): bool {
+function pgr_complete(bool $success = true, string $detail = ''): bool {
     $operation = $GLOBALS['pgr_operation'] ?? null;
     if (!$operation) return empty($GLOBALS['pgr_skip_rollback']);
     if (!$success || !empty($GLOBALS['pgr_sql_failed'])) {
-        pgr_fail('A rollback write failed.');
+        $warnings = $GLOBALS['pgr_sql_warnings'] ?? [];
+        $why = trim($detail . (empty($warnings) ? '' : ' ' . count($warnings) . ' SQL warning(s), first: ' . str_replace(["\r", "\n"], ' ', (string)$warnings[0])));
+        pgr_fail('A rollback write failed.' . ($why === '' ? '' : ' ' . $why));
         return false;
     }
     $conn = $operation['conn']; $meta = ptp_product()['meta'];

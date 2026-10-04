@@ -1,0 +1,23 @@
+# id: REL-p7-01b-recruit-forced-low
+# covers: SR30/SR31 low trust: a stranger asked to join DOES try JoinParty (test switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT,
+#   the LLM never tried on its own in m8/m16) and the recruitment gate drops it at dispatch.
+# fixture: auto-home
+# reset: fresh  (kah-* copy; mode ENABLED)
+# needs: server cb3bc44+; before: --set-mode enabled, --set-switch SOCIAL_TEST_FORCE_JOIN_ATTEMPT true
+#   (rel-m18.sh does it, and turns both off after REL-p7-01c); Capture=1
+# verify: log/stobeserver.log: "SOCIAL_TEST_FORCE_JOIN_ATTEMPT: JoinParty forced" for "Rel Rook", then
+#   "REL recruitment gate blocked JoinParty" with reason affinity_below_76 (or no_trust_evidence); the where step: still [Drifters].
+@wait-world
+@sleep 8
+speed 0
+spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
+@set R chars 40 ~ Hungry Bandit\]? (#\d+/\d+)
+relation ${R} 60
+setname ${R} "Rel Rook" ~ ^([^ ].* \[)?Hungry Bandit\]? ->
+@set RNAME where ${R} ~ ^(.+?) #\d+
+select Shay
+stobe_say "Rel Rook" "Rook, join my squad right now. You're one of us from today."
+speed 1
+@sleep 25
+speed 0
+where ${R} ~ \[Drifters\]

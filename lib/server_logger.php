@@ -207,7 +207,10 @@ function stobeRegisterErrorHandlers(): void
 
     set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
         // Rollback must stop even when legacy SQL warnings are suppressed with @.
-        if (!empty($GLOBALS['pgr_operation']) && str_contains($message, 'pg_')) $GLOBALS['pgr_sql_failed'] = true;
+        if (!empty($GLOBALS['pgr_operation']) && str_contains($message, 'pg_')) {
+            if (function_exists('pgr_note_sql_warning')) pgr_note_sql_warning($message, $file, $line);
+            else $GLOBALS['pgr_sql_failed'] = true;
+        }
         if (!(error_reporting() & $severity)) {
             return false;
         }

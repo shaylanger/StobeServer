@@ -1,0 +1,16 @@
+# id: REL-p7-01c-recruit-forced-trusted
+# covers: SR30 trusted: the same NPC at affinity 80 with trust evidence (lifesaving) asked again: the forced JoinParty
+#   passes the gate and he really joins.
+# fixture: auto-home
+# reset: keep  (right after REL-p7-01b, same "Rel Rook")
+# needs: as p7-01b, plus (rel-m18.sh): --set-relation "Rel Rook" "Shay" 80 and --add-trust "Rel Rook" "Shay" lifesaving 25
+# verify: log/stobeserver.log: a second "JoinParty forced" for Rel Rook and NO new "gate blocked JoinParty"; stobe.log
+#   shows the JOIN_PARTY dispatch; the where step: no longer [Drifters] (the squad's faction). After: select Shay.
+@set R where "Rel Rook" ~ (#\d+/\d+)
+select Shay
+stobe_say "Rel Rook" "Rook, you saved my life. Join my squad, come with us."
+speed 1
+@sleep 25
+speed 0
+@until 30 where ${R} ~ \[(?!Drifters)[^\]]+\]
+select Shay

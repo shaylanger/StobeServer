@@ -1,0 +1,74 @@
+# id: REL-p3-06-ko-loot-witnessed
+# covers: SR09 (B knocked out by A = Shay; C = Malzin takes B's plate while B's conscious friend W watches: W's sight is
+#   verified better evidence, so on waking B blames C, and A is not charged the theft on top)
+# fixture: auto-home
+# reset: fresh
+# needs: Stobe with pending-fixes/rel_theft_caught_native.py (witnesses on item_gain/item_transfer); server 2fbd947+;
+#   Capture=1; mode shadow
+# verify: php tools/social_relationship_inspect.php --pair-effects --incidents 10 --interpret-log 60 --log-filter "Rel Vale" --check-shadow -> exit 0
+#   interpret log: known_thief basis witness (witness "<WNAME>") on the item_gain/item_transfer of Malzin;
+#   pair_effects: "<VNAME>" -> "Malzin" a theft component (petty_theft/theft, inferred, certain);
+#   "<VNAME>" -> "Shay" only aggression/injury/serious_assault (NO theft component).
+#   If the item_gain line shows witnesses=0 or W "sees_actor":false: W did not see Malzin (report the w=[...] part).
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
+@set MALZIN where Malzin ~ Malzin (#\d+/\d+)
+@set MALZIN_S where ${MALZIN} ~ (#\d+)/\d+
+protect Shay on
+teleport Malzin Shay dist 60
+spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
+@set V chars 40 ~ Hungry Bandit\]? (#\d+/\d+)
+@set V_S where ${V} ~ (#\d+)/\d+
+relation ${V} 60
+setname ${V} "Rel Vale" ~ ^([^ ].* \[)?Hungry Bandit\]? ->
+@set VNAME where ${V} ~ ^(.+?) #\d+
+give ${V} "Iron Plates" 1 ~ got 1/1
+stobe_say "Rel Vale" "Vale, stay right there."
+speed 1
+@sleep 10
+speed 0
+# A = Shay attacks first and knocks him out (remembered attacker)
+teleport ${V} Shay dist 2
+attack Shay ${V}
+speed 1
+@sleep 5
+# as p3-01 (m5/m8/m9/m13): force the KO right after the attack while the game runs, then everyone steps back
+teleport ${V} Shay dist 4
+ko ${V} 180
+@until 20 where ${V} ~ KO
+teleport Shay ${V} dist 40
+@sleep 4
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=harm seq=\d+ load=\d+ actor=${SHAY_S} target=${V_S} witnesses=\d+ facts="level":"knockout".*"inventory"
+# W = his friend (same faction), conscious, next to the body
+spawn "Hungry Bandit" Drifters near ${V} dist 6 count 1 ~ spawned 1/1
+@set W chars 60 ~ Hungry Bandit\]? (#\d+/\d+)
+setname ${W} "Rel Wren" ~ ^([^ ].* \[)?Hungry Bandit\]? ->
+@set WNAME where ${W} ~ ^(.+?) #\d+
+protect ${W} on
+teleport ${W} ${V} dist 4
+# C = Malzin takes the plate from the body in W's view
+teleport Malzin ${V} dist 2
+speed 1
+@sleep 3
+speed 0
+transfer ${V} Malzin "Iron Plates"
+speed 1
+@sleep 20
+speed 0
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_(gain|transfer) seq=\d+ load=\d+ actor=${MALZIN_S} .*witnesses=[1-9]
+# B wakes (protect clears the KO at once) and finds the plate gone
+protect ${V} on
+speed 1
+@sleep 5
+speed 0
+protect ${V} off
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=recovered seq=\d+ load=\d+ actor=#0 target=${V_S}
+protect ${W} off
+teleport ${W} Shay dist 300
+teleport ${V} Shay dist 300
+teleport Malzin Shay dist 5
+protect Shay off

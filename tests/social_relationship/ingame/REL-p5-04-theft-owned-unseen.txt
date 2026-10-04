@@ -1,0 +1,40 @@
+# id: REL-p5-04-theft-owned-unseen
+# covers: SR13 (unseen: the owner is knocked out 4 m away while Shay sneaks and takes his plate: no hunt, no blame,
+#   even though the plate is stolen-flagged)
+# fixture: auto-home
+# reset: fresh
+# needs: as REL-p5-03; mode shadow
+# verify: php tools/social_relationship_inspect.php --pair-effects --interpret-log 40 --log-filter "Rel Tess" --expect-none "<TNAME>" "Shay" -> exit 0
+#   (a knockout by the harness has no attacker, so no harm row either); interpret log: stolen_gain "no hunt yet: no blame",
+#   and NO theft_caught event for Shay (grep "theft hunt .*thief=Shay" in stobe.log: none). The stolen_items step shows
+#   whether the game flags an unseen theft at all (probe answer, not a failure).
+@wait-world
+@sleep 8
+speed 0
+@set SHAY where Shay ~ Shay (#\d+/\d+)
+@set SHAY_S where ${SHAY} ~ (#\d+)/\d+
+protect Shay on
+teleport Malzin Shay dist 60
+spawn "Hungry Bandit" Drifters near Shay dist 10 count 1 ~ spawned 1/1
+@set O chars 40 ~ Hungry Bandit\]? (#\d+/\d+)
+@set O_S where ${O} ~ (#\d+)/\d+
+relation ${O} 60
+setname ${O} "Rel Tess" ~ ^([^ ].* \[)?Hungry Bandit\]? ->
+@set TNAME where ${O} ~ ^(.+?) #\d+
+give ${O} "Iron Plates" 1 ~ got 1/1
+stobe_say "Rel Tess" "Tess, wait here a moment."
+speed 1
+@sleep 10
+speed 0
+teleport ${O} Shay dist 4
+drop ${O} "Iron Plates" owned ~ owner_faction=Drifters
+ko ${O} 120
+stealth Shay on
+speed 1
+pickup Shay "Iron Plates" near ${O} radius 15 ~ picked up .*item_stolen=
+@sleep 15
+speed 0
+crime Shay ~ hunters=0
+stealth Shay off
+@log D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=item_gain seq=\d+ load=\d+ actor=${SHAY_S} target=#0 witnesses=\d+ facts="items":\{[^}]*\},"stolen_items":\{
+protect Shay off
