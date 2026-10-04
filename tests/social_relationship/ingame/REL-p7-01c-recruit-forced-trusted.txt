@@ -15,5 +15,5 @@ speed 0
 # m21: normal recruitment can recreate the character; reacquire by exact name.
 @until 30 where "Rel Rook" ~ \[(?!Drifters)[^\]]+\]
 @set R where "Rel Rook" ~ (#\d+/\d+)
-state ${R}
+where ${R}
 select Shay
