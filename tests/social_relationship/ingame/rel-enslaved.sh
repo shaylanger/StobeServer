@@ -29,14 +29,14 @@ run(){ # template tag
 koslavers(){
   local n=0 p h
   for p in 1 2 3 4; do
-    stobe-auto chars 1000 "[slave traders]" | tr '|' '\n' | grep '\[Slave Traders\]' > "$O/slavers-$1.txt"
+    stobe-auto chars 1000 "[slave traders]|[traders guild]" | tr '|' '\n' | grep -E '\[(Slave Traders|Traders Guild)\]' > "$O/slavers-$1.txt"
     grep -v -e ' KO' -e ' DEAD' "$O/slavers-$1.txt" | grep -o '#[0-9]*/[0-9]*' > "$O/slavers-$1.todo"
     [ -s "$O/slavers-$1.todo" ] || break
     while read -r h; do stobe-auto ko "$h" 1500 >> "$O/guards.txt" 2>&1; n=$((n + 1)); done < "$O/slavers-$1.todo"
     # m31: a KO shows in `chars` only after a frame (paused, every pass re-knocked the same nearest 40): 1 s of time
     stobe-auto speed 1 >/dev/null; sleep 1; stobe-auto speed 0 >/dev/null
   done
-  log "$1: knocked out $n Slave Traders for 1500 s ($(grep -c . "$O/slavers-$1.txt") listed, 40 = cap; awake left: $(grep -c . "$O/slavers-$1.todo"))"
+  log "$1: knocked out $n Slave Traders + Traders Guild (m32 S5: guild samurai KO'd the freed slave) for 1500 s ($(grep -c . "$O/slavers-$1.txt") listed, 40 = cap; awake left: $(grep -c . "$O/slavers-$1.todo"))"
 }
 gate(){ grep -a "REL recruitment gate blocked JoinParty" $S/log/stobeserver.log | grep -F "Rel Nima" | tail -2; }
 
