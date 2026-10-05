@@ -69,7 +69,7 @@ else log "FAIL SR12: neither $A nor $B was seen enslaved after the load (see fir
 pick_ns(){
   NS=""; : > "$O/ns-candidates.txt"
   tail -n +"$base" "$L" | grep -a -E "first seen already enslaved serial=|EVENT_SCAN: slave state serial=|SOCIAL_IDENTITY: handle changed" |
-    sed -E 's/ (chained=|\(no enslaved).*//' | sed -n -E 's/.*serial=([0-9]+) name=(.*)$/	/p; s/.*name=(.*) old=[0-9]+ new=([0-9]+).*/	/p' |
+    sed -E 's/ (chained=|\(no enslaved).*//' | sed -n -E 's/.*serial=([0-9]+) name=(.*)$/\2	\1/p; s/.*name=(.*) old=[0-9]+ new=([0-9]+).*/\1	\2/p' |
     grep -v -E "^($A|$B)	" | awk -F'	' '{last[$1]=$2; if(!($1 in ord)){ord[$1]=++n; nm[n]=$1}} END{for(i=1;i<=n;i++) print "#" last[nm[i]]}' | head -20 > "$O/ns-serials.txt"
   for c in $(cat "$O/ns-serials.txt"); do
     r=$(stobe-auto chance "$FREE" lockpick "$c" 2>&1 | tr -s '[:space:]' ' ' | cut -c1-160); echo "$c $r" >> "$O/ns-candidates.txt"
