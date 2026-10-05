@@ -46,8 +46,13 @@ grep -a -q "SOCIAL_CAPTURE: enabled" "$L" || { log "FAIL setup: this Kenshi laun
 insp --set-mode shadow >/dev/null
 base=$(grep -a -c "" "$L")   # before the load: the squad's first sweep can land right after world-stable
 stobe-auto load kah-enslaved >/dev/null; sleep 12; stobe-auto wait-world 240 >/dev/null
+# m32: Stobe's sweep scans squad members near the player or the SELECTION only (REL_SQUAD_SWEEP_M22);
+# after this load nothing is selected, so a squad slave held away from the player was never scanned
+# (batch S/S2). Select each squad member in turn (A first) so both get into the sweep.
+stobe-auto select "$A" >/dev/null 2>&1
 stobe-auto speed 1 >/dev/null
-for i in $(seq 1 100); do   # bounded poll (<=300 s): m32 batch S: the first squad sighting took ~175 s after a load in batch Q
+for i in $(seq 1 100); do   # bounded poll (<=300 s)
+  [ "$i" = 40 ] && stobe-auto select "$B" >/dev/null 2>&1
   tail -n +"$base" "$L" | grep -a "first seen already enslaved" > "$O/first-seen-enslaved.txt"
   grep -q -E "name=($A|$B) " "$O/first-seen-enslaved.txt" && break; sleep 3
 done
