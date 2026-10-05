@@ -10,7 +10,8 @@ speed 0
 setname ${NS} "Rel Nima" ~ -> Rel Nima
 protect ${FREE} on
 setstat ${FREE} lockpicking 100
-teleport ${FREE} ${NS} dist 3
+# m33 S8: at dist 3 the freer stood still 3 min (slave indoors in the prison, freer likely outside the wall)
+teleport ${FREE} ${NS} dist 1
 speed 1
 @sleep 6
 speed 0
@@ -20,6 +21,9 @@ chance ${FREE} lockpick ${NS} ~ lockpick_chance=(0\.0*[1-9]|[1-9])
 order ${FREE} PICK_LOCK_ON_SHACKLES target ${NS}
 speed 2
 @any @log-wait 60 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ (slave state serial=\d+ name=Rel Nima chained=1->0|liberation task serial=\d+ name=__FREE__ task=) || order ${FREE} PICK_LOCK_ON_SHACKLES target ${NS}
+# m33 S8: positions mid-pick (diagnosis: did the freer reach the slave?)
+where ${FREE}
+where ${NS}
 # m26: poll (the lock pick takes a while) instead of a fixed 60 s
 @log-wait 180 D:\Steam\steamapps\common\Kenshi\RE_Kenshi\mods\Stobe\stobe.log ~ SOCIAL_CAPTURE: structured kind=freed seq=\d+ load=\d+ actor=#\d+ target=#\d+ witnesses=\d+ facts=.*"liberator":\{[^}]*"name":"__FREE__"
 speed 0
