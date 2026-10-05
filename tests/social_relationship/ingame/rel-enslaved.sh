@@ -47,7 +47,7 @@ insp --set-mode shadow >/dev/null
 base=$(grep -a -c "" "$L")   # before the load: the squad's first sweep can land right after world-stable
 stobe-auto load kah-enslaved >/dev/null; sleep 12; stobe-auto wait-world 240 >/dev/null
 stobe-auto speed 1 >/dev/null
-for i in $(seq 1 40); do   # bounded poll (<=120 s): the squad is in every sweep once capture is ready
+for i in $(seq 1 100); do   # bounded poll (<=300 s): m32 batch S: the first squad sighting took ~175 s after a load in batch Q
   tail -n +"$base" "$L" | grep -a "first seen already enslaved" > "$O/first-seen-enslaved.txt"
   grep -q -E "name=($A|$B) " "$O/first-seen-enslaved.txt" && break; sleep 3
 done
