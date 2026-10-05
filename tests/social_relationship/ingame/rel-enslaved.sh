@@ -63,12 +63,21 @@ else log "FAIL SR12: neither $A nor $B was seen enslaved after the load (see fir
   echo "RESULT REL-p7-03-enslaved-real-load FAIL neither $A nor $B first seen enslaved log=$O/first-seen-enslaved.txt"; insp --set-mode off >/dev/null; exit 1; fi
 # The non-squad slave must wear a pickable lock (shackles): a caged prisoner can't be freed by PICK_LOCK_ON_SHACKLES
 # (batch O: the first one was in a prison cage). Harness: "lockpick_chance=" vs "<name> wears nothing locked".
-NS=""; : > "$O/ns-candidates.txt"
-for c in $(grep -v -E "name=($A|$B) " "$O/first-seen-enslaved.txt" | grep -o 'serial=[0-9]*' | sed 's/serial=/#/' | awk '!seen[$0]++' | head -20); do
-  r=$(stobe-auto chance "$FREE" lockpick "$c" 2>&1 | tr -s '[:space:]' ' ' | cut -c1-160); echo "$c $r" >> "$O/ns-candidates.txt"
-  case "$r" in *lockpick_chance=*) NS="$c"; break ;; esac
-done
-log "slave=$SLAVE free=$FREE non-squad shackled slave=${NS:-none} ($(grep -c . "$O/first-seen-enslaved.txt") first-seen slaves, $(grep -c . "$O/ns-candidates.txt") checked: ns-candidates.txt)"
+# m32 S3: picked before p7-04, the slave freed itself once p7-04 knocked its master out (handle changed, unshackled),
+# so p7-05 found nobody. Pick right before p7-05 (after its knockouts), from each slave's LATEST serial
+# (first-seen / slave-state / handle-changed lines since the load), still shackled.
+pick_ns(){
+  NS=""; : > "$O/ns-candidates.txt"
+  tail -n +"$base" "$L" | grep -a -E "first seen already enslaved serial=|EVENT_SCAN: slave state serial=|SOCIAL_IDENTITY: handle changed" |
+    sed -E 's/ (chained=|\(no enslaved).*//' | sed -n -E 's/.*serial=([0-9]+) name=(.*)$/	/p; s/.*name=(.*) old=[0-9]+ new=([0-9]+).*/	/p' |
+    grep -v -E "^($A|$B)	" | awk -F'	' '{last[$1]=$2; if(!($1 in ord)){ord[$1]=++n; nm[n]=$1}} END{for(i=1;i<=n;i++) print "#" last[nm[i]]}' | head -20 > "$O/ns-serials.txt"
+  for c in $(cat "$O/ns-serials.txt"); do
+    r=$(stobe-auto chance "$FREE" lockpick "$c" 2>&1 | tr -s '[:space:]' ' ' | cut -c1-160); echo "$c $r" >> "$O/ns-candidates.txt"
+    case "$r" in *lockpick_chance=*) NS="$c"; break ;; esac
+  done
+  log "non-squad shackled slave=${NS:-none} ($(grep -c . "$O/ns-serials.txt") slaves, $(grep -c . "$O/ns-candidates.txt") checked: ns-candidates.txt)"
+}
+log "slave=$SLAVE free=$FREE"
 stobe-auto chars 150 > "$O/chars-after-load.txt" 2>&1
 
 run REL-p7-03-enslaved-real-load
@@ -79,10 +88,11 @@ while read -r h f; do stobe-auto relation "$h" 100 >> "$O/guards.txt" 2>&1; done
 koslavers p7-04
 log "guards: relation 100 for $(wc -l < "$O/camp-factions.txt") camp factions: $(cut -d' ' -f2- "$O/camp-factions.txt" | tr '\n' ' ')"
 run REL-p7-04-enslaved-real-liberator
+koslavers p7-05
+pick_ns
 if [ -n "$NS" ]; then
   insp --set-mode enabled >/dev/null
   g0=$(gate | wc -l)
-  koslavers p7-05
   run REL-p7-05-enslaved-free-recruit
   gate > "$O/gate-low.txt"; log "gate at low trust: $(tail -1 "$O/gate-low.txt" | cut -c1-200)"
   insp --set-relation "Rel Nima" "$FREE" 80 > "$O/setrel-80.txt" 2>&1
