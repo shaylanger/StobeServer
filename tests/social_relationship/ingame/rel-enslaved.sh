@@ -28,8 +28,9 @@ run(){ # template tag
 # freed). KO every Slave Trader within 1000 m of the squad (filter before the 40 cap; passes until none is awake). Never kill.
 koslavers(){
   local n=0 p h
-  for p in 1 2 3 4; do
-    stobe-auto chars 1000 "[slave traders]|[traders guild]" | tr '|' '\n' | grep -E '\[(Slave Traders|Traders Guild)\]' > "$O/slavers-$1.txt"
+  for p in 1 2 3 4 5 6; do
+    # m33 S6: the knocked-out nearest 40 filled the 40 cap and an awake guard behind them (Jorek 4) KO'd the slave: list awake ones only (harness EAB24D54 !ko/!dead)
+    stobe-auto chars 1000 "[slave traders]|[traders guild]|!ko|!dead" | tr '|' '\n' | grep -E '\[(Slave Traders|Traders Guild)\]' > "$O/slavers-$1.txt"
     grep -v -e ' KO' -e ' DEAD' "$O/slavers-$1.txt" | grep -o '#[0-9]*/[0-9]*' > "$O/slavers-$1.todo"
     [ -s "$O/slavers-$1.todo" ] || break
     while read -r h; do stobe-auto ko "$h" 1500 >> "$O/guards.txt" 2>&1; n=$((n + 1)); done < "$O/slavers-$1.todo"
