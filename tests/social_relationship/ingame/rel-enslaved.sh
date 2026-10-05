@@ -69,9 +69,13 @@ else log "FAIL SR12: neither $A nor $B was seen enslaved after the load (see fir
 # (first-seen / slave-state / handle-changed lines since the load), still shackled.
 pick_ns(){
   NS=""; : > "$O/ns-candidates.txt"
+  # m33 S7: a slave that turned ESCAPING_SLAVE (2) after p7-04's knockouts ran 565 m away mid-lockpick: skip
+  # slaves whose latest slave state is 2 (escaping) or 3 (ex-slave)
+  tail -n +"$base" "$L" | grep -a "EVENT_SCAN: slave state serial=" | sed -n -E 's/.* name=(.*) chained=.* slave_state=[0-9]+->([0-9]+).*/\1	\2/p' |
+    awk -F'	' '{st[$1]=$2} END{for(n in st) if(st[n]>=2) print n; print "@@none@@"}' > "$O/ns-escaping.txt"
   tail -n +"$base" "$L" | grep -a -E "first seen already enslaved serial=|EVENT_SCAN: slave state serial=|SOCIAL_IDENTITY: handle changed" |
     sed -E 's/ (chained=|\(no enslaved).*//' | sed -n -E 's/.*serial=([0-9]+) name=(.*)$/\2	\1/p; s/.*name=(.*) old=[0-9]+ new=([0-9]+).*/\1	\2/p' |
-    grep -v -E "^($A|$B)	" | awk -F'	' '{last[$1]=$2; if(!($1 in ord)){ord[$1]=++n; nm[n]=$1}} END{for(i=1;i<=n;i++) print "#" last[nm[i]]}' | head -20 > "$O/ns-serials.txt"
+    grep -v -E "^($A|$B)	" | awk -F'	' 'NR==FNR{e[$0]=1;next} !($1 in e)' "$O/ns-escaping.txt" - | awk -F'	' '{last[$1]=$2; if(!($1 in ord)){ord[$1]=++n; nm[n]=$1}} END{for(i=1;i<=n;i++) print "#" last[nm[i]]}' | head -20 > "$O/ns-serials.txt"
   for c in $(cat "$O/ns-serials.txt"); do
     r=$(stobe-auto chance "$FREE" lockpick "$c" 2>&1 | tr -s '[:space:]' ' ' | cut -c1-160); echo "$c $r" >> "$O/ns-candidates.txt"
     case "$r" in *lockpick_chance=*) NS="$c"; break ;; esac
