@@ -6,6 +6,8 @@
  * POST JSON:
  *   {"action":"list"}
  *   {"action":"detail","sid":"<storage_id|id:123|name>"}
+ *   {"action":"player_view","storage_id":"hand_<serial>","serial":1,"name":"","speaker":"","gamets":0,
+ *    "live_activity":"","live_faction":"","trader":false,"key":""}  (NPC info panel: read-only, no LLM call)
  */
 
 $path = dirname(__FILE__) . DIRECTORY_SEPARATOR;
@@ -459,6 +461,19 @@ if ($action === 'detail') {
         ],
         $jsonFlags
     );
+    return;
+}
+
+if ($action === 'player_view') {
+    require_once $path . 'lib/npc_player_view.php';
+    try {
+        $view = stobeNpcPlayerViewText($payload);
+    } catch (Throwable $e) {
+        stobeLogWarn('NPC info panel: player_view failed', ['error' => $e->getMessage()]);
+        echo json_encode(['ok' => false, 'error' => 'player_view failed', 'key' => strval($payload['key'] ?? '')], $jsonFlags);
+        return;
+    }
+    echo json_encode(['ok' => true, 'text' => $view['text'], 'key' => strval($payload['key'] ?? ''), 'storage_id' => $view['storage_id']], $jsonFlags);
     return;
 }
 

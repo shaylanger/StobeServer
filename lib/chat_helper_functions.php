@@ -12365,6 +12365,13 @@ function stobeRelationshipTurnNeedsConnectorEvaluation(
     ) === 1) {
         return true;
     }
+    // NPC info panel: the NPC talking about their own past/work is worth one evaluation (disclosed facts ride on it).
+    if (trim($responseText) !== '' && preg_match(
+        '/\b(i was born|i grew up|i used to|i come from|i came from|years ago|back when i|before i (?:came|joined|was)|my (?:father|mother|family|brother|sister|parents|village|home ?town)|i once|i\'ve been an?|i was an?|i work(?:ed)? as)\b/i',
+        $responseText
+    ) === 1) {
+        return true;
+    }
     $backgroundChance = max(1, intval(round($chance / 4)));
     return stobeShouldRunAutomaticRelationshipEvaluation($backgroundChance);
 }
@@ -12478,10 +12485,11 @@ function stobeEvaluateRelationshipsForTurn(
             . "  <rule>You update only the speaker NPC relationship map for this single turn.</rule>\n"
             . "  <rule>Return strict JSON only: {\"updates\":[{\"target\":\"Name\",\"aff_delta\":-10,\"type\":\"rival\",\"note\":\"short optional note\"}]}</rule>\n"
             . "  <rule>Use at most 3 updates.</rule>\n"
+            . "  <rule>Also return \"disclosed\": facts the speaker states about THEMSELVES in speaker_response (origin, past, family, occupation, interests), e.g. \"disclosed\":[{\"fact\":\"grew up in Stack\",\"category\":\"background\"}]. category is one of background, interest, occupation, history. At most 2, short, third person without the name, only what is literally said in this turn: no guesses, no facts about others, nothing from incoming_line. Use [] if none.</rule>\n"
             . "  <rule>Use conservative deltas for normal chat (typically -8..+8). Reserve larger deltas for major events.</rule>\n"
             . "  <rule>Use lowercase one-word types. If type should not change, omit type or leave it empty.</rule>\n"
             . "  <rule>type must be one of: " . implode(', ', stobeRelationshipTypeList()) . ".</rule>\n"
-            . "  <rule>If nothing changed, return {\"updates\":[]}.</rule>\n"
+            . "  <rule>If nothing changed, return {\"updates\":[],\"disclosed\":[]}.</rule>\n"
             . "</relationship_evaluator>";
 
         $userPrompt = "<relationship_turn>\n"
@@ -12504,6 +12512,15 @@ function stobeEvaluateRelationshipsForTurn(
             'event_type' => 'relationship_eval',
             'response_format' => ['type' => 'json_object'],
         ]);
+        if ($rawEval !== false && trim(strval($rawEval)) !== '' && strcasecmp($listener, $speaker) !== 0) {
+            // NPC info panel: facts the NPC disclosed to the listener, from the same evaluator reply (no extra LLM call).
+            try {
+                require_once __DIR__ . '/npc_player_view.php';
+                stobeNpcFactRecordDisclosed($speakerNpcData, $speaker, $listener, stobeNpcFactParseDisclosed(strval($rawEval)), $result['clean_response'], stobeNpcFactCurrentGamets());
+            } catch (Throwable $e) {
+                stobeLogWarn('NPC_FACTS: record failed', ['npc' => $speaker, 'error' => $e->getMessage()]);
+            }
+        }
         if ($rawEval !== false && trim(strval($rawEval)) !== '') {
             $updates = stobeParseRelationshipEvalUpdates(strval($rawEval));
             if (count($updates) > 0) {
