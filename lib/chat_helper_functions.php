@@ -15446,7 +15446,9 @@ function stobeReplyAgreesToErrand(string $reply): bool {
     foreach (preg_split('/(?<=[.!?])\s+/', strtolower(trim(str_replace(["\u{2019}", "\u{2018}"], "'", $reply)))) ?: [] as $sentence) {
         $sentence = trim($sentence);
         if ($sentence === '') continue;
-        if (preg_match("/\b(no|nope|won'?t|will\s+not|can'?t|cannot|not\s+going|refuse|get\s+it\s+yourself|do\s+it\s+yourself|later|busy)\b/", $sentence)) return false;
+        // Row 14-A3 (m48): hedges like "no promises" / "no problem" are not refusals.
+        $refusalCheck = preg_replace("/\bno\s+(?:promises?|guarantees?|problem|problems|trouble|worries|worry|bother|sweat)\b/", '', $sentence) ?? $sentence;
+        if (preg_match("/\b(no|nope|won'?t|will\s+not|can'?t|cannot|not\s+going|refuse|get\s+it\s+yourself|do\s+it\s+yourself|later|busy)\b/", $refusalCheck)) return false;
         if (str_ends_with($sentence, '?')) continue;
         if (preg_match("/\b(i'?ll|i\s+will|let\s+me|i'?m\s+on\s+it|on\s+it|on\s+my\s+way|right\s+away|will\s+do|got\s+it|sure|fine|right|alright|all\s+right|okay|ok|be\s+right\s+back|going\s+(?:now|to\s+get|to\s+fetch))\b/", $sentence)) $agree = true;
     }

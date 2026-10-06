@@ -107,6 +107,12 @@ check('item 111: "buy one X from the shop here" + agreement -> TASK_GOAL@BUY wit
 check('item 111: "from the trader" refused -> nothing', stobeInferBuyFromAgreedRequest('Buy 2 bread from the trader.', $npc73, [], "No, I'm not wasting cats on that.", true, $known74) === '');
 check('item 74: a question from the player -> nothing', stobeInferBuyFromAgreedRequest('Could you buy a kit from Apothecary Abia?', $npc73, [], "Sure.", true, $known74) === '');
 check('item 74: an action already there -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, ['TASK_GOAL@BUY@Apothecary Abia@Standard First Aid Kit@1@@0'], $reply74, true, $known74) === '');
+check('row 14-A3: "no promises" hedge is not a refusal -> BUY',
+    stobeInferBuyFromAgreedRequest('Kint, go buy one Ronin Samurai Helmet from the shop here.', $npc73, [],
+        "Ronin Samurai Helmet. I'll see what the shops here are asking for it - no promises if the price is robbery.", true, $known74)
+        === 'TASK_GOAL@BUY@@Ronin Samurai Helmet@1@@0');
+check('row 14-A3: a plain "no" still refuses', stobeReplyAgreesToErrand("No. I'll see about it later.") === false);
+check('row 14-A3: "no problem, on it" agrees', stobeReplyAgreesToErrand("No problem, on it.") === true);
 check('item 74: a non-faction NPC -> nothing', stobeInferBuyFromAgreedRequest($line74, $npc73, [], $reply74, false, $known74) === '');
 // 75: the model's MOVE_TO toward the goal's trader is dropped (run m2: "Could not identify that destination")
 check('item 75: MOVE_TO@Apothecary Abia is dropped next to the inferred BUY goal',
