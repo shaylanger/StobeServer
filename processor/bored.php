@@ -10,6 +10,12 @@ $campaign = 'Default';
 $requestMode = strtolower(trim(strval($_GET['mode'] ?? '')));
 $forceDirectorMode = ($requestMode === 'director');
 $forceDirectiveTurn = false; // goal reports: skip the chance gate, no director (bug 66)
+// Drawn-weapon reaction turn (StobeDrawnWeapon.cpp): no chance gate, no director, speech only.
+$reactTurn = function_exists('stobeReactRequest') ? stobeReactRequest($_GET) : null;
+if (is_array($reactTurn)) {
+    $forceDirectiveTurn = true;
+    $forceDirectorMode = false;
+}
 $playerName = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
 $incomingProfile = normalizeParticipantNameToken(trim(strval($_GET['profile'] ?? '')));
 $peopleRaw = strval($GLOBALS["CACHE_PEOPLE"] ?? ($_GET['people'] ?? ''));
@@ -81,7 +87,7 @@ foreach ($candidateNames as $candidateName) {
 if (function_exists('stobeGoalReportQueuePending')) {
     try { stobeGoalReportQueuePending(); } catch (Throwable $e) { stobeLogWarn('Goal report queue failed', ['error' => $e->getMessage()]); }
 }
-$negDirective = function_exists('stobeNegClaimDirective') ? stobeNegClaimDirective($candidateNames) : null;
+$negDirective = (!is_array($reactTurn) && function_exists('stobeNegClaimDirective')) ? stobeNegClaimDirective($candidateNames) : null;
 if (is_array($negDirective)) {
     $negSpeakerData = getNpcData(strval($negDirective['npc_name']));
     if (is_array($negSpeakerData)) {
@@ -153,6 +159,13 @@ if ($suggestedTarget !== '' &&
 }
 if (is_array($negDirective) && $playerName !== '') {
     $listener = $playerName;
+}
+if (is_array($reactTurn)) {
+    $listener = $reactTurn['player'] !== '' ? $reactTurn['player'] : $playerName;
+    $reactEvent = stobeReactContextEvent($reactTurn, $speakerNpc, $listener);
+    storeEvent('infoaction', intval($timestamp), intval($gamets), $reactEvent);
+    stobeLogInfo('Drawn weapon reaction turn', ['speaker' => $speakerNpc, 'listener' => $listener,
+        'kind' => $reactTurn['kind'], 'weapon' => $reactTurn['weapon'], 'meters' => $reactTurn['meters']]);
 }
 if ($listener === '') {
     $listeners = [];
@@ -271,6 +284,9 @@ $boredInstruction = function_exists('stobeBuildLifelikeBoredInstruction')
         intval($gamets)
     )
     : 'Start a brief spontaneous conversation to the listener about the current situation.';
+if (is_array($reactTurn)) {
+    $boredInstruction = stobeReactInstruction($reactTurn, $speakerNpc, $listener);
+}
 if (is_array($negDirective)) {
     $boredInstruction = strval($negDirective['payload']['instruction'] ?? $boredInstruction);
     if (in_array(strval($negDirective['kind']), ['surrender','assist'], true)) {
@@ -330,10 +346,12 @@ $streamResult = stobeStreamDialogueViaLlm(
         'stream_event_type' => 'bored',
         'stream_listener' => $listener, // bug 95: the turn's real addressee
         'stream_gamets' => $gamets,
-        'defer_structured_stream' => is_array($negDirective),
+        'defer_structured_stream' => is_array($negDirective) || is_array($reactTurn),
         // Test switch NEG_TEST_INJECT (off by default), context "directive".
-        'stobe_test_inject' => (is_array($negDirective) && function_exists('stobeNegTestTakeInjection'))
-            ? stobeNegTestTakeInjection('directive', $speakerNpc, $speakerData, $playerName) : null,
+        'stobe_test_inject' => (is_array($reactTurn) && function_exists('stobeNegTestTakeInjection'))
+            ? stobeNegTestTakeInjection('react', $speakerNpc, $speakerData, $listener)
+            : ((is_array($negDirective) && function_exists('stobeNegTestTakeInjection'))
+            ? stobeNegTestTakeInjection('directive', $speakerNpc, $speakerData, $playerName) : null),
         'response_format' => (is_array($negDirective) && in_array(strval($negDirective['kind']), ['surrender','assist'], true))
             ? stobeDealResponseFormat(stobeBuildStructuredDialogueResponseFormat($speakerNpc, $speakerData, false, 'bored'))
             : stobeBuildStructuredDialogueResponseFormat($speakerNpc, $speakerData, npcIsInPlayerFaction($speakerData), 'bored'),
@@ -356,6 +374,9 @@ if (boolval($streamResult['ok'] ?? false)) {
     return;
 }
 $responseActions = stobeDedupeActionList($responseActions, 'bored', $actionConfig);
+if (is_array($reactTurn)) {
+    $responseActions = stobeReactFilterActions($responseActions); // speech only, the DLL owns any attack
+}
 if (is_array($negDirective)) {
     $negOutcome = stobeNegCompleteDirective(
         $negDirective, strval($streamResult['raw_response'] ?? ''), $speakerNpc, $playerName,

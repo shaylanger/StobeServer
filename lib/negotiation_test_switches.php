@@ -9,7 +9,8 @@
  *   before anything is streamed or parsed, so every guard downstream sees it like a real model reply.
  *     {"row":"27","npc":"Varn Oddie","context":"chat","steps":[{"deal_decision":"COUNTER","deal_terms":""}, ...]}
  *   - npc: optional; the speaker's name (also matches "Name [npc]" after a rename, and npc "X" vs "X [Y]").
- *   - context: chat (the player talks to her; default) | directive (her negotiation directive turn) | any.
+ *   - context: chat (the player talks to her; default) | directive (her negotiation directive turn)
+ *     | react (a drawn-weapon reaction turn, StobeDrawnWeapon.cpp) | any.
  *   - each step = keys of the reply JSON to override: message, deal_decision, deal_terms (string or array),
  *     action, target, item, amount, ... Placeholders in strings: {player} {npc} {weapon} {worn}.
  *   - one step per turn, in order; the switch fires no more once all steps are used ("fired" is set).

@@ -100,6 +100,7 @@ require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'world_state_runtime.ph
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'memory_helper_functions.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'chat_helper_functions.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'lifelike_npc.php');
+require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'drawn_weapon_reaction.php'); // drawn-weapon reaction turns
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'player_mood_prompts.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'compact_context_history.php');
 require_once($enginePath . 'lib' . DIRECTORY_SEPARATOR . 'diary_helper_functions.php');
