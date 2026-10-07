@@ -1,8 +1,11 @@
 <?php
 /**
  * NPC info panel (player view): a compact, read-only summary of one NPC as the
- * speaking squad character knows them. Built from stored game/server state only;
- * nothing here calls an LLM.
+ * speaking squad character knows them, laid out as a biography card (header fields,
+ * About them, What you've learned, Dealings with you, Right now). Built from stored
+ * game/server state; the only LLM call is the cached "What you've learned" paragraph
+ * (stobeNpcBioFor), written from the NPC's own lines to that listener and the facts
+ * they disclosed, regenerated only when new dialogue/facts exist (max once per 60 s).
  *
  * Learned facts (stobe_npc_learned_fact): what an NPC disclosed about themselves
  * to one listener, extracted by the existing per-turn relationship evaluator
@@ -309,9 +312,320 @@ function stobeNpcViewGoal(int $serial, string $npcName): array {
     return $lines;
 }
 
+// ------------------------------------------------------------------ biography card
+
+const STOBE_NPC_BIO_MIN_REGEN_SECONDS = 60;
+const STOBE_NPC_BIO_DIALOGUE_TYPES = ['chat', 'rechat', 'inputtext', 'inputtext_s', 'ginputtext', 'ginputtext_s'];
+const STOBE_NPC_BIO_EMPTY = "You don't know much about them yet. Talk to them to learn more.";
+const STOBE_NPC_BIO_MAX_LINES = 40;
+
+function stobeNpcBioEnsureSchema(): void {
+    static $done = false;
+    if ($done) return;
+    $db = $GLOBALS['db'];
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS stobe_npc_bio (
+            id BIGSERIAL PRIMARY KEY,
+            npc_storage_id TEXT NOT NULL,
+            npc_name TEXT NOT NULL DEFAULT '',
+            learner_name TEXT NOT NULL,
+            bio TEXT NOT NULL DEFAULT '',
+            source_rowid_max BIGINT NOT NULL DEFAULT 0,
+            fact_count INT NOT NULL DEFAULT 0,
+            source_gamets BIGINT NOT NULL DEFAULT 0,
+            attempted_at TIMESTAMP NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )"
+    );
+    $db->exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_stobe_npc_bio ON stobe_npc_bio (npc_storage_id, LOWER(learner_name))");
+    $done = true;
+}
+
+function stobeNpcBioLikeEscape(string $s): string {
+    return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $s);
+}
+
+/** "Name: text (talking to: X)" -> "text". */
+function stobeNpcBioCleanLine(string $data): string {
+    $t = trim(preg_replace('/\s+/', ' ', $data) ?? '');
+    $t = preg_replace('/\s*\((?:talking to:?|to:)\s*[^)]*\)\s*$/i', '', $t) ?? $t;
+    if (preg_match('/^[^:]{1,80}:\s+(.*)$/s', $t, $m)) $t = $m[1];
+    $t = trim($t);
+    if (strlen($t) > 300) $t = rtrim(substr($t, 0, 297)) . '...';
+    return $t;
+}
+
 /**
- * Builds the panel text. $p: storage_id or serial (target), name, speaker, gamets,
- * live_activity, live_faction, trader (flags from the game thread).
+ * Lines spoken between the NPC and the learner (eventlog rows whose people list holds both),
+ * chronological. Only rows spoken BY the NPC or BY the learner count; the first people entry is the speaker.
+ */
+function stobeNpcBioDialogue(string $sid, string $learner, int $limit = 400): array {
+    $out = ['lines' => [], 'npc_lines' => 0, 'rowid_max' => 0, 'gamets_max' => 0, 'first_gamets' => 0, 'talks' => 0];
+    if ($sid === '' || $learner === '') return $out;
+    $types = "'" . implode("','", STOBE_NPC_BIO_DIALOGUE_TYPES) . "'";
+    $rows = $GLOBALS['db']->fetchAll(
+        "SELECT rowid, type, gamets, people, data FROM eventlog
+         WHERE type IN ($types) AND people LIKE $1 AND people ILIKE $2
+         ORDER BY rowid DESC LIMIT " . max(1, $limit),
+        ['%|' . stobeNpcBioLikeEscape($sid) . '"%', '%"' . stobeNpcBioLikeEscape($learner) . '|%']
+    );
+    $rows = is_array($rows) ? array_reverse($rows) : [];
+    $lastTs = null;
+    foreach ($rows as $r) {
+        $people = json_decode(strval($r['people'] ?? ''), true);
+        if (!is_array($people) || count($people) === 0) continue;
+        $first = strval($people[0]);
+        $pipe = strrpos($first, '|');
+        $firstName = $pipe === false ? $first : substr($first, 0, $pipe);
+        $firstSid = $pipe === false ? '' : substr($first, $pipe + 1);
+        $data = strval($r['data'] ?? '');
+        if ($firstSid === $sid) {
+            // NPC line: only when addressed to the learner (or to nobody in particular)
+            if (preg_match('/\((?:talking to:?|to:)\s*([^)]*)\)\s*$/i', $data, $m) && stripos($m[1], $learner) === false) continue;
+            $who = 'npc';
+        } elseif (strcasecmp(trim($firstName), $learner) === 0) {
+            $who = 'you';
+        } else {
+            continue;
+        }
+        $text = stobeNpcBioCleanLine($data);
+        if ($text === '') continue;
+        $ts = intval($r['gamets'] ?? 0);
+        $out['lines'][] = ['who' => $who, 'text' => $text, 'gamets' => $ts];
+        if ($who === 'npc') $out['npc_lines']++;
+        $out['rowid_max'] = max($out['rowid_max'], intval($r['rowid'] ?? 0));
+        $out['gamets_max'] = max($out['gamets_max'], $ts);
+        if ($out['first_gamets'] === 0 || ($ts > 0 && $ts < $out['first_gamets'])) $out['first_gamets'] = $ts;
+        // a new conversation starts after an hour of game time without a word between them
+        if ($lastTs === null || $ts - $lastTs > 3600) $out['talks']++;
+        $lastTs = $ts;
+    }
+    return $out;
+}
+
+function stobeNpcBioCache(string $sid, string $learner): array|false {
+    stobeNpcBioEnsureSchema();
+    $row = $GLOBALS['db']->fetchOne(
+        "SELECT *, (attempted_at IS NOT NULL AND attempted_at > NOW() - make_interval(secs => $3)) AS throttled
+         FROM stobe_npc_bio WHERE npc_storage_id=$1 AND LOWER(learner_name)=LOWER($2) LIMIT 1",
+        [$sid, $learner, STOBE_NPC_BIO_MIN_REGEN_SECONDS]
+    );
+    return is_array($row) ? $row : false;
+}
+
+function stobeNpcBioCleanReply(string $raw): string {
+    $t = preg_replace('/<think>[\s\S]*?<\/think>/i', '', $raw) ?? $raw;
+    $t = preg_replace('/^```[a-z]*\s*|```$/im', '', $t) ?? $t;
+    $t = trim(preg_replace('/\s+/', ' ', $t) ?? '');
+    $t = preg_replace('/^(bio(graphy)?|summary)\s*:\s*/i', '', $t) ?? $t;
+    $t = trim($t, " \"'");
+    $sentences = preg_split('/(?<=[.!?])\s+/', $t) ?: [$t];
+    $t = implode(' ', array_slice($sentences, 0, 6));
+    if (strlen($t) > 900) $t = rtrim(substr($t, 0, 897)) . '...';
+    return $t;
+}
+
+/** The bio prompt: built only from the dialogue lines and told facts (never the stored profile). */
+function stobeNpcBioMessages(string $npcName, string $learner, array $lines, array $facts, string $pronoun = 'they'): array {
+    $system = "<npc_card_biography>\n"
+        . "  <rule>Write the 'What you've learned' paragraph of a character card in a game UI.</rule>\n"
+        . "  <rule>Use ONLY what the character said in the conversation lines and the told facts below. Do not invent anything, do not guess, do not add lore.</rule>\n"
+        . "  <rule>Third person about the character, plain everyday English, 2 to 5 short sentences, no lists, no headings, no quotes, no names of the reader.</rule>\n"
+        . "  <rule>Prefer what they said about themselves (origin, work, family, interests, plans). If they said nothing personal, say in one or two sentences how they have come across when talking.</rule>\n"
+        . "  <rule>Reply with the paragraph only.</rule>\n"
+        . "</npc_card_biography>";
+    $conv = [];
+    foreach (array_slice($lines, -STOBE_NPC_BIO_MAX_LINES) as $l) {
+        $conv[] = ($l['who'] === 'npc' ? $npcName : $learner) . ': ' . $l['text'];
+    }
+    $told = [];
+    foreach ($facts as $f) $told[] = '- ' . strval($f['fact'] ?? '');
+    $user = "<character>" . stobePromptXmlEscape($npcName) . "</character>\n"
+        . "<pronoun>" . stobePromptXmlEscape($pronoun) . "</pronoun>\n"
+        . "<reader>" . stobePromptXmlEscape($learner) . "</reader>\n"
+        . "<told_facts>\n" . stobePromptXmlEscape(count($told) > 0 ? implode("\n", $told) : '(none)') . "\n</told_facts>\n"
+        . "<conversation>\n" . stobePromptXmlEscape(implode("\n", $conv)) . "\n</conversation>";
+    return [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]];
+}
+
+function stobeNpcBioCallLlm(array $messages, array|false $npcRow, string $npcName): string|false {
+    $stub = $GLOBALS['STOBE_NPC_BIO_LLM'] ?? null; // tests inject a callable
+    if (is_callable($stub)) return $stub($messages);
+    if (!function_exists('stobeCallLLM')) require_once dirname(__DIR__) . '/connector/llm_dispatcher.php';
+    $config = getLlmConfigForNpcPurpose($npcRow, 'relationship');
+    return stobeCallLLM($messages, $config, ['npc_name' => $npcName, 'event_type' => 'npc_bio']);
+}
+
+/**
+ * The growing biography for (NPC, learner). $generate=false never calls the LLM: it returns the cache and
+ * 'stale'=true when new dialogue/facts exist and a regeneration is allowed (DLL then asks again with bio=1).
+ * $generate=true regenerates at most once per STOBE_NPC_BIO_MIN_REGEN_SECONDS per pair.
+ * state: empty | cached | pending | updated
+ */
+function stobeNpcBioFor(string $sid, string $npcName, string $learner, array|false $npcRow, array $dialogue, array $facts, bool $generate, bool $quiet = false): array {
+    $res = ['bio' => '', 'state' => 'empty', 'stale' => false];
+    if ($sid === '' || $learner === '') return $res;
+    if ($dialogue['npc_lines'] === 0 && count($facts) === 0) return $res;
+    $cache = stobeNpcBioCache($sid, $learner);
+    $cachedBio = is_array($cache) ? strval($cache['bio'] ?? '') : '';
+    $fresh = is_array($cache) && $cachedBio !== ''
+        && intval($cache['source_rowid_max']) === intval($dialogue['rowid_max'])
+        && intval($cache['fact_count']) === count($facts);
+    $throttled = is_array($cache) && ($cache['throttled'] === true || $cache['throttled'] === 't');
+    $res['bio'] = $cachedBio;
+    $res['state'] = $cachedBio !== '' ? 'cached' : 'empty';
+    if ($fresh) {
+        if (!$quiet) stobeLogInfo('NPC_BIO: cache hit', ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner, 'rowid' => $dialogue['rowid_max'], 'facts' => count($facts)]);
+        return $res;
+    }
+    if ($throttled) {
+        if (!$quiet) stobeLogInfo('NPC_BIO: throttled', ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner]);
+        return $res;
+    }
+    if (!$generate) {
+        $res['state'] = 'pending';
+        $res['stale'] = true;
+        return $res;
+    }
+    $db = $GLOBALS['db'];
+    $srcGamets = intval($dialogue['gamets_max']);
+    foreach ($facts as $f) $srcGamets = max($srcGamets, intval($f['game_ts'] ?? 0));
+    $db->exec(
+        "INSERT INTO stobe_npc_bio (npc_storage_id, npc_name, learner_name, attempted_at) VALUES ($1,$2,$3,NOW())
+         ON CONFLICT (npc_storage_id, LOWER(learner_name)) DO UPDATE SET attempted_at=NOW(), npc_name=EXCLUDED.npc_name",
+        [$sid, $npcName, $learner]
+    );
+    $t0 = microtime(true);
+    $raw = false;
+    try {
+        $g = is_array($npcRow) ? strtolower(trim(strval($npcRow['gender'] ?? ''))) : '';
+        $pronoun = $g === 'female' ? 'she' : ($g === 'male' ? 'he' : 'they');
+        $raw = stobeNpcBioCallLlm(stobeNpcBioMessages($npcName, $learner, $dialogue['lines'], $facts, $pronoun), $npcRow, $npcName);
+    } catch (Throwable $e) {
+        stobeLogWarn('NPC_BIO: llm failed', ['npc' => $npcName, 'error' => $e->getMessage()]);
+    }
+    $bio = $raw !== false ? stobeNpcBioCleanReply(strval($raw)) : '';
+    if ($bio === '') {
+        stobeLogWarn('NPC_BIO: llm returned nothing', ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner]);
+        return $res;
+    }
+    $db->exec(
+        "UPDATE stobe_npc_bio SET bio=$3, source_rowid_max=$4, fact_count=$5, source_gamets=$6, updated_at=NOW()
+         WHERE npc_storage_id=$1 AND LOWER(learner_name)=LOWER($2)",
+        [$sid, $learner, $bio, intval($dialogue['rowid_max']), count($facts), $srcGamets]
+    );
+    stobeLogInfo('NPC_BIO: generated', ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner, 'lines' => count($dialogue['lines']),
+        'facts' => count($facts), 'rowid' => $dialogue['rowid_max'], 'ms' => intval((microtime(true) - $t0) * 1000)]);
+    return ['bio' => $bio, 'state' => 'updated', 'stale' => false];
+}
+
+// ------------------------------------------------------------------ header fields
+
+/** "Jora [Slavemonger Guard]" -> ["Jora", "Slavemonger Guard"] */
+function stobeNpcViewSplitTitle(string $name): array {
+    if (preg_match('/^(.*?)\s*\[([^\]]+)\]\s*$/', $name, $m) && trim($m[1]) !== '') return [trim($m[1]), trim($m[2])];
+    return [trim($name), ''];
+}
+
+function stobeNpcViewArticle(string $word): string {
+    return preg_match('/^[aeiou]/i', $word) ? 'an' : 'a';
+}
+
+/** Visible looks parsed from the stored appearance + race/gender columns. */
+function stobeNpcViewLooks(array|false $row): array {
+    $looks = ['race' => '', 'gender' => '', 'age' => '', 'build' => '', 'extras' => [], 'raw' => ''];
+    if (!is_array($row)) return $looks;
+    $looks['race'] = trim(strval($row['race'] ?? ''));
+    if (strcasecmp($looks['race'], 'Unknown') === 0) $looks['race'] = '';
+    $g = strtolower(trim(strval($row['gender'] ?? '')));
+    $looks['gender'] = in_array($g, ['male', 'female'], true) ? $g : '';
+    $app = trim(preg_replace('/\s+/', ' ', strval($row['appearance'] ?? '')) ?? '');
+    $looks['raw'] = $app;
+    if (preg_match('/with an? ([a-z-]+) look\./i', $app, $m)) $looks['age'] = strtolower($m[1]);
+    if (preg_match('/Build appears ([a-z]+)\./i', $app, $m)) $looks['build'] = strtolower($m[1]);
+    if (stripos($app, 'facial hair') !== false) $looks['extras'][] = 'facial hair';
+    if (stripos($app, 'head is shaved') !== false) $looks['extras'][] = 'a shaved head';
+    if (stripos($app, 'flayed') !== false) $looks['extras'][] = 'heavy scarring';
+    return $looks;
+}
+
+function stobeNpcViewGenderNoun(array $looks): string {
+    if ($looks['gender'] === '' || preg_match('/hive|skeleton|robot|animal/i', $looks['race'])) return '';
+    return $looks['gender'] === 'female' ? 'woman' : 'man';
+}
+
+/** "Greenlander woman, older" */
+function stobeNpcViewRaceLine(array $looks): string {
+    $parts = array_values(array_filter([$looks['race'], stobeNpcViewGenderNoun($looks)], 'strlen'));
+    $line = implode(' ', $parts);
+    if ($line === '' && $looks['gender'] !== '') $line = ucfirst($looks['gender']);
+    if ($line !== '' && $looks['age'] !== '') $line .= ', ' . $looks['age'];
+    return $line;
+}
+
+/** 1-2 natural sentences from visible info only (looks, job, faction). */
+function stobeNpcViewAbout(array $looks, string $job, string $faction): string {
+    $sent = [];
+    $noun = trim($looks['race'] . ' ' . stobeNpcViewGenderNoun($looks));
+    if ($noun !== '' && ($looks['age'] !== '' || $looks['build'] !== '')) {
+        $adj = [];
+        if ($looks['build'] === 'short' || $looks['build'] === 'tall') $adj[] = $looks['build'];
+        if ($looks['age'] !== '') $adj[] = $looks['age'];
+        $phrase = trim(implode(', ', $adj) . ' ' . $noun);
+        $s = ucfirst(stobeNpcViewArticle($phrase) . ' ' . $phrase);
+        if (count($looks['extras']) > 0) $s .= ' with ' . implode(' and ', $looks['extras']);
+        $sent[] = $s . '.';
+    } elseif ($looks['raw'] !== '') {
+        $s = preg_replace('/\ba ([aeiou])/i', 'an $1', $looks['raw']) ?? $looks['raw'];
+        $s = ucfirst(rtrim($s));
+        if (!preg_match('/[.!?]$/', $s)) $s .= '.';
+        if (strlen($s) > 240) $s = rtrim(substr($s, 0, 237)) . '...';
+        $sent[] = $s;
+    }
+    $pron = $looks['gender'] === 'female' ? 'She' : ($looks['gender'] === 'male' ? 'He' : 'They');
+    $jobL = $job !== '' && strcasecmp($job, 'unknown') !== 0 ? $job : '';
+    $facL = preg_replace('/\s*\(last known\)$/', '', $faction) ?? $faction;
+    $facL = strcasecmp($facL, 'unknown') === 0 ? '' : $facL;
+    $works = $pron === 'They' ? 'work' : 'works';
+    $is = $pron === 'They' ? 'are' : 'is';
+    if ($jobL !== '' && $facL !== '') $sent[] = $pron . ' ' . $works . ' as ' . stobeNpcViewArticle($jobL) . ' ' . strtolower($jobL) . ' and ' . $is . ' with the ' . $facL . '.';
+    elseif ($jobL !== '') $sent[] = $pron . ' ' . $works . ' as ' . stobeNpcViewArticle($jobL) . ' ' . strtolower($jobL) . '.';
+    elseif ($facL !== '') $sent[] = $pron . ' ' . $is . ' with the ' . $facL . '.';
+    return count($sent) > 0 ? implode(' ', $sent) : 'You know nothing about how they look yet.';
+}
+
+function stobeNpcViewRelation(array|false $row, string $speaker): array {
+    $label = 'Neutral';
+    $line = 'They have no opinion of you yet.';
+    if (!is_array($row) || $speaker === '') return [$label, $line];
+    $map = stobeGetNpcRelationshipMap($row);
+    $key = stobeFindRelationshipEntryKey($map, $speaker);
+    if ($key === '' || !is_array($map[$key] ?? null)) return [$label, $line];
+    $aff = intval($map[$key]['aff'] ?? 0);
+    $type = stobeNormalizeRelationshipTypeToken(strval($map[$key]['type'] ?? 'neutral'));
+    $label = stobeRelationshipTierLabel($aff) . ($type !== '' && $type !== 'neutral' ? ' (' . $type . ')' : '');
+    if ($aff >= 76) $line = 'They are deeply attached to you.';
+    elseif ($aff >= 56) $line = 'They like you a lot.';
+    elseif ($aff >= 31) $line = 'They like you.';
+    elseif ($aff >= 6) $line = 'They know you a little.';
+    elseif ($aff >= -5) $line = 'They have no strong feelings about you.';
+    elseif ($aff >= -30) $line = 'They are wary of you.';
+    elseif ($aff >= -55) $line = "They don't like you.";
+    elseif ($aff >= -90) $line = 'They resent you.';
+    else $line = 'They hate you.';
+    return [$label, $line];
+}
+
+function stobeNpcViewGameAgo(int $seconds): string {
+    if ($seconds < 3600) return 'less than an hour ago';
+    if ($seconds < 172800) return intval(round($seconds / 3600)) . ' hours ago';
+    return intval(round($seconds / 86400)) . ' days ago';
+}
+
+/**
+ * Builds the NPC biography card. $p: storage_id or serial (target), name, speaker, gamets,
+ * live_activity, live_faction, trader (flags from the game thread), bio (1 = may call the LLM), why.
+ * Returns structured fields for the DLL plus 'text' (the whole card as plain text).
  */
 function stobeNpcPlayerViewText(array $p): array {
     $db = $GLOBALS['db'];
@@ -321,6 +635,8 @@ function stobeNpcPlayerViewText(array $p): array {
     $speaker = trim(strval($p['speaker'] ?? ''));
     $gamets = intval($p['gamets'] ?? 0);
     if ($gamets <= 0 && function_exists('stobeNegLatestGamets')) $gamets = stobeNegLatestGamets();
+    $generate = !empty($p['bio']);
+    $quiet = strval($p['why'] ?? '') === 'periodic';
 
     $row = false;
     if ($sid !== '') {
@@ -329,71 +645,106 @@ function stobeNpcPlayerViewText(array $p): array {
             [$sid]
         );
     }
-    $displayName = $name !== '' ? $name : strval($row['name'] ?? 'Unknown');
-    $lines = [];
-    $lines[] = $displayName;
+    $fullName = $name !== '' ? $name : strval($row['name'] ?? 'Unknown');
+    [$displayName, $title] = stobeNpcViewSplitTitle($fullName);
+    $you = $speaker !== '' ? $speaker : 'you';
+
     $faction = stobeNpcViewCleanFaction(strval($p['live_faction'] ?? ''));
     if ($faction === '' && is_array($row)) {
         $faction = stobeNpcViewCleanFaction(strval($row['faction'] ?? ''));
         if ($faction !== '') $faction .= ' (last known)';
     }
-    $lines[] = 'Faction: ' . ($faction !== '' ? $faction : 'unknown');
 
     $facts = ($sid !== '' && $speaker !== '') ? stobeNpcFactsFor($sid, $speaker, 0) : [];
-    $occupation = '';
-    foreach ($facts as $f) {
-        if (($f['category'] ?? '') === 'occupation') { $occupation = strval($f['fact']) . ' (they told you)'; break; }
-    }
-    if ($occupation === '' && !empty($p['trader'])) $occupation = 'Trader (seen trading)';
-    $lines[] = 'Occupation: ' . ($occupation !== '' ? $occupation : 'unknown');
-    if (!is_array($row)) $lines[] = '(No Stobe record for this character yet.)';
-
-    // Deals
-    $lines[] = '';
-    $lines[] = 'DEALS WITH ' . strtoupper($speaker !== '' ? $speaker : 'YOU');
-    $outstanding = [];
-    [$active, $past] = $speaker !== '' ? stobeNpcViewDeals($serial, $displayName, $speaker, $gamets, $outstanding) : [[], []];
-    if (count($active) === 0 && count($past) === 0) $lines[] = 'No deals.';
-    foreach ($active as $a) $lines[] = $a;
-    if (count($outstanding) > 0) $lines[] = 'Outstanding: ' . implode('; ', array_unique($outstanding));
-    if (count($past) > 0) { $lines[] = 'Earlier:'; foreach ($past as $x) $lines[] = $x; }
-
-    // Activity
-    $lines[] = '';
-    $lines[] = 'ACTIVITY';
-    $goal = stobeNpcViewGoal($serial, $displayName);
-    foreach ($goal as $g) $lines[] = $g;
-    $live = trim(strval($p['live_activity'] ?? ''));
-    $lines[] = 'Doing now: ' . ($live !== '' ? $live : 'not visible');
-    if (count($goal) === 0) $lines[] = 'No agreed goal.';
-
-    // Relationship
-    $lines[] = '';
-    $lines[] = 'RELATIONSHIP WITH ' . strtoupper($speaker !== '' ? $speaker : 'YOU');
-    $rel = 'No opinion of ' . ($speaker !== '' ? $speaker : 'you') . ' yet (neutral).';
-    if (is_array($row) && $speaker !== '') {
-        $map = stobeGetNpcRelationshipMap($row);
-        $key = stobeFindRelationshipEntryKey($map, $speaker);
-        if ($key !== '' && is_array($map[$key] ?? null)) {
-            $aff = intval($map[$key]['aff'] ?? 0);
-            $type = stobeNormalizeRelationshipTypeToken(strval($map[$key]['type'] ?? 'neutral'));
-            $rel = stobeRelationshipTierLabel($aff) . ($type !== '' && $type !== 'neutral' ? ' (' . $type . ')' : '');
+    $job = $title;
+    if ($job === '' && !empty($p['trader'])) $job = 'Trader';
+    if ($job === '') {
+        foreach ($facts as $f) {
+            if (($f['category'] ?? '') === 'occupation') { $job = ucfirst(strval($f['fact'])) . ' (they told you)'; break; }
         }
     }
-    $lines[] = $rel;
 
-    // Knowledge
-    $lines[] = '';
-    $lines[] = 'WHAT ' . strtoupper($speaker !== '' ? $speaker : 'YOU') . ' KNOWS';
-    $told = [];
-    foreach ($facts as $f) {
-        if (count($told) >= STOBE_NPC_FACT_MAX_SHOWN) break;
-        $cat = strval($f['category'] ?? 'background');
-        $told[] = '- ' . strval($f['fact']) . ($cat === 'interest' ? ' (interest)' : ($cat === 'history' ? ' (shared past)' : ''));
+    $looks = stobeNpcViewLooks($row);
+    $raceLine = stobeNpcViewRaceLine($looks);
+    [$relLabel, $relLine] = stobeNpcViewRelation($row, $speaker);
+
+    $dialogue = stobeNpcBioDialogue($sid, $speaker);
+    if ($dialogue['talks'] > 0) {
+        $talked = 'Talked ' . $dialogue['talks'] . ($dialogue['talks'] === 1 ? ' time' : ' times');
+        if ($dialogue['first_gamets'] > 0 && $gamets > 0) $talked .= ', first met ' . stobeNpcViewGameAgo(max(0, $gamets - $dialogue['first_gamets']));
+    } else {
+        $talked = "You haven't talked yet";
     }
-    if (count($told) > 0) { $lines[] = 'They told you (not verified):'; foreach ($told as $t) $lines[] = $t; }
-    if (count($past) > 0 || count($active) > 0) $lines[] = 'You saw: ' . (count($active) + count($past)) . ' deal(s) between you, listed above.';
-    if (count($told) === 0) $lines[] = 'Nothing learned about their past yet.';
 
-    return ['text' => implode("\n", $lines), 'storage_id' => $sid, 'facts' => count($facts), 'gamets' => $gamets];
+    $about = stobeNpcViewAbout($looks, preg_replace('/\s*\(they told you\)$/', '', $job) ?? $job, $faction);
+    $bio = stobeNpcBioFor($sid, $displayName, $speaker, $row, $dialogue, $facts, $generate, $quiet);
+
+    // Dealings
+    $outstanding = [];
+    [$active, $past] = $speaker !== '' ? stobeNpcViewDeals($serial, $fullName, $speaker, $gamets, $outstanding) : [[], []];
+    $deals = [];
+    if (count($active) === 0 && count($past) === 0) $deals[] = 'No deals with ' . $you . ' yet.';
+    foreach ($active as $a) $deals[] = $a;
+    if (count($outstanding) > 0) $deals[] = 'Outstanding: ' . implode('; ', array_unique($outstanding));
+    if (count($past) > 0) { $deals[] = 'Earlier:'; foreach ($past as $x) $deals[] = $x; }
+
+    // Right now
+    $now = stobeNpcViewGoal($serial, $fullName);
+    $live = trim(strval($p['live_activity'] ?? ''));
+    $now[] = 'Doing now: ' . ($live !== '' ? $live : 'not visible');
+
+    // What you've learned
+    $learned = [];
+    if ($bio['bio'] !== '') $learned[] = $bio['bio'];
+    elseif ($bio['state'] !== 'pending') {
+        if (count($facts) > 0) {
+            $learned[] = 'They told you:';
+            foreach (array_slice($facts, 0, STOBE_NPC_FACT_MAX_SHOWN) as $f) $learned[] = '- ' . strval($f['fact']);
+        } else {
+            $learned[] = STOBE_NPC_BIO_EMPTY;
+        }
+    }
+    if ($bio['state'] === 'pending') $learned[] = 'Updating...';
+
+    $header = [$displayName];
+    $header[] = 'Job: ' . ($job !== '' ? $job : 'unknown');
+    $header[] = 'Faction: ' . ($faction !== '' ? $faction : 'unknown');
+    if ($raceLine !== '') $header[] = $raceLine;
+    $header[] = 'Relationship: ' . $relLabel . ' - ' . lcfirst($relLine);
+    $header[] = $talked;
+    if (!is_array($row)) $header[] = '(No Stobe record for this character yet.)';
+
+    $body = [];
+    $body[] = 'ABOUT THEM';
+    $body[] = $about;
+    $body[] = '';
+    $body[] = "WHAT YOU'VE LEARNED";
+    foreach ($learned as $l) $body[] = $l;
+    $body[] = '';
+    $body[] = 'DEALINGS WITH ' . strtoupper($you);
+    foreach ($deals as $d) $body[] = $d;
+    $body[] = '';
+    $body[] = 'RIGHT NOW';
+    foreach ($now as $n) $body[] = $n;
+
+    return [
+        'text' => implode("\n", array_merge($header, [''], $body)),
+        'body' => implode("\n", $body),
+        'name' => $displayName,
+        'job' => $job !== '' ? $job : 'unknown',
+        'faction' => $faction !== '' ? $faction : 'unknown',
+        'race_line' => $raceLine,
+        'relation_label' => $relLabel,
+        'relation_line' => $relLine,
+        'talked_line' => $talked,
+        'about' => $about,
+        'bio' => $bio['bio'],
+        'bio_state' => $bio['state'],
+        'bio_stale' => $bio['stale'] ? 1 : 0,
+        'deals' => implode("\n", $deals),
+        'now' => implode("\n", $now),
+        'storage_id' => $sid,
+        'facts' => count($facts),
+        'gamets' => $gamets,
+    ];
 }

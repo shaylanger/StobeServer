@@ -182,12 +182,20 @@ function stobePlaythroughPruneFutureTimeline(int $cutoffGamets): array
         'task_goals' => 0,
         'work_goals' => 0,
         'npc_facts' => 0,
+        'npc_bio' => 0,
     ];
 
     // NPC info panel: facts learned in the abandoned timeline go too; unstamped (game_ts 0) rows stay.
     if (stobePlaythroughTableExists('stobe_npc_learned_fact')) {
         $counts['npc_facts'] = stobePlaythroughDeleteCount(
             'WITH deleted AS (DELETE FROM stobe_npc_learned_fact WHERE game_ts > $1 RETURNING 1) SELECT COUNT(*)::int AS c FROM deleted',
+            [$cutoff]
+        );
+    }
+    // NPC info panel: biographies written from that timeline go too (rebuilt on the next open).
+    if (stobePlaythroughTableExists('stobe_npc_bio')) {
+        $counts['npc_bio'] = stobePlaythroughDeleteCount(
+            'WITH deleted AS (DELETE FROM stobe_npc_bio WHERE source_gamets > $1 RETURNING 1) SELECT COUNT(*)::int AS c FROM deleted',
             [$cutoff]
         );
     }
@@ -1270,6 +1278,7 @@ function stobePlaythroughZeroPruneCounts(): array
         'player_bases_restored' => 0,
         'player_base_presence_cleared' => 0,
         'npc_facts' => 0,
+        'npc_bio' => 0,
     ];
 }
 

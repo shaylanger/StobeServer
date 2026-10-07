@@ -473,7 +473,9 @@ if ($action === 'player_view') {
         echo json_encode(['ok' => false, 'error' => 'player_view failed', 'key' => strval($payload['key'] ?? '')], $jsonFlags);
         return;
     }
-    echo json_encode(['ok' => true, 'text' => $view['text'], 'key' => strval($payload['key'] ?? ''), 'storage_id' => $view['storage_id']], $jsonFlags);
+    // card fields (name, job, faction, race_line, relation_label/line, talked_line, about, bio, bio_state,
+    // bio_stale, deals, now, body) + 'text' (whole card as plain text, read by the harness)
+    echo json_encode(array_merge(['ok' => true, 'key' => strval($payload['key'] ?? '')], $view), $jsonFlags);
     return;
 }
 
