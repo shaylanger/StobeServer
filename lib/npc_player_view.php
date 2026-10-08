@@ -6,6 +6,9 @@
  * game/server state; the only LLM call is the cached "What you've learned" paragraph
  * (stobeNpcBioFor), written from the NPC's own lines to that listener and the facts
  * they disclosed, regenerated only when new dialogue/facts exist (max once per 60 s).
+ * At relationship tier NPC_BIO_BACKSTORY_MIN_TIER (default Devoted) or higher with the
+ * speaker, the bio may also draw on the stored backstory, framed as what the NPC confided;
+ * goals, personality, notes, prompts and other metadata never reach the bio prompt.
  *
  * Learned facts (stobe_npc_learned_fact): what an NPC disclosed about themselves
  * to one listener, extracted by the existing per-turn relationship evaluator
@@ -318,6 +321,37 @@ const STOBE_NPC_BIO_MIN_REGEN_SECONDS = 60;
 const STOBE_NPC_BIO_DIALOGUE_TYPES = ['chat', 'rechat', 'inputtext', 'inputtext_s', 'ginputtext', 'ginputtext_s'];
 const STOBE_NPC_BIO_EMPTY = "You don't know much about them yet. Talk to them to learn more.";
 const STOBE_NPC_BIO_MAX_LINES = 40;
+const STOBE_NPC_BIO_BACKSTORY_SETTING = 'NPC_BIO_BACKSTORY_MIN_TIER'; // tier name (Acquaintance..Bonded) or 'off'
+const STOBE_NPC_BIO_BACKSTORY_DEFAULT_TIER = 'Devoted';
+const STOBE_NPC_BIO_BACKSTORY_MAX_CHARS = 1500;
+
+/** Lowest affinity of a relationship tier label (stobeRelationshipTierLabel ladder), null if unknown. */
+function stobeNpcBioTierMinAff(string $tier): ?int {
+    $t = strtolower(trim($tier));
+    for ($s = -100; $s <= 100; $s++) {
+        if (strtolower(stobeRelationshipTierLabel($s)) === $t) return $s;
+    }
+    return null;
+}
+
+/** Affinity from which the bio may use the hidden backstory; null = never (setting 'off'). Unknown values fall back to the default tier. */
+function stobeNpcBioBackstoryMinAff(): ?int {
+    $raw = function_exists('getSetting') ? getSetting(STOBE_NPC_BIO_BACKSTORY_SETTING, STOBE_NPC_BIO_BACKSTORY_DEFAULT_TIER) : '';
+    $t = strtolower(trim($raw));
+    if (in_array($t, ['off', 'never', 'none', 'false', 'no', '0'], true)) return null;
+    $min = $t !== '' ? stobeNpcBioTierMinAff($t) : null;
+    return $min ?? stobeNpcBioTierMinAff(STOBE_NPC_BIO_BACKSTORY_DEFAULT_TIER);
+}
+
+/** The backstory text the bio may use for this speaker ('' = not allowed / none stored). */
+function stobeNpcBioConfidedBackstory(array|false $row, ?int $speakerAff): string {
+    if (!is_array($row) || $speakerAff === null) return '';
+    $min = stobeNpcBioBackstoryMinAff();
+    if ($min === null || $speakerAff < $min) return '';
+    $b = trim(preg_replace('/\s+/', ' ', strval($row['backstory'] ?? '')) ?? '');
+    if (strlen($b) > STOBE_NPC_BIO_BACKSTORY_MAX_CHARS) $b = rtrim(substr($b, 0, STOBE_NPC_BIO_BACKSTORY_MAX_CHARS - 3)) . '...';
+    return $b;
+}
 
 function stobeNpcBioEnsureSchema(): void {
     static $done = false;
@@ -338,6 +372,7 @@ function stobeNpcBioEnsureSchema(): void {
         )"
     );
     $db->exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_stobe_npc_bio ON stobe_npc_bio (npc_storage_id, LOWER(learner_name))");
+    $db->exec("ALTER TABLE stobe_npc_bio ADD COLUMN IF NOT EXISTS backstory_included SMALLINT NOT NULL DEFAULT 0");
     $done = true;
 }
 
@@ -406,7 +441,8 @@ function stobeNpcBioDialogue(string $sid, string $learner, int $limit = 400): ar
 function stobeNpcBioCache(string $sid, string $learner): array|false {
     stobeNpcBioEnsureSchema();
     $row = $GLOBALS['db']->fetchOne(
-        "SELECT *, (attempted_at IS NOT NULL AND attempted_at > NOW() - make_interval(secs => $3)) AS throttled
+        "SELECT *, (attempted_at IS NOT NULL AND attempted_at > NOW() - make_interval(secs => $3)) AS throttled,
+                (attempted_at IS NULL OR updated_at > attempted_at) AS last_ok
          FROM stobe_npc_bio WHERE npc_storage_id=$1 AND LOWER(learner_name)=LOWER($2) LIMIT 1",
         [$sid, $learner, STOBE_NPC_BIO_MIN_REGEN_SECONDS]
     );
@@ -425,10 +461,13 @@ function stobeNpcBioCleanReply(string $raw): string {
     return $t;
 }
 
-/** The bio prompt: built only from the dialogue lines and told facts (never the stored profile). */
-function stobeNpcBioMessages(string $npcName, string $learner, array $lines, array $facts, string $pronoun = 'they'): array {
+/** The bio prompt: built only from the dialogue lines, told facts and (high tiers only) the confided backstory; never goals/personality/notes/prompts. */
+function stobeNpcBioMessages(string $npcName, string $learner, array $lines, array $facts, string $pronoun = 'they', string $confided = ''): array {
     $system = "<npc_card_biography>\n"
         . "  <rule>Write the 'What you've learned' paragraph of a character card in a game UI.</rule>\n"
+        . ($confided !== ''
+            ? "  <rule>The reader is very close to the character, who has privately confided the story in <confided> over time. You may use it, always framed as what the character has told or confided to the reader (for example: they once confided that ...). Retell it in your own plain words: never copy its sentences, never call it a backstory, profile or notes.</rule>\n"
+            : '')
         . "  <rule>Use ONLY what the character said in the conversation lines and the told facts below. Do not invent anything, do not guess, do not add lore.</rule>\n"
         . "  <rule>Third person about the character, plain everyday English, 2 to 5 short sentences, no lists, no headings, no quotes, no names of the reader.</rule>\n"
         . "  <rule>Prefer what they said about themselves (origin, work, family, interests, plans). If they said nothing personal, say in one or two sentences how they have come across when talking.</rule>\n"
@@ -444,7 +483,8 @@ function stobeNpcBioMessages(string $npcName, string $learner, array $lines, arr
         . "<pronoun>" . stobePromptXmlEscape($pronoun) . "</pronoun>\n"
         . "<reader>" . stobePromptXmlEscape($learner) . "</reader>\n"
         . "<told_facts>\n" . stobePromptXmlEscape(count($told) > 0 ? implode("\n", $told) : '(none)') . "\n</told_facts>\n"
-        . "<conversation>\n" . stobePromptXmlEscape(implode("\n", $conv)) . "\n</conversation>";
+        . "<conversation>\n" . stobePromptXmlEscape(implode("\n", $conv)) . "\n</conversation>"
+        . ($confided !== '' ? "\n<confided>\n" . stobePromptXmlEscape($confided) . "\n</confided>" : '');
     return [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]];
 }
 
@@ -460,26 +500,37 @@ function stobeNpcBioCallLlm(array $messages, array|false $npcRow, string $npcNam
  * The growing biography for (NPC, learner). $generate=false never calls the LLM: it returns the cache and
  * 'stale'=true when new dialogue/facts exist and a regeneration is allowed (DLL then asks again with bio=1).
  * $generate=true regenerates at most once per STOBE_NPC_BIO_MIN_REGEN_SECONDS per pair.
+ * $confided = backstory the bio may use (stobeNpcBioConfidedBackstory; '' below the tier). The cache row is
+ * marked backstory_included; a mismatch (tier crossed either way) makes it stale and skips the throttle once,
+ * and a backstory bio is never shown to a speaker below the tier. 'backstory' = 1 when the shown bio used it.
  * state: empty | cached | pending | updated
  */
-function stobeNpcBioFor(string $sid, string $npcName, string $learner, array|false $npcRow, array $dialogue, array $facts, bool $generate, bool $quiet = false): array {
-    $res = ['bio' => '', 'state' => 'empty', 'stale' => false];
+function stobeNpcBioFor(string $sid, string $npcName, string $learner, array|false $npcRow, array $dialogue, array $facts, bool $generate, bool $quiet = false, string $confided = ''): array {
+    $res = ['bio' => '', 'state' => 'empty', 'stale' => false, 'backstory' => 0];
+    $useBs = $confided !== '';
     if ($sid === '' || $learner === '') return $res;
-    if ($dialogue['npc_lines'] === 0 && count($facts) === 0) return $res;
+    if ($dialogue['npc_lines'] === 0 && count($facts) === 0 && !$useBs) return $res;
     $cache = stobeNpcBioCache($sid, $learner);
     $cachedBio = is_array($cache) ? strval($cache['bio'] ?? '') : '';
-    $fresh = is_array($cache) && $cachedBio !== ''
+    $cachedBs = is_array($cache) && intval($cache['backstory_included'] ?? 0) === 1;
+    $bsMatch = $cachedBs === $useBs;
+    $fresh = is_array($cache) && $cachedBio !== '' && $bsMatch
         && intval($cache['source_rowid_max']) === intval($dialogue['rowid_max'])
         && intval($cache['fact_count']) === count($facts);
-    $throttled = is_array($cache) && ($cache['throttled'] === true || $cache['throttled'] === 't');
+    $lastOk = is_array($cache) && ($cache['last_ok'] === true || $cache['last_ok'] === 't');
+    $throttled = is_array($cache) && ($cache['throttled'] === true || $cache['throttled'] === 't')
+        && ($bsMatch || $cachedBio === '' || !$lastOk); // a tier crossing regenerates at once unless the last attempt failed
     $res['bio'] = $cachedBio;
-    $res['state'] = $cachedBio !== '' ? 'cached' : 'empty';
+    $res['backstory'] = $cachedBio !== '' && $cachedBs ? 1 : 0;
+    if ($cachedBs && !$useBs) { $res['bio'] = ''; $res['backstory'] = 0; } // below the tier now: never show what was confided
+    $res['state'] = $res['bio'] !== '' ? 'cached' : 'empty';
+    $bsLog = 'backstory=' . ($useBs ? 1 : 0);
     if ($fresh) {
-        if (!$quiet) stobeLogInfo('NPC_BIO: cache hit', ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner, 'rowid' => $dialogue['rowid_max'], 'facts' => count($facts)]);
+        if (!$quiet) stobeLogInfo('NPC_BIO: cache hit ' . $bsLog, ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner, 'rowid' => $dialogue['rowid_max'], 'facts' => count($facts), 'backstory' => $res['backstory']]);
         return $res;
     }
     if ($throttled) {
-        if (!$quiet) stobeLogInfo('NPC_BIO: throttled', ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner]);
+        if (!$quiet) stobeLogInfo('NPC_BIO: throttled backstory=' . $res['backstory'], ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner, 'backstory' => $res['backstory']]);
         return $res;
     }
     if (!$generate) {
@@ -500,7 +551,7 @@ function stobeNpcBioFor(string $sid, string $npcName, string $learner, array|fal
     try {
         $g = is_array($npcRow) ? strtolower(trim(strval($npcRow['gender'] ?? ''))) : '';
         $pronoun = $g === 'female' ? 'she' : ($g === 'male' ? 'he' : 'they');
-        $raw = stobeNpcBioCallLlm(stobeNpcBioMessages($npcName, $learner, $dialogue['lines'], $facts, $pronoun), $npcRow, $npcName);
+        $raw = stobeNpcBioCallLlm(stobeNpcBioMessages($npcName, $learner, $dialogue['lines'], $facts, $pronoun, $confided), $npcRow, $npcName);
     } catch (Throwable $e) {
         stobeLogWarn('NPC_BIO: llm failed', ['npc' => $npcName, 'error' => $e->getMessage()]);
     }
@@ -510,13 +561,13 @@ function stobeNpcBioFor(string $sid, string $npcName, string $learner, array|fal
         return $res;
     }
     $db->exec(
-        "UPDATE stobe_npc_bio SET bio=$3, source_rowid_max=$4, fact_count=$5, source_gamets=$6, updated_at=NOW()
+        "UPDATE stobe_npc_bio SET bio=$3, source_rowid_max=$4, fact_count=$5, source_gamets=$6, backstory_included=$7, updated_at=clock_timestamp()
          WHERE npc_storage_id=$1 AND LOWER(learner_name)=LOWER($2)",
-        [$sid, $learner, $bio, intval($dialogue['rowid_max']), count($facts), $srcGamets]
+        [$sid, $learner, $bio, intval($dialogue['rowid_max']), count($facts), $srcGamets, $useBs ? 1 : 0]
     );
-    stobeLogInfo('NPC_BIO: generated', ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner, 'lines' => count($dialogue['lines']),
-        'facts' => count($facts), 'rowid' => $dialogue['rowid_max'], 'ms' => intval((microtime(true) - $t0) * 1000)]);
-    return ['bio' => $bio, 'state' => 'updated', 'stale' => false];
+    stobeLogInfo('NPC_BIO: generated ' . $bsLog, ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner, 'lines' => count($dialogue['lines']),
+        'facts' => count($facts), 'rowid' => $dialogue['rowid_max'], 'backstory' => $useBs ? 1 : 0, 'ms' => intval((microtime(true) - $t0) * 1000)]);
+    return ['bio' => $bio, 'state' => 'updated', 'stale' => false, 'backstory' => $useBs ? 1 : 0];
 }
 
 // ------------------------------------------------------------------ header fields
@@ -592,6 +643,15 @@ function stobeNpcViewAbout(array $looks, string $job, string $faction): string {
     elseif ($jobL !== '') $sent[] = $pron . ' ' . $works . ' as ' . stobeNpcViewArticle($jobL) . ' ' . strtolower($jobL) . '.';
     elseif ($facL !== '') $sent[] = $pron . ' ' . $is . ' with the ' . $facL . '.';
     return count($sent) > 0 ? implode(' ', $sent) : 'You know nothing about how they look yet.';
+}
+
+/** The NPC's affinity toward the speaker (null = no relationship entry). */
+function stobeNpcViewSpeakerAff(array|false $row, string $speaker): ?int {
+    if (!is_array($row) || $speaker === '') return null;
+    $map = stobeGetNpcRelationshipMap($row);
+    $key = stobeFindRelationshipEntryKey($map, $speaker);
+    if ($key === '' || !is_array($map[$key] ?? null)) return null;
+    return intval($map[$key]['aff'] ?? 0);
 }
 
 function stobeNpcViewRelation(array|false $row, string $speaker): array {
@@ -677,7 +737,8 @@ function stobeNpcPlayerViewText(array $p): array {
     }
 
     $about = stobeNpcViewAbout($looks, preg_replace('/\s*\(they told you\)$/', '', $job) ?? $job, $faction);
-    $bio = stobeNpcBioFor($sid, $displayName, $speaker, $row, $dialogue, $facts, $generate, $quiet);
+    $confided = stobeNpcBioConfidedBackstory($row, stobeNpcViewSpeakerAff($row, $speaker));
+    $bio = stobeNpcBioFor($sid, $displayName, $speaker, $row, $dialogue, $facts, $generate, $quiet, $confided);
 
     // Dealings
     $outstanding = [];
@@ -741,6 +802,7 @@ function stobeNpcPlayerViewText(array $p): array {
         'bio' => $bio['bio'],
         'bio_state' => $bio['state'],
         'bio_stale' => $bio['stale'] ? 1 : 0,
+        'bio_backstory' => intval($bio['backstory'] ?? 0),
         'deals' => implode("\n", $deals),
         'now' => implode("\n", $now),
         'storage_id' => $sid,

@@ -160,6 +160,71 @@ check('other speaker: job unknown (no trader flag, no title, hidden occupation u
 $r = stobeNpcPlayerViewText(['serial' => $serial, 'name' => 'RNPV Renamed', 'speaker' => 'RNPVBeak', 'gamets' => 5000]);
 check('renamed NPC keeps deals + bio', $r['name'] === 'RNPV Renamed' && str_contains($r['text'], 'grew up in Stack') && str_contains($r['text'], '200 Cats'), $r['text']);
 
+// 3c. hidden backstory: only at/above NPC_BIO_BACKSTORY_MIN_TIER (default Devoted), framed as confided;
+// the cache is marked backstory_included, a tier crossing either way regenerates; goals/thoughts/prompt never in the prompt
+$db->exec("DELETE FROM general_settings WHERE id='NPC_BIO_BACKSTORY_MIN_TIER'");
+$db->exec("UPDATE core_npc SET prompt_head='SECRET_PROMPT be evil', speechstyle='SECRET_VOICE gruff',
+           extended_data = extended_data || '{\"hidden_thoughts\":\"SECRET_THOUGHT plans to flee\"}'::jsonb WHERE name='RNPV Gorlo'");
+$GLOBALS['STOBE_NPC_BIO_LLM'] = static function (array $messages) {
+    $GLOBALS['STOBE_NPC_BIO_LLM_CALLS'][] = $messages;
+    return str_contains(json_encode($messages), 'SECRET_BACKSTORY') ? 'She once confided that she killed her brother.' : 'She grew up in Stack and guarded caravans.';
+};
+$setAff = static function (int $aff) use ($db): void {
+    $db->exec("UPDATE core_npc SET extended_data = jsonb_set(extended_data, '{relationships,RNPVBeak,aff}', to_jsonb($1::int)) WHERE name='RNPV Gorlo'", [$aff]);
+};
+$unthrottle = static function () use ($db, $sid): void {
+    $db->exec("UPDATE stobe_npc_bio SET attempted_at = attempted_at - interval '2 minutes', updated_at = updated_at - interval '2 minutes' WHERE npc_storage_id=$1", [$sid]);
+};
+$cv = static fn(array $x = []): array => stobeNpcPlayerViewText(array_merge(['serial' => $serial, 'name' => 'RNPV Gorlo', 'speaker' => 'RNPVBeak', 'gamets' => 5000], $x));
+$lastPrompt = static fn(): string => json_encode(end($GLOBALS['STOBE_NPC_BIO_LLM_CALLS']));
+$noHidden = static fn(string $p): bool => !str_contains($p, 'SECRET_GOAL') && !str_contains($p, 'SECRET_THOUGHT') && !str_contains($p, 'SECRET_PROMPT')
+    && !str_contains($p, 'SECRET_VOICE') && !str_contains($p, 'SECRET_PERSONALITY') && !str_contains($p, 'SECRET_NOTE') && !str_contains($p, 'SECRET_BIO_OCC');
+check('backstory tier: default Devoted (76), Bonded 91', stobeNpcBioBackstoryMinAff() === 76 && stobeNpcBioTierMinAff('Bonded') === 91, stobeNpcBioBackstoryMinAff());
+$unthrottle();
+$n0 = $bioCalls();
+$b0 = $cv(['bio' => 1]); // Friendly (40): pending dialogue from 3b -> regenerated without backstory
+check('below tier: bio_backstory=0, prompt has no backstory', $b0['bio_state'] === 'updated' && $b0['bio_backstory'] === 0 && $bioCalls() === $n0 + 1
+    && !str_contains($lastPrompt(), 'SECRET_') && !str_contains($lastPrompt(), 'confided'), [$b0['bio_state'], $b0['bio_backstory']]);
+$setAff(80); // Devoted
+$b1 = $cv();
+check('crossing up: stale + pending, old bio shown with bio_backstory=0, no LLM call', $b1['bio_state'] === 'pending' && $b1['bio_stale'] === 1
+    && $b1['bio_backstory'] === 0 && $b1['bio'] === 'She grew up in Stack and guarded caravans.' && $bioCalls() === $n0 + 1, [$b1['bio_state'], $b1['bio_backstory']]);
+$b2 = $cv(['bio' => 1]); // inside the 60 s window: a tier crossing still regenerates
+$pr = $lastPrompt();
+check('at Devoted: regenerated with backstory, bio_backstory=1', $b2['bio_state'] === 'updated' && $b2['bio_backstory'] === 1 && $bioCalls() === $n0 + 2
+    && str_contains($b2['bio'], 'confided'), [$b2['bio_state'], $b2['bio_backstory'], $b2['bio']]);
+check('at Devoted: prompt holds the backstory framed as confided', str_contains($pr, 'SECRET_BACKSTORY he murdered his brother') && str_contains($pr, '<confided>')
+    && str_contains($pr, 'never copy its sentences'), $pr);
+check('at Devoted: goals/thoughts/prompt/voice/personality/notes never in the prompt', $noHidden($pr), $pr);
+check('at Devoted: card never holds raw profile text', !str_contains(json_encode($b2), 'SECRET_'), $b2['text']);
+check('cache row marked backstory_included=1', intval(stobeNpcBioCache($sid, 'RNPVBeak')['backstory_included'] ?? -1) === 1);
+$b3 = $cv(['bio' => 1]);
+check('at Devoted: cache hit keeps bio_backstory=1, no LLM call', $b3['bio_state'] === 'cached' && $b3['bio_backstory'] === 1 && $bioCalls() === $n0 + 2, [$b3['bio_state'], $b3['bio_backstory']]);
+$setAff(40); // a grudge: back below Devoted
+$b4 = $cv();
+check('crossing down: confided bio hidden at once, bio_backstory=0', $b4['bio_backstory'] === 0 && !str_contains($b4['text'], 'killed her brother')
+    && $b4['bio_state'] === 'pending' && $bioCalls() === $n0 + 2, [$b4['bio_state'], $b4['bio_backstory'], $b4['bio']]);
+$b5 = $cv(['bio' => 1]);
+check('crossing down: regenerated without backstory', $b5['bio_state'] === 'updated' && $b5['bio_backstory'] === 0 && $bioCalls() === $n0 + 3
+    && !str_contains($lastPrompt(), 'SECRET_'), [$b5['bio_state'], $b5['bio_backstory']]);
+// setting: Bonded needs 91; off never
+$db->exec("INSERT INTO general_settings (id, value) VALUES ('NPC_BIO_BACKSTORY_MIN_TIER', 'Bonded') ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value");
+$setAff(80);
+$b6 = $cv(['bio' => 1]);
+check('setting Bonded: Devoted is not enough', $b6['bio_state'] === 'cached' && $b6['bio_backstory'] === 0 && $bioCalls() === $n0 + 3, [$b6['bio_state'], $b6['bio_backstory']]);
+$setAff(95);
+$b7 = $cv(['bio' => 1]);
+check('setting Bonded: Bonded uses the backstory', $b7['bio_state'] === 'updated' && $b7['bio_backstory'] === 1 && str_contains($lastPrompt(), 'SECRET_BACKSTORY'), [$b7['bio_state'], $b7['bio_backstory']]);
+$db->exec("UPDATE general_settings SET value='off' WHERE id='NPC_BIO_BACKSTORY_MIN_TIER'");
+$b8 = $cv(['bio' => 1]);
+check('setting off: never', $b8['bio_backstory'] === 0 && !str_contains($lastPrompt(), 'SECRET_'), [$b8['bio_state'], $b8['bio_backstory']]);
+$db->exec("DELETE FROM general_settings WHERE id='NPC_BIO_BACKSTORY_MIN_TIER'");
+$z = $cv(['speaker' => 'RNPVZed', 'bio' => 1]);
+check('other speaker (no relationship): bio_backstory=0', $z['bio_backstory'] === 0 && !str_contains(json_encode($z), 'brother'), [$z['bio_state'], $z['bio_backstory']]);
+$setAff(40);
+$src = file_get_contents(__DIR__ . '/../lib/npc_player_view.php');
+check('NPC_BIO log lines carry backstory=1|0', str_contains($src, "'NPC_BIO: generated ' . \$bsLog") && str_contains($src, "'NPC_BIO: cache hit ' . \$bsLog"));
+
 // 4. evaluator wiring: prompt asks for disclosed facts, a first-person background line triggers the evaluation
 $src = file_get_contents(__DIR__ . '/../lib/chat_helper_functions.php');
 check('evaluator prompt asks for disclosed facts', str_contains($src, 'Also return \\"disclosed\\"'));
