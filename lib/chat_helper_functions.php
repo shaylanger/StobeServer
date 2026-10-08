@@ -12368,8 +12368,15 @@ function stobeRelationshipTurnNeedsConnectorEvaluation(
     }
     // NPC info panel: the NPC talking about their own past/work is worth one evaluation (disclosed facts ride on it).
     if (trim($responseText) !== '' && preg_match(
-        '/\b(i was born|i grew up|i used to|i come from|i came from|years ago|back when i|before i (?:came|joined|was)|my (?:father|mother|family|brother|sister|parents|village|home ?town)|i once|i\'ve been an?|i was an?|i work(?:ed)? as)\b/i',
+        '/\b(i was born|i grew up|i used to|i come from|i came from|years ago|back when i|before i (?:came|joined|was)|my (?:father|mother|family|brother|sister|parents|village|home ?town|childhood|past)|i once|i\'ve been an?|i was an?|i work(?:ed)? as|i (?:hid|lived|worked|fought|served|survived|escaped|lost|left|ran|grew|spent)\b)\b/i',
         $responseText
+    ) === 1) {
+        return true;
+    }
+    // NP5 (m54): the player asked about the NPC's own life/past and the NPC answered: evaluate, whatever the wording.
+    if (trim($responseText) !== '' && preg_match(
+        '/\b(tell me about (?:yourself|you|your (?:past|life|family|home|story|work))|where (?:did you grow up|are you from|do you come from|were you born)|what (?:did you do|work did you do|were you) before|your (?:past|childhood|backstory|background|story)|how did you (?:end up|get|come) (?:here|to)|who are you really)\b/i',
+        $incomingLine
     ) === 1) {
         return true;
     }
@@ -12513,6 +12520,14 @@ function stobeEvaluateRelationshipsForTurn(
             'event_type' => 'relationship_eval',
             'response_format' => ['type' => 'json_object'],
         ]);
+        // Test switch NEG_TEST_INJECT (off by default), context "relationship": keys put into the evaluator reply (NP5).
+        try {
+            require_once __DIR__ . '/negotiation_test_switches.php';
+            $relInject = stobeNegTestTakeInjection('relationship', $speaker, $speakerNpcData, $listener);
+            if ($relInject !== null) $rawEval = stobeNegTestApplyRelationshipInjection($rawEval === false ? '' : strval($rawEval), $relInject);
+        } catch (Throwable $e) {
+            stobeLogWarn('NEG_TEST_INJECT relationship context failed', ['npc' => $speaker, 'error' => $e->getMessage()]);
+        }
         if ($rawEval !== false && trim(strval($rawEval)) !== '' && strcasecmp($listener, $speaker) !== 0) {
             // NPC info panel: facts the NPC disclosed to the listener, from the same evaluator reply (no extra LLM call).
             try {

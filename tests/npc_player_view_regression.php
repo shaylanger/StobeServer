@@ -39,6 +39,23 @@ $p = stobeNpcFactParseDisclosed('{"updates":[],"disclosed":[{"fact":"knows a hid
 check('parse: unknown category -> background, too-short dropped', count($p) === 1 && $p[0]['category'] === 'background', $p);
 check('parse: no disclosed key -> none', stobeNpcFactParseDisclosed('{"updates":[]}') === []);
 check('parse: garbage -> none', stobeNpcFactParseDisclosed('not json') === []);
+// NP5 (m54): the evaluator (which carries "disclosed") must run when the player asks about the NPC's past
+require_once __DIR__ . '/../lib/chat_helper_functions.php';
+require_once __DIR__ . '/../lib/negotiation_test_switches.php';
+$np5 = 0;
+for ($i = 0; $i < 40; $i++) {
+    if (stobeRelationshipTurnNeedsConnectorEvaluation('Shay: Tell me about yourself. Where did you grow up, and what work did you do before you ended up here?',
+        'I hid in a storage container two days without water while it went up around me.', 'chat', 4)) $np5++;
+}
+check('NP5 gate: question about her past -> evaluated every time', $np5 === 40, $np5);
+$np5 = 0;
+for ($i = 0; $i < 40; $i++) if (stobeRelationshipTurnNeedsConnectorEvaluation('Shay: Nice day.', 'I hid in the shade all morning.', 'chat', 4)) $np5++;
+check('NP5 gate: first-person past reply -> evaluated every time', $np5 === 40, $np5);
+check('NP5 gate: chance 0 still off', !stobeRelationshipTurnNeedsConnectorEvaluation('Shay: Tell me about yourself.', 'I grew up in Stack.', 'chat', 0));
+$ri = stobeNegTestApplyRelationshipInjection('{"updates":[{"target":"X","aff_delta":2}]}', ['step' => ['disclosed' => [['fact' => 'grew up in Stack', 'category' => 'background']]]]);
+$rp = stobeNpcFactParseDisclosed($ri);
+check('relationship injection: disclosed added, updates kept', count($rp) === 1 && $rp[0]['fact'] === 'grew up in Stack' && str_contains($ri, '"aff_delta":2'), $ri);
+check('relationship injection on an empty reply', count(stobeNpcFactParseDisclosed(stobeNegTestApplyRelationshipInjection('', ['step' => ['disclosed' => ['was a caravan guard']]]))) === 1);
 
 // 2. record
 $npcData = ['name' => 'RNPV Gorlo', 'metadata' => json_encode(['storage_id' => $sid])];

@@ -10,7 +10,8 @@
  *     {"row":"27","npc":"Varn Oddie","context":"chat","steps":[{"deal_decision":"COUNTER","deal_terms":""}, ...]}
  *   - npc: optional; the speaker's name (also matches "Name [npc]" after a rename, and npc "X" vs "X [Y]").
  *   - context: chat (the player talks to her; default) | directive (her negotiation directive turn)
- *     | react (a drawn-weapon reaction turn, StobeDrawnWeapon.cpp) | any.
+ *     | react (a drawn-weapon reaction turn, StobeDrawnWeapon.cpp) | relationship (the relationship evaluator's JSON
+ *     reply after her turn, e.g. {"disclosed":[{"fact":"...","category":"background"}]}; only when the real gate runs it) | any.
  *   - each step = keys of the reply JSON to override: message, deal_decision, deal_terms (string or array),
  *     action, target, item, amount, ... Placeholders in strings: {player} {npc} {weapon} {worn}.
  *   - one step per turn, in order; the switch fires no more once all steps are used ("fired" is set).
@@ -137,6 +138,16 @@ function stobeNegTestApplyInjection(string $raw, array $inject): string {
         $decoded[$k] = $val;
     }
     return json_encode($decoded, JSON_UNESCAPED_SLASHES);
+}
+
+/** Relationship-evaluator reply (context "relationship") with the injected keys put in, e.g. "disclosed". */
+function stobeNegTestApplyRelationshipInjection(string $raw, array $inject): string {
+    $d = json_decode(trim($raw), true);
+    if (!is_array($d) && preg_match('/\{[\s\S]*\}/', $raw, $m)) $d = json_decode($m[0], true);
+    if (!is_array($d)) $d = [];
+    if (!is_array($d['updates'] ?? null)) $d['updates'] = [];
+    foreach ((array)($inject['step'] ?? []) as $k => $val) $d[$k] = $val;
+    return json_encode($d, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 }
 
 /**
