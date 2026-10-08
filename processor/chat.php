@@ -1520,6 +1520,7 @@ if ($manualActionActive && $manualActionCannotSpeak) {
             $negotiationActive = false;
         }
         if ($negotiationActive) {
+            $dealAcceptedUnix = time(); // NP7: evidence windows start here, not at the (later) performance start
             $dealResult = stobeDealCaptureResponse(
                 strval($streamResult['raw_response'] ?? ''), $targetNpc, $playerName, $npcData, $message,
                 $negotiationKind !== '' ? $negotiationKind : 'combat'
@@ -1895,7 +1896,7 @@ if (isset($deferredRelationshipEval)) {
 if (isset($dealResult) && ($dealResult['decision'] ?? '') === 'ACCEPT'
     && ($dealResult['status'] ?? '') === 'ACCEPTED' && function_exists('stobeNegBeginPerformance')) {
     // Queued actions are not proof of anything; the engine verifies each term from evidence.
-    stobeNegBeginPerformance(strval($dealResult['id']), $responseActions, $playerName, intval($gamets), $peopleRaw);
+    stobeNegBeginPerformance(strval($dealResult['id']), $responseActions, $playerName, intval($gamets), $peopleRaw, intval($dealAcceptedUnix ?? 0));
     // "Here's your cats" in the same line that closed the deal: pay what is now owed.
     if (($voiceHandoverNote ?? '') === '' && !$narratorMode && empty($manualActionActive)
         && function_exists('stobeNegVoiceHandover')) {

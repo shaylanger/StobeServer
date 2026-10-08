@@ -754,7 +754,7 @@ function stobeNegBuildTermState(array $terms, array $dispatched, string $player,
  * Called after the accepting reply's actions are final (after policy filtering).
  * Moves ACCEPTED -> AWAITING_PERFORMANCE and records what was actually sent.
  */
-function stobeNegBeginPerformance(string $id, array $finalActions, string $player, int $gamets, string $peopleRaw = ''): bool {
+function stobeNegBeginPerformance(string $id, array $finalActions, string $player, int $gamets, string $peopleRaw = '', int $acceptedUnix = 0): bool {
     try {
         stobeNegEnsureSchema();
         $deal = stobeNegFetchDeal($id);
@@ -788,15 +788,18 @@ function stobeNegBeginPerformance(string $id, array $finalActions, string $playe
             [strval($deal['npc_name']), $id]
         );
         // Payment searches start 3 s before dispatch_unix; keep clear of the previous deal's payment.
-        $lookback = min(120, max(0, intval($prev['age'] ?? 120) - 6));
+        // NP7 (m64): windows are anchored on the accept (the reply that carried the hand-over), not on
+        // this call, which can run long after it (the relationship eval sits in between: 41 s in m64).
+        $anchor = ($acceptedUnix > 0 && $acceptedUnix <= $now) ? $acceptedUnix : $now;
+        $floor = isset($prev['age']) && $prev['age'] !== null ? $now - max(0, intval($prev['age']) - 6) : 0;
         foreach ($state as $idx => $t) {
             if (($t['by'] ?? '') === 'player' && in_array($t['kind'] ?? '', ['GIVE_CATS','GIVE_ITEM','RETURN_ITEM'], true)) {
-                $state[$idx]['dispatched_unix'] = $now - $lookback;
+                $state[$idx]['dispatched_unix'] = min($now, max($floor, $anchor - 120));
             }
             // Item 96: her hand-over went out with the accepting reply and can land before this start.
             if (($t['by'] ?? '') === 'npc' && ($t['status'] ?? '') === 'DISPATCHED'
                 && in_array($t['kind'] ?? '', ['GIVE_CATS','GIVE_ITEM','RETURN_ITEM'], true)) {
-                $state[$idx]['evidence_since_unix'] = $now - min(30, $lookback);
+                $state[$idx]['evidence_since_unix'] = min($now, max($floor, $anchor - 30));
             }
         }
         // STOBE's STOP_ATTACK is a faction ceasefire and refuses personal brawls

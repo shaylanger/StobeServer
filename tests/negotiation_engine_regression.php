@@ -194,6 +194,23 @@ stobeLine("ACTION_EXEC: GIVE_CATS actor=NegTestTrader recipient=$player amount=3
 stobeNegBeginPerformance($id, ['GIVE_CATS@' . $player . '@33'], $player, 1000, '');
 stobeNegTick();
 check('item 96: payment made just before the performance start is verified', status($id) === 'COMPLETE' && termStatus($id, 0) === 'VERIFIED', [status($id), termStatus($id, 0)]);
+// NP7 (m64): her GIVE_ITEM ran with the accepting reply; the performance start came 45 s later
+// (relationship eval in between). The transfer counts from the accept, not from the start - 30 s.
+file_put_contents($stobeLog, ''); stobeNegResetLogCache();
+$db->exec("DELETE FROM stobe_social_contract WHERE npc_name='NegTestTrader' AND player_name=$1", [$player]);
+$id = makeDeal('NegTestTrader', [['kind'=>'GIVE_ITEM','by'=>'npc','to'=>'player','item'=>'Iron Hat']], 'social');
+stobeLine("ACTION_EXEC: GIVE_ITEM actor=NegTestTrader recipient=$player requested=1 transferred=1 item='Iron Hat' source=inventory", time() - 44);
+stobeNegBeginPerformance($id, ['GIVE_ITEM@' . $player . '@Iron Hat@1'], $player, 1000, '', time() - 45);
+stobeNegTick();
+check('NP7: hand-over in the accept turn credited despite a late performance start', status($id) === 'COMPLETE' && termStatus($id, 0) === 'VERIFIED', [status($id), termStatus($id, 0)]);
+// ...but a transfer from well before the accept is not this deal's.
+file_put_contents($stobeLog, ''); stobeNegResetLogCache();
+$db->exec("DELETE FROM stobe_social_contract WHERE npc_name='NegTestTrader' AND player_name=$1", [$player]);
+$id = makeDeal('NegTestTrader', [['kind'=>'GIVE_ITEM','by'=>'npc','to'=>'player','item'=>'Iron Hat']], 'social');
+stobeLine("ACTION_EXEC: GIVE_ITEM actor=NegTestTrader recipient=$player requested=1 transferred=1 item='Iron Hat' source=inventory", time() - 90);
+stobeNegBeginPerformance($id, ['GIVE_ITEM@' . $player . '@Iron Hat@1'], $player, 1000, '', time() - 45);
+stobeNegTick();
+check('NP7: a transfer 45 s before the accept is not credited', termStatus($id, 0) === 'DISPATCHED', [status($id), termStatus($id, 0)]);
 
 // ---------------------------------------------------------------- 6c. bug 127: the squad gets 10 s to stop swinging after sparing
 $id = makeDeal('NegTestBandit', [['kind'=>'SPARE','by'=>'player','target'=>'npc']], 'surrender');
