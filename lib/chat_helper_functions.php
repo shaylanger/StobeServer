@@ -331,7 +331,7 @@ function loadCoreActionRows(bool $onlyActivated = true): array {
         ['TASK_GOAL', 'RepairGoal', 'Repair a named nearby player structure, using real Kenshi repair work.'],
         ['TASK_CONTROL', 'PauseGoal', 'Pause the current/referenced persistent goal.'],
         ['TASK_CONTROL', 'ResumeGoal', 'Resume the current/referenced paused goal.'],
-        ['TASK_CONTROL', 'CancelGoal', 'Cancel the current/referenced persistent goal.'],
+        ['TASK_CONTROL', 'CancelGoal', 'Cancel the current/referenced persistent goal; target "all" cancels every goal she has.'],
         ['TASK_CONTROL', 'ModifyGoal', 'Change the requested quantity of the current/referenced goal; put the new quantity in amount.'],
         ['TASK_CONTROL', 'RetargetGoal', 'Change the destination of the current/referenced goal; put the new known destination in destination.'],
         ['TASK_CONTROL', 'ApprovePurchase', 'Approve the NPC most recent pending purchase request. Use only after the player clearly says yes/approves spending.'],
@@ -1772,7 +1772,7 @@ function normalizeActionTagToken(string $rawTag, array $config = []): string {
         $parts=explode('@',$argument);
         while(count($parts)<4)$parts[]='';
         $cmd=strtoupper($sanitizeInlineText(strval($parts[0]),24));
-        if(!in_array($cmd,['PAUSE','RESUME','CANCEL','QUANTITY','DESTINATION','APPROVE','DECLINE'],true))return '';
+        if(!in_array($cmd,['PAUSE','RESUME','CANCEL','CLEAR','QUANTITY','DESTINATION','APPROVE','DECLINE'],true))return '';
         $selector=$sanitizeInlineText(strval($parts[1]),160);
         $qty=max(0,min(1000,intval($parts[2])));
         $dest=$sanitizeInlineText(strval($parts[3]),160);
@@ -6007,7 +6007,7 @@ function stobeBuildOutputContractUserPrompt(
     $actionLine .= " IMPORTANT UNEQUIP SPEECH RULE: UnequipItem executes only AFTER this dialogue response is generated. When emitting UnequipItem, phrase the message as intent or action-in-progress (for example 'Fine, I'll take it off' or 'Let me get this off'), NEVER as completed fact such as 'It's off', 'Already off', 'There, it's off', or 'I took it off'. Completion may only be stated on a later turn after live equipment state confirms the item is no longer equipped. The same applies to EquipItem: say 'Let me put it on', NEVER 'There, back on', 'It is on' or 'Already on' in the same response.";
     $actionLine .= " DropWeapon physically drops the equipped weapon. Surrender/Disarm removes it from the equipped slot but keeps it in the NPC inventory. HoldPosition is a real hold-position order.";
     if (in_array('WorkGoal', $parts['actions'] ?? [], true)) {
-        $actionLine .= " WorkGoal is for finite autonomous production or gathering requests such as 'mine 5 copper', 'make 5 bread', 'craft a longsword', or 'go Home and make 5 bread'. Put the desired final output/resource in item, the requested finite count in amount, and only an explicitly requested destination/base/location in target. Leave target blank when the work should happen here. WorkGoal persists after dialogue, travels first when target is a destination, uses real Kenshi jobs, and recursively sources missing producible inputs up to depth 10. Do not decompose its substeps yourself.";
+        $actionLine .= " WorkGoal is for finite autonomous production or gathering requests such as 'mine 5 copper', 'make 5 bread', 'craft a longsword', or 'go Home and make 5 bread'. Put the desired final output/resource in item, the requested finite count in amount, and only an explicitly requested destination/base/location in target. Leave target blank when the work should happen here. WorkGoal persists after dialogue, travels first when target is a destination, uses real Kenshi jobs, and recursively sources missing producible inputs up to depth 10. Do not decompose its substeps yourself. Never refuse or put off a production order because a building looks empty, input-blocked or unpowered, and never name the bench yourself: the planner finds the real chain (farm -> mill -> oven) and reports real blockers.";
         $actionLine .= " Persistent planner actions are available for player-faction NPCs: LootArea loots matching items/categories from all valid nearby downed/dead targets; LootStore does the same then stores them; StoreItems/FetchItems/DeliverItems move owned items; RecoverGround picks up matching dropped items; MedicalCleanup treats/rescues loaded squadmates; BattleCleanup treats/rescues first then loots nearby downed enemies; ImprisonAll/ReleaseAll process nearby prisoners; MaintainStock keeps a minimum stock level; GuardGoal/WaitForGoal/PatrolGoal persist until their condition or cancellation; BuildGoal/RepairGoal manage real construction/repair work. Use destination only when the player explicitly named a known place/base.";
         $actionLine .= " BuyItems is explicit permission to spend real faction Cats on the requested purchase. If production planning discovers buying as a fallback, it MUST wait for player approval instead; buying is always last resort after owned stock, gathering, and production. SellItems MUST only be selected when the player explicitly asked to sell; never sell possessions automatically to fund another goal. ApprovePurchase/DeclinePurchase respond to pending purchase requests. PauseGoal/ResumeGoal/CancelGoal/ModifyGoal/RetargetGoal control persistent goals.";
     }
@@ -13523,6 +13523,13 @@ function buildSystemPrompt(
     if ($workGoalBlock !== '') {
         $prompt .= "\n\n" . $workGoalBlock;
     }
+    // Item 137 (m51): the real production chain for the output the player asks for.
+    $productionChainBlock = function_exists('stobeBuildProductionChainBlock')
+        ? stobeBuildProductionChainBlock(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $inPlayerFaction === true)
+        : '';
+    if ($productionChainBlock !== '') {
+        $prompt .= "\n\n" . $productionChainBlock;
+    }
     $taskGoalBlock = function_exists('stobeBuildTaskGoalStateBlock')
         ? stobeBuildTaskGoalStateBlock($npcName)
         : '';
@@ -15395,8 +15402,9 @@ function stobeTaskStorePronounItems(string $actor, string $item): array {
  * that the model answered without a goal action -> WORK_GOAL@Item@N.
  * The planner reports BLOCKED itself when nothing can make it.
  */
-function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, array $actions, string $reply = ''): string {
-    if (!is_array($npcData) || !function_exists('npcIsInPlayerFaction') || !npcIsInPlayerFaction($npcData)) return '';
+function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, array $actions, string $reply = '', ?bool $squadMember = null): string {
+    $squad = $squadMember ?? (is_array($npcData) && function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData));
+    if (!$squad) return '';
     foreach ($actions as $a) {
         if (preg_match('/^(WORK_GOAL|TASK_GOAL|TASK_CONTROL)@/i', strval($a))) return '';
     }
@@ -15406,11 +15414,15 @@ function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, a
         return '';
     }
     $line = trim($playerLine);
-    if ($line === '' || str_contains($line, '?')) return '';
+    if ($line === '') return '';
+    // Item 137 (m51): "Hey Avarek can you make me 1 bread?" is an order too; questions about the past are not.
+    $politeAsk = preg_match("/\b(?:can|could|would|will)\s+you\s+(?:please\s+|maybe\s+|also\s+)?(?:make|craft|produce|smelt|cook|bake|brew)\b/i", $line) === 1
+        && preg_match("/\b(?:did|have\s+you|why|how\s+(?:many|much|long|do)|what|when|where)\b/i", $line) !== 1;
+    if (str_contains($line, '?') && !$politeAsk) return '';
     if (preg_match("/\b(don'?t|do\s+not|stop|never|no\s+need|cancel)\b/i", $line)) return '';
     $words = ['a'=>1,'an'=>1,'one'=>1,'two'=>2,'three'=>3,'four'=>4,'five'=>5,'six'=>6,'seven'=>7,
         'eight'=>8,'nine'=>9,'ten'=>10,'twelve'=>12,'twenty'=>20];
-    if (!preg_match("/(?:^|[.!,;]\s*|\b(?:just|please|now|then|and)\s+)(?:make|craft|produce|smelt|cook|bake|brew)\s+(?:me\s+|us\s+)?(\d{1,4}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|twenty)\s+([a-z][a-z' -]{1,40}?)(?=\s*(?:\band\b|\bfor\b|\bat\b|\bfrom\b|\bthen\b|[,.!;]|$))/i", $line, $m)) return '';
+    if (!preg_match("/(?:^|[.!,;]\s*|\b(?:just|please|now|then|and|you|maybe|also)\s+)(?:make|craft|produce|smelt|cook|bake|brew)\s+(?:me\s+|us\s+)?(\d{1,4}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|twenty)\s+([a-z][a-z' -]{1,40}?)(?=\s*(?:\band\b|\bfor\b|\bat\b|\bfrom\b|\bthen\b|[,.!;?]|$))/i", $line, $m)) return '';
     $qty = ctype_digit($m[1]) ? intval($m[1]) : ($words[strtolower($m[1])] ?? 0);
     if ($qty < 1 || $qty > 1000) return '';
     $item = trim(preg_replace('/\s+/', ' ', $m[2]) ?? '');
@@ -15421,6 +15433,64 @@ function stobeInferWorkGoalFromOrder(string $playerLine, array|false $npcData, a
     $item = ucwords(strtolower(implode(' ', $parts)));
     if ($item === '' || preg_match('/^(it|them|that|this|some|more|sure)$/i', $item)) return '';
     return 'WORK_GOAL@' . $item . '@' . $qty;
+}
+
+/**
+ * Items 138/139 (m51): the player's words decide what a goal control means.
+ * "clear all your tasks and goals as well as your jobs" -> TASK_CONTROL@CLEAR@all (every goal + her jobs),
+ * "clear/cancel all your goals" -> TASK_CONTROL@CANCEL@all, "cancel it / forget it / I don't want that
+ * bread anymore" turns a PAUSE into CANCEL, "resume / get back to work" answered with no goal action while
+ * she has a live goal -> TASK_CONTROL@RESUME@@0@. Returns the (possibly changed) action list.
+ */
+function stobeFixGoalControlFromOrder(string $playerLine, array|false $npcData, array $actions, ?bool $squadMember = null, ?callable $hasLiveGoal = null, string $actorName = ''): array {
+    $squad = $squadMember ?? (is_array($npcData) && function_exists('npcIsInPlayerFaction') && npcIsInPlayerFaction($npcData));
+    if (!$squad) return $actions;
+    $line = strtolower(trim(str_replace(["\u{2019}", "\u{2018}"], "'", $playerLine)));
+    if ($line === '') return $actions;
+    if (preg_match("/\b(?:don'?t|do\s+not|never|no\s+need\s+to)\s+(?:\w+\s+){0,2}(?:clear|cancel|drop|forget|remove|resume|continue|stop)\b/", $line)) return $actions;
+    $isControl = static fn($a): bool => preg_match('/^TASK_CONTROL@(?:PAUSE|RESUME|CANCEL|CLEAR)@/i', trim(strval($a))) === 1;
+    $goalAction = false;
+    foreach ($actions as $a) if (preg_match('/^(?:WORK_GOAL|TASK_GOAL|TASK_CONTROL)@/i', trim(strval($a)))) $goalAction = true;
+    $verb = '(?:clear|cancel|drop|forget|remove|delete|scrap|wipe|abandon|empty)';
+    $noun = '(?:tasks?|goals?|jobs?|orders?|work|errands?|queue)';
+    if (preg_match('/\b' . $verb . '\b.{0,40}\b(?:all|every|everything)\b.{0,50}\b' . $noun . '\b/', $line)
+        || preg_match('/\b' . $verb . '\b.{0,20}\beverything\b/', $line)) {
+        $new = preg_match('/\bjobs?\b/', $line) ? 'TASK_CONTROL@CLEAR@all@0@' : 'TASK_CONTROL@CANCEL@all@0@';
+        $out = array_values(array_filter($actions, static fn($a) => !$isControl($a)));
+        $out[] = $new;
+        return $out;
+    }
+    if (preg_match("/\b(?:cancel|forget\s+(?:it|about\s+it|that|the\s+\w+)|scrap\s+(?:it|that)|call\s+(?:it|that)\s+off|no\s+longer\s+want|(?:don'?t|do\s+not)\s+want\s+[\w' ]{0,40}?any\s?more|remove\s+(?:it|that|the\s+[\w ]{1,30}?goal)|clear\s+(?:it|that))\b/", $line)) {
+        $changed = false;
+        $out = [];
+        foreach ($actions as $a) {
+            if (preg_match('/^TASK_CONTROL@PAUSE@(.*)$/i', trim(strval($a)), $m)) {
+                $out[] = 'TASK_CONTROL@CANCEL@' . $m[1];
+                $changed = true;
+            } else {
+                $out[] = $a;
+            }
+        }
+        if ($changed) return $out;
+    }
+    if (!$goalAction && preg_match("/\b(?:resume|get\s+back\s+to\s+(?:work|it|your\s+\w+)|back\s+to\s+work|carry\s+on|continue\s+(?:your|the|with|working)|keep\s+(?:going|working)|get\s+(?:to|on\s+with\s+your)\s+work|pick\s+(?:it|that)\s+back\s+up|finish\s+(?:your|the)\s+(?:job|task|work|goal))\b/", $line)) {
+        $actor = trim($actorName) !== '' ? trim($actorName) : strval(is_array($npcData) ? ($npcData['name'] ?? '') : '');
+        $live = $hasLiveGoal ?? static function (string $who): bool {
+            try {
+                if (function_exists('stobeWorkGoalSyncStatusFile')) stobeWorkGoalSyncStatusFile();
+                $w = $GLOBALS['db']->fetchOne("SELECT 1 AS x FROM stobe_work_goal WHERE LOWER(actor_name)=LOWER($1) AND status IN ('ACTIVE','PAUSED') LIMIT 1", [normalizeParticipantNameToken($who)]);
+                if (is_array($w)) return true;
+                $t = $GLOBALS['db']->fetchOne("SELECT 1 AS x FROM stobe_task_goal_runtime WHERE LOWER(actor_name)=LOWER($1) AND status IN ('ACTIVE','PAUSED') LIMIT 1", [normalizeParticipantNameToken($who)]);
+                return is_array($t);
+            } catch (Throwable $e) {
+                return false;
+            }
+        };
+        if ($actor !== '' && $live($actor)) {
+            $actions[] = 'TASK_CONTROL@RESUME@@0@';
+        }
+    }
+    return $actions;
 }
 
 /**

@@ -290,6 +290,39 @@ function stobeQueueWorkGoalRequest(
         $safeDestination = substr($safeDestination, 0, 160);
     }
 
+    // Items 138/139 (m51): she already has a live goal for this output ("get to work", "make me 1 bread"
+    // again): resume that goal instead of queueing a duplicate that waits behind it and never runs.
+    $dupe = stobeWorkGoalFindLiveDuplicate($safeActor, $safeItem, $safeDestination);
+    if (is_array($dupe)) {
+        $dupeId = strval($dupe['goal_id']);
+        $ctl = $dupeId . "\tRESUME\n";
+        if ($quantity > intval($dupe['quantity'] ?? 0)) {
+            $ctl .= $dupeId . "\tQUANTITY\t" . $quantity . "\n";
+        }
+        if (@file_put_contents(stobeWorkGoalControlPath(), $ctl, FILE_APPEND | LOCK_EX) === false) {
+            return ['ok' => false, 'error' => 'control_write_failed', 'goal_id' => $dupeId];
+        }
+        $GLOBALS['db']->exec(
+            "UPDATE stobe_work_goal SET status='ACTIVE', quantity=GREATEST(quantity,$2), updated_at=NOW() WHERE goal_id=$1",
+            [$dupeId, $quantity]
+        );
+        if (function_exists('stobeLogInfo')) {
+            stobeLogInfo('Work goal order merged into her live goal (items 138/139)', [
+                'goal_id' => $dupeId, 'actor' => $safeActor, 'item' => $safeItem, 'quantity' => $quantity,
+                'was' => strval($dupe['status'] ?? ''),
+            ]);
+        }
+        return [
+            'ok' => true,
+            'goal_id' => $dupeId,
+            'actor' => $safeActor,
+            'item' => strval($dupe['item_name'] ?? $safeItem),
+            'quantity' => max($quantity, intval($dupe['quantity'] ?? 0)),
+            'destination' => strval($dupe['destination_name'] ?? ''),
+            'merged' => true,
+        ];
+    }
+
     $serial = function_exists('stobeResolveLiveParticipantSerial')
         ? stobeResolveLiveParticipantSerial($safeActor, true)
         : 0;
@@ -321,7 +354,7 @@ function stobeQueueWorkGoalRequest(
         ]
     );
 
-    $requestPath = '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_work_goal.request';
+    $requestPath = strval(getenv('STOBE_WORK_GOAL_REQUEST_FILE') ?: '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_work_goal.request');
     $line = implode("\t", [
         $goalId,
         strval($serial),
@@ -359,6 +392,166 @@ function stobeQueueWorkGoalRequest(
         'quantity' => $quantity,
         'destination' => $destName,
     ];
+}
+
+/** Items 138/139 (m51): control file paths (env overrides for the offline tests). */
+function stobeWorkGoalControlPath(): string
+{
+    return strval(getenv('STOBE_WORK_GOAL_CONTROL_FILE') ?: '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_work_goal.control');
+}
+
+function stobeTaskGoalControlPath(): string
+{
+    return strval(getenv('STOBE_TASK_GOAL_CONTROL_FILE') ?: '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_task_goal.control');
+}
+
+/** Item 138: "Bread", "bread", "Breads" are one output. */
+function stobeWorkGoalItemKey(string $item): string
+{
+    $k = strtolower(trim(preg_replace('/\s+/', ' ', $item) ?? ''));
+    return preg_replace('/(?<=[a-z]{3})(?:es|s)$/', '', $k) ?? $k;
+}
+
+/**
+ * Item 138: her live (ACTIVE first, then PAUSED; oldest first = the one actually running) goal for the
+ * same output and a compatible destination (none, the same, or a word that means "here": a bench, "home").
+ */
+function stobeWorkGoalFindLiveDuplicate(string $actor, string $item, string $destination = ''): array|false
+{
+    try {
+        stobeWorkGoalSyncStatusFile();
+        $rows = $GLOBALS['db']->fetchAll(
+            "SELECT goal_id, item_name, quantity, destination_name, status FROM stobe_work_goal
+             WHERE LOWER(actor_name)=LOWER($1) AND status IN ('ACTIVE','PAUSED')
+             ORDER BY CASE status WHEN 'ACTIVE' THEN 0 ELSE 1 END, created_at ASC LIMIT 20",
+            [normalizeParticipantNameToken($actor)]
+        );
+    } catch (Throwable $e) {
+        return false;
+    }
+    $key = stobeWorkGoalItemKey($item);
+    $dest = trim($destination);
+    foreach (($rows ?: []) as $r) {
+        if ($key === '' || stobeWorkGoalItemKey(strval($r['item_name'] ?? '')) !== $key) continue;
+        $have = trim(strval($r['destination_name'] ?? ''));
+        if ($dest !== '' && strcasecmp($dest, $have) !== 0) {
+            if ($have !== '' || stobeGoalDestinationFallback($dest) === '') continue;
+        }
+        return $r;
+    }
+    return false;
+}
+
+/** Item 137: where Stobe writes the producers it can see around the player (P/C lines). */
+function stobeProductionCatalogPath(): string
+{
+    return strval(getenv('STOBE_PRODUCTION_CATALOG_FILE') ?: '/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_production_catalog.txt');
+}
+
+/** Item 137: vanilla bread chain, only while the game has not written its catalog yet. */
+function stobeProductionCatalogFallback(): array
+{
+    $out = [];
+    foreach ([['Bread', 'Bread Oven', ['Strawflour', 'Water']], ['Strawflour', 'Grain Silo', ['Wheatstraw']],
+              ['Wheatstraw', 'Wheat Farm', ['Water']], ['Water', 'Well or Water Pump', []]] as [$o, $b, $in]) {
+        $out[stobeWorkGoalItemKey($o)][] = ['output' => $o, 'building' => $b, 'inputs' => $in, 'kind' => 'production'];
+    }
+    return $out;
+}
+
+/**
+ * Item 137: producers per output key from Stobe's catalog file:
+ *   P<TAB>building<TAB>output<TAB>input1|input2      machine / farm / well
+ *   C<TAB>bench<TAB>craft1|craft2|...                 crafting bench
+ */
+function stobeProductionCatalogLoad(?string $path = null): array
+{
+    $path = $path ?? stobeProductionCatalogPath();
+    $out = [];
+    $lines = is_file($path) ? @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : false;
+    foreach ((is_array($lines) ? array_slice($lines, 0, 800) : []) as $line) {
+        $p = explode("\t", strval($line));
+        $tag = trim(strval($p[0] ?? ''));
+        if ($tag === 'P' && count($p) >= 3) {
+            $o = trim(strval($p[2]));
+            if ($o === '') continue;
+            $in = array_values(array_filter(array_map('trim', explode('|', strval($p[3] ?? ''))), 'strlen'));
+            $out[stobeWorkGoalItemKey($o)][] = ['output' => $o, 'building' => trim(strval($p[1])), 'inputs' => $in, 'kind' => 'production'];
+        } elseif ($tag === 'C' && count($p) >= 3) {
+            foreach (explode('|', strval($p[2])) as $c) {
+                $c = trim($c);
+                if ($c === '') continue;
+                $out[stobeWorkGoalItemKey($c)][] = ['output' => $c, 'building' => trim(strval($p[1])), 'inputs' => [], 'kind' => 'crafting'];
+            }
+        }
+    }
+    return $out ?: stobeProductionCatalogFallback();
+}
+
+/** Item 137: the requested output and its inputs, breadth first (at most 8 steps). */
+function stobeProductionChain(string $item, array $catalog): array
+{
+    $steps = [];
+    $queue = [$item];
+    $seen = [];
+    while ($queue && count($steps) < 8) {
+        $it = array_shift($queue);
+        $k = stobeWorkGoalItemKey($it);
+        if ($k === '' || isset($seen[$k])) continue;
+        $seen[$k] = true;
+        $prods = $catalog[$k] ?? [];
+        if (!$prods) continue;
+        $buildings = [];
+        foreach ($prods as $p) {
+            $b = trim(strval($p['building'] ?? ''));
+            if ($b !== '' && !in_array($b, $buildings, true) && count($buildings) < 3) $buildings[] = $b;
+        }
+        $inputs = $prods[0]['inputs'] ?? [];
+        $steps[] = ['output' => strval($prods[0]['output']), 'buildings' => $buildings, 'inputs' => $inputs];
+        foreach ($inputs as $in) $queue[] = $in;
+    }
+    return $steps;
+}
+
+/** Item 137: the catalog output a production request names ("make me 1 bread" -> Bread), '' if none. */
+function stobeProductionRequestedItem(string $line, array $catalog): string
+{
+    $l = ' ' . strtolower(preg_replace("/[^a-z0-9' -]+/i", ' ', $line) ?? '') . ' ';
+    $l = preg_replace('/\s+/', ' ', $l) ?? $l;
+    if (!preg_match('/\b(make|craft|produce|smelt|cook|bake|brew|grow|mill|grind|forge|sew|build)\b/', $l)) return '';
+    $best = '';
+    foreach ($catalog as $prods) {
+        $name = strtolower(trim(strval($prods[0]['output'] ?? '')));
+        if ($name === '') continue;
+        foreach ([$name, $name . 's', $name . 'es'] as $v) {
+            if (str_contains($l, ' ' . $v . ' ') && strlen($name) > strlen($best)) $best = strval($prods[0]['output']);
+        }
+    }
+    return $best;
+}
+
+/** Item 137: the real production chain for the output the player just asked her to make. */
+function stobeBuildProductionChainBlock(string $playerLine, bool $inPlayerFaction, ?string $catalogPath = null): string
+{
+    if (!$inPlayerFaction || trim($playerLine) === '') return '';
+    $catalog = stobeProductionCatalogLoad($catalogPath);
+    $item = stobeProductionRequestedItem($playerLine, $catalog);
+    if ($item === '') return '';
+    $steps = stobeProductionChain($item, $catalog);
+    if (!$steps) return '';
+    $esc = static fn(string $s): string => function_exists('stobePromptXmlEscape') ? stobePromptXmlEscape($s) : htmlspecialchars($s, ENT_QUOTES);
+    $o = ['<production_chain item="' . $esc($item) . '">'];
+    $o[] = '  <rule>How ' . $esc($item) . ' is really made here, read from the game. Name only these buildings for it. '
+        . 'Never refuse or put off the order because one building looks empty, input-blocked or unpowered, and do not pick the bench yourself: '
+        . 'emit WorkGoal with item "' . $esc($item) . '" and leave target blank. The planner works the whole chain below itself '
+        . '(growing, milling, hauling water, cooking) and reports any real blocker.</rule>';
+    foreach ($steps as $s) {
+        $attrs = ' output="' . $esc($s['output']) . '" made_at="' . $esc(implode(' or ', $s['buildings'])) . '"';
+        if ($s['inputs']) $attrs .= ' inputs="' . $esc(implode(', ', $s['inputs'])) . '"';
+        $o[] = '  <step' . $attrs . ' />';
+    }
+    $o[] = '</production_chain>';
+    return implode("\n", $o);
 }
 
 function stobeWorkGoalSyncStatusFile(): void
@@ -525,6 +718,8 @@ function stobeEndedGoalRules(): array
     return [
         'Goals with ended_minutes_ago have ended (COMPLETE, CANCELLED or BLOCKED). They are past history, not the current state: power, materials, stations and stock may have changed since.',
         'Never turn down a new order because of an ended goal. When the player orders new work, take it on and start a new goal; the planner checks power, materials and stations right now and reports any real blocker itself.',
+        // Item 143 (m51): she tacked the old bread order onto two backstory answers.
+        'Goals and earlier orders are background. Bring one up only when the player talks about work or asks about it; never tack an old request onto an unrelated answer (small talk, personal or backstory questions).',
     ];
 }
 

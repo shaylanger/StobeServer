@@ -1681,6 +1681,16 @@ if (!$narratorMode && function_exists('stobeInferWorkGoalFromOrder')
         stobeLogInfo('Work goal inferred from a direct order (bug 76)', ['npc'=>$targetNpc, 'action'=>$inferredGoal]);
     }
 }
+if (!$narratorMode && function_exists('stobeFixGoalControlFromOrder')
+    && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
+    // Items 138/139 (m51): clear-all -> CLEAR, cancel words turn a PAUSE into CANCEL, "resume" -> RESUME.
+    $fixedControl = stobeFixGoalControlFromOrder(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,
+        null, null, strval($targetNpc ?? ''));
+    if ($fixedControl !== $responseActions) {
+        stobeLogInfo('Goal control fixed from the player line (items 138/139)', ['npc'=>$targetNpc, 'before'=>$responseActions, 'after'=>$fixedControl]);
+        $responseActions = $fixedControl;
+    }
+}
 if (!$narratorMode && function_exists('stobeInferFetchFromAgreedRequest')
     && !in_array($dealTurnDecision, ['ACCEPT','COUNTER','PROPOSE'], true)) {
     $inferredFetch = stobeInferFetchFromAgreedRequest(strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? ''), $npcData, $responseActions,

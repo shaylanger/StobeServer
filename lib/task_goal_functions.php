@@ -374,8 +374,13 @@ function stobeAnyGoalControl(string $actor,string $command,string $selector='',i
         return ['ok'=>true,'goal_id'=>strval($pending['goal_id']),'command'=>'DECLINE'];
     }
 
-    $taskStatuses=match($command){'PAUSE'=>['ACTIVE'],'RESUME'=>['PAUSED'],default=>['ACTIVE','PAUSED','WAITING_APPROVAL']};
-    $task=stobeTaskGoalFind($actor,$selector,$taskStatuses);
+    // Items 138/139 (m51): PAUSE / RESUME / CANCEL / CLEAR act on every matching live goal (duplicates of
+    // one order used to leave the running goal untouched), RESUME also matches an ACTIVE goal (Stobe
+    // re-kicks it), "all"/"everything"/no selector picks every live goal, CLEAR also drops her jobs.
+    if(in_array($command,['PAUSE','RESUME','CANCEL','CLEAR'],true)){
+        return stobeAnyGoalControlMany($actor,$command,$selector);
+    }
+    $task=stobeTaskGoalFind($actor,$selector,['ACTIVE','PAUSED','WAITING_APPROVAL']);
     if($task){
         if($command==='DESTINATION')return stobeTaskGoalRetarget($actor,$selector,$destination);
         $arg=$command==='QUANTITY'?(string)max(1,min(1000,$quantity)):'';
@@ -385,24 +390,14 @@ function stobeAnyGoalControl(string $actor,string $command,string $selector='',i
     // Fall back to a production WorkGoal.
     stobeWorkGoalSyncStatusFile();
     $actor=normalizeParticipantNameToken($actor);
-    $rows=$GLOBALS['db']->fetchAll(
-        "SELECT * FROM stobe_work_goal
-         WHERE LOWER(actor_name)=LOWER($1) AND status = ANY($2::text[])
-         ORDER BY updated_at DESC,created_at DESC LIMIT 20",
-        [$actor, match($command){'PAUSE'=>'{ACTIVE}','RESUME'=>'{PAUSED,BLOCKED}',default=>'{ACTIVE,PAUSED}'}]
-    );
     $work=false;
-    foreach(($rows?:[]) as $r){
-        if($selector===''){
-            $work=$r;break;
-        }
-        $hay=strtolower(strval($r['item_name']??'').' '.strval($r['destination_name']??''));
-        if(str_contains($hay,strtolower($selector))){$work=$r;break;}
+    foreach(stobeWorkGoalLiveRows($actor,['ACTIVE','PAUSED']) as $r){
+        if(stobeGoalSelectorMatches($selector,strval($r['item_name']??'').' '.strval($r['destination_name']??''))){$work=$r;break;}
     }
     if(!$work)return ['ok'=>false,'error'=>'no_matching_goal'];
 
     $id=strval($work['goal_id']);
-    $path='/mnt/d/Steam/steamapps/common/Kenshi/RE_Kenshi/mods/Stobe/stobe_work_goal.control';
+    $path=stobeWorkGoalControlPath();
     $arg='';
     if($command==='QUANTITY'){
         if($quantity<1)return ['ok'=>false,'error'=>'quantity_required'];
@@ -415,12 +410,99 @@ function stobeAnyGoalControl(string $actor,string $command,string $selector='',i
             "UPDATE stobe_work_goal SET destination_name=$2,destination_x=$3,destination_y=$4,destination_z=$5,updated_at=NOW() WHERE goal_id=$1",
             [$id,strval($dest['name']??$destination),floatval($dest['x']),floatval($dest['y']),floatval($dest['z'])]
         );
-    }elseif(!in_array($command,['PAUSE','RESUME','CANCEL'],true)){
+    }else{
         return ['ok'=>false,'error'=>'unsupported_control'];
     }
-    $line=$id."\t".$command.($arg!==''?"\t".$arg:'')."\n";
+    $line=$id."\t".$command."\t".$arg."\n";
     if(@file_put_contents($path,$line,FILE_APPEND|LOCK_EX)===false)return ['ok'=>false,'error'=>'control_write_failed'];
-    $newStatus=match($command){'PAUSE'=>'PAUSED','RESUME'=>'ACTIVE','CANCEL'=>'CANCELLED',default=>strval($work['status'])};
-    $GLOBALS['db']->exec("UPDATE stobe_work_goal SET status=$2,updated_at=NOW() WHERE goal_id=$1",[$id,$newStatus]);
     return ['ok'=>true,'goal_id'=>$id,'command'=>$command,'goal_type'=>'work'];
+}
+
+/** Item 139: "all", "everything", "all your tasks, goals and jobs" or no selector = every live goal. */
+function stobeGoalSelectorIsAll(string $selector): bool
+{
+    $s=strtolower(trim(preg_replace('/[\s,]+/',' ',$selector)??''));
+    if($s===''||$s==='*')return true;
+    if(preg_match('/^(?:all|any|everything|anything|every\s?thing)$/',$s))return true;
+    return preg_match('/^(?:all|every|any)(?:\s+(?:of|your|my|her|his|the|current|those|these|and|goals?|tasks?|jobs?|work|orders?|errands?))+$/',$s)===1;
+}
+
+/** Item 138: a selector against a goal's item/target/destination text ("the bread goal" ~ "Bread"). */
+function stobeGoalSelectorMatches(string $selector,string $hay): bool
+{
+    if(stobeGoalSelectorIsAll($selector))return true;
+    $s=strtolower(trim($selector));
+    $s=trim(preg_replace('/^(?:the|my|your|her|that|this)\s+/','',$s)??$s);
+    $s=trim(preg_replace('/\s+(?:goals?|tasks?|jobs?|orders?)$/','',$s)??$s);
+    $h=strtolower($hay);
+    if($s===''||str_contains($h,$s))return true;
+    $s1=preg_replace('/(?<=[a-z]{3})(?:es|s)$/','',$s)??$s;
+    return $s1!==''&&str_contains($h,$s1);
+}
+
+/** Items 138/139: her work goals in the given statuses, ACTIVE first, oldest first. */
+function stobeWorkGoalLiveRows(string $actor,array $statuses): array
+{
+    $rows=$GLOBALS['db']->fetchAll(
+        "SELECT *,GREATEST(0,EXTRACT(EPOCH FROM (NOW()-updated_at)))::int AS age_s FROM stobe_work_goal
+         WHERE LOWER(actor_name)=LOWER($1) AND status = ANY($2::text[])
+         ORDER BY CASE status WHEN 'ACTIVE' THEN 0 WHEN 'PAUSED' THEN 1 ELSE 2 END,created_at ASC LIMIT 30",
+        [normalizeParticipantNameToken($actor),'{'.implode(',',$statuses).'}']
+    );
+    return is_array($rows)?$rows:[];
+}
+
+/**
+ * Items 138/139: PAUSE / RESUME / CANCEL / CLEAR on every matching live task and work goal of the actor.
+ * RESUME takes PAUSED and ACTIVE goals (and BLOCKED ones of the last 30 min when an item is named);
+ * CLEAR = CANCEL every goal + a CLEARJOBS line so Stobe empties her job list.
+ */
+function stobeAnyGoalControlMany(string $actor,string $command,string $selector=''): array
+{
+    $command=strtoupper(trim($command));
+    $all=stobeGoalSelectorIsAll($selector);
+    if($command==='CLEAR'){$selector='';$all=true;}
+    $send=$command==='CLEAR'?'CANCEL':$command;
+    $statuses=match($command){
+        'PAUSE'=>['ACTIVE'],
+        'RESUME'=>$all?['PAUSED','ACTIVE']:['PAUSED','ACTIVE','BLOCKED'],
+        default=>['ACTIVE','PAUSED','WAITING_APPROVAL'],
+    };
+    $newStatus=match($send){'PAUSE'=>'PAUSED','RESUME'=>'ACTIVE',default=>'CANCELLED'};
+    $actorKey=normalizeParticipantNameToken($actor);
+    $ids=[];
+    stobeTaskGoalSyncStatusFile();
+    $taskRows=$GLOBALS['db']->fetchAll(
+        "SELECT * FROM stobe_task_goal_runtime WHERE LOWER(actor_name)=LOWER($1) ORDER BY updated_at DESC,created_at DESC LIMIT 30",
+        [$actorKey]
+    );
+    foreach(($taskRows?:[]) as $r){
+        if(!in_array(strtoupper(strval($r['status']??'')),$statuses,true))continue;
+        if($command==='RESUME'&&strtoupper(strval($r['status']??''))==='BLOCKED')continue;
+        $hay=implode(' ',[strval($r['kind']??''),strval($r['item_name']??''),strval($r['target_name']??''),strval($r['destination_name']??'')]);
+        if(!stobeGoalSelectorMatches($selector,$hay))continue;
+        $id=strval($r['goal_id']);
+        if(@file_put_contents(stobeTaskGoalControlPath(),$id."\t".$send."\n",FILE_APPEND|LOCK_EX)===false)return ['ok'=>false,'error'=>'control_write_failed'];
+        $GLOBALS['db']->exec("UPDATE stobe_task_goal_runtime SET status=$2,updated_at=NOW() WHERE goal_id=$1",[$id,$newStatus]);
+        $ids[]=$id;
+    }
+    stobeWorkGoalSyncStatusFile();
+    foreach(stobeWorkGoalLiveRows($actorKey,$statuses) as $r){
+        if(strtoupper(strval($r['status']??''))==='BLOCKED'&&intval($r['age_s']??0)>1800)continue;
+        if(!stobeGoalSelectorMatches($selector,strval($r['item_name']??'').' '.strval($r['destination_name']??'')))continue;
+        $id=strval($r['goal_id']);
+        if(@file_put_contents(stobeWorkGoalControlPath(),$id."\t".$send."\n",FILE_APPEND|LOCK_EX)===false)return ['ok'=>false,'error'=>'control_write_failed'];
+        $GLOBALS['db']->exec("UPDATE stobe_work_goal SET status=$2,updated_at=NOW() WHERE goal_id=$1",[$id,$newStatus]);
+        $ids[]=$id;
+    }
+    $jobs=false;
+    if($command==='CLEAR'){
+        $serial=function_exists('stobeResolveLiveParticipantSerial')?intval(stobeResolveLiveParticipantSerial($actorKey,true)):0;
+        $line="*\tCLEARJOBS\t".$serial.'^'.str_replace(["\t","\n","\r",'^'],' ',$actorKey)."\n";
+        $jobs=@file_put_contents(stobeWorkGoalControlPath(),$line,FILE_APPEND|LOCK_EX)!==false;
+    }
+    if(!$ids&&!$jobs)return ['ok'=>false,'error'=>'no_matching_goal'];
+    if(function_exists('stobeLogInfo'))stobeLogInfo('Goal control on every matching goal (items 138/139)',
+        ['actor'=>$actorKey,'command'=>$command,'selector'=>$selector,'goal_ids'=>$ids,'jobs_cleared'=>$jobs]);
+    return ['ok'=>true,'goal_id'=>$ids[0]??'','goal_ids'=>$ids,'command'=>$command,'jobs_cleared'=>$jobs];
 }
