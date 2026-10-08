@@ -6878,6 +6878,7 @@ function stobeParseStructuredDialogueResponse(string $rawResponse, string $event
         $responseConfig['disallow_stop_attack'] = !stobeNpcIsInCombat($speakerNpcData);
         $actionTag = normalizeActionTagToken($rawActionTag, $responseConfig);
     }
+    stobeSocialSparStopGuard($character, $actionTag, $message, $eventType); // item 141 (m53): "enough" ends a spar
 
     return [
         'is_structured' => true,

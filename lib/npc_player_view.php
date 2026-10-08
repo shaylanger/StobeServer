@@ -394,38 +394,69 @@ function stobeNpcBioCleanLine(string $data): string {
  * Lines spoken between the NPC and the learner (eventlog rows whose people list holds both),
  * chronological. Only rows spoken BY the NPC or BY the learner count; the first people entry is the speaker.
  */
-function stobeNpcBioDialogue(string $sid, string $learner, int $limit = 400): array {
+function stobeNpcBioDialogue(string $sid, string $learner, int $limit = 400, array $names = []): array {
     $out = ['lines' => [], 'npc_lines' => 0, 'rowid_max' => 0, 'gamets_max' => 0, 'first_gamets' => 0, 'talks' => 0];
     if ($sid === '' || $learner === '') return $out;
+    // m53 (NP11): Stobe logs a reply with the PLAYER's nearby list as people (the player first, the speaking NPC
+    // often not in it at all), so the speaker is the line's "Name:" prefix; people[0] only for a line without one.
+    $names = array_values(array_unique(array_filter(array_map(static fn($n) => strtolower(trim(strval($n))), $names),
+        static fn($n) => $n !== '' && strcasecmp($n, $learner) !== 0)));
+    $lowLearner = strtolower(trim($learner));
     $types = "'" . implode("','", STOBE_NPC_BIO_DIALOGUE_TYPES) . "'";
+    $params = ['%|' . stobeNpcBioLikeEscape($sid) . '"%', '%"' . stobeNpcBioLikeEscape($learner) . '|%', stobeNpcBioLikeEscape($learner) . ':%'];
+    $nameSql = '';
+    foreach ($names as $n) { $params[] = stobeNpcBioLikeEscape($n) . ':%'; $nameSql .= ' OR data ILIKE $' . count($params); }
     $rows = $GLOBALS['db']->fetchAll(
         "SELECT rowid, type, gamets, people, data FROM eventlog
-         WHERE type IN ($types) AND people LIKE $1 AND people ILIKE $2
+         WHERE type IN ($types) AND (people LIKE $1$nameSql) AND (people ILIKE $2 OR data ILIKE $3)
          ORDER BY rowid DESC LIMIT " . max(1, $limit),
-        ['%|' . stobeNpcBioLikeEscape($sid) . '"%', '%"' . stobeNpcBioLikeEscape($learner) . '|%']
+        $params
     );
     $rows = is_array($rows) ? array_reverse($rows) : [];
     $lastTs = null;
+    $seen = [];
     foreach ($rows as $r) {
-        $people = json_decode(strval($r['people'] ?? ''), true);
-        if (!is_array($people) || count($people) === 0) continue;
-        $first = strval($people[0]);
+        $peopleRaw = strval($r['people'] ?? '');
+        $people = json_decode($peopleRaw, true);
+        if (!is_array($people)) $people = [];
+        $inPeople = str_contains($peopleRaw, '|' . $sid . '"');
+        $first = strval($people[0] ?? '');
         $pipe = strrpos($first, '|');
         $firstName = $pipe === false ? $first : substr($first, 0, $pipe);
         $firstSid = $pipe === false ? '' : substr($first, $pipe + 1);
         $data = strval($r['data'] ?? '');
-        if ($firstSid === $sid) {
-            // NPC line: only when addressed to the learner (or to nobody in particular)
-            if (preg_match('/\((?:talking to:?|to:)\s*([^)]*)\)\s*$/i', $data, $m) && stripos($m[1], $learner) === false) continue;
+        $to = preg_match('/\((?:talking to:?|to:)\s*([^)]*)\)\s*$/i', $data, $m) ? trim($m[1]) : null;
+        $prefix = preg_match('/^\s*([^:]{1,80}):\s/', $data, $pm) ? strtolower(trim($pm[1])) : '';
+        $who = '';
+        if ($prefix !== '') {
+            if ($prefix === $lowLearner) $who = 'you';
+            elseif (in_array($prefix, $names, true)) $who = 'npc';
+            elseif ($names === [] && $firstSid === $sid) $who = 'npc';
+        } elseif ($firstSid === $sid) {
             $who = 'npc';
         } elseif (strcasecmp(trim($firstName), $learner) === 0) {
             $who = 'you';
+        }
+        if ($who === '') continue;
+        if ($who === 'npc') {
+            // NPC line: only when addressed to the learner (or to nobody in particular)
+            if ($to !== null && stripos($to, $learner) === false) continue;
         } else {
-            continue;
+            // the learner's line: only when said to this NPC
+            if ($to !== null) {
+                $hit = false;
+                foreach ($names as $n) if (stripos($to, $n) !== false) { $hit = true; break; }
+                if (!$hit && !($names === [] && $inPeople)) continue;
+            } elseif (!$inPeople) {
+                continue;
+            }
         }
         $text = stobeNpcBioCleanLine($data);
         if ($text === '') continue;
         $ts = intval($r['gamets'] ?? 0);
+        $key = $who . '|' . $ts . '|' . strtolower($text);   // the player's line is logged as chat + inputtext
+        if (isset($seen[$key])) continue;
+        $seen[$key] = true;
         $out['lines'][] = ['who' => $who, 'text' => $text, 'gamets' => $ts];
         if ($who === 'npc') $out['npc_lines']++;
         $out['rowid_max'] = max($out['rowid_max'], intval($r['rowid'] ?? 0));
@@ -442,7 +473,9 @@ function stobeNpcBioCache(string $sid, string $learner): array|false {
     stobeNpcBioEnsureSchema();
     $row = $GLOBALS['db']->fetchOne(
         "SELECT *, (attempted_at IS NOT NULL AND attempted_at > NOW() - make_interval(secs => $3)) AS throttled,
-                (attempted_at IS NULL OR updated_at > attempted_at) AS last_ok
+                (attempted_at IS NULL OR updated_at > attempted_at) AS last_ok,
+                (attempted_at IS NOT NULL AND attempted_at > NOW() - make_interval(secs => 45)
+                 AND NOT COALESCE(updated_at > attempted_at, false)) AS in_flight
          FROM stobe_npc_bio WHERE npc_storage_id=$1 AND LOWER(learner_name)=LOWER($2) LIMIT 1",
         [$sid, $learner, STOBE_NPC_BIO_MIN_REGEN_SECONDS]
     );
@@ -530,6 +563,9 @@ function stobeNpcBioFor(string $sid, string $npcName, string $learner, array|fal
         return $res;
     }
     if ($throttled) {
+        // m53 (NP14): another request is writing this bio right now: say so (was 'empty' while a tier
+        // change hid the old bio, so the panel showed "you don't know much" until the next refresh).
+        if (is_array($cache) && ($cache['in_flight'] === true || $cache['in_flight'] === 't')) { $res['state'] = 'pending'; $res['stale'] = true; }
         if (!$quiet) stobeLogInfo('NPC_BIO: throttled backstory=' . $res['backstory'], ['npc' => $npcName, 'sid' => $sid, 'learner' => $learner, 'backstory' => $res['backstory']]);
         return $res;
     }
@@ -728,7 +764,7 @@ function stobeNpcPlayerViewText(array $p): array {
     $raceLine = stobeNpcViewRaceLine($looks);
     [$relLabel, $relLine] = stobeNpcViewRelation($row, $speaker);
 
-    $dialogue = stobeNpcBioDialogue($sid, $speaker);
+    $dialogue = stobeNpcBioDialogue($sid, $speaker, 400, [$fullName, $displayName, is_array($row) ? strval($row['name'] ?? '') : '']);
     if ($dialogue['talks'] > 0) {
         $talked = 'Talked ' . $dialogue['talks'] . ($dialogue['talks'] === 1 ? ' time' : ' times');
         if ($dialogue['first_gamets'] > 0 && $gamets > 0) $talked .= ', first met ' . stobeNpcViewGameAgo(max(0, $gamets - $dialogue['first_gamets']));

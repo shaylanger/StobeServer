@@ -466,7 +466,9 @@ function stobeAnyGoalControlMany(string $actor,string $command,string $selector=
     $statuses=match($command){
         'PAUSE'=>['ACTIVE'],
         'RESUME'=>$all?['PAUSED','ACTIVE']:['PAUSED','ACTIVE','BLOCKED'],
-        default=>['ACTIVE','PAUSED','WAITING_APPROVAL'],
+        // m53: a BLOCKED goal is still live (on the panel, its jobs may be queued) until cleared, so
+        // "cancel the bread" must hit it (was "I could not find a matching goal to change").
+        default=>['ACTIVE','PAUSED','WAITING_APPROVAL','BLOCKED'],
     };
     $newStatus=match($send){'PAUSE'=>'PAUSED','RESUME'=>'ACTIVE',default=>'CANCELLED'};
     $actorKey=normalizeParticipantNameToken($actor);

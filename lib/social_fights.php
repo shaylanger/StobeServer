@@ -144,6 +144,42 @@ function stobeSocialSparAgreed(string $reply): bool
     return preg_match("/\b(yes|yeah|sure|alright|all right|fine|okay|ok|deal|gladly|let'?s|bring it|you'?re on|ready|why not)\b/i", $reply) === 1;
 }
 
+/**
+ * Item 141 (m53): a spar she started with ATTACK@<player> after "let's spar" is recorded; when the player then
+ * says "enough / stop" and her reply carries no attack, Stobe gets STOP_FIGHT for her (disengage + squad rejoin),
+ * whatever the model answered (it replied in words only and the deal path dropped it). Once per player line.
+ */
+function stobeSocialSparStopGuard(string $npc, string $actionTag, string $reply, string $eventType = 'chat'): bool
+{
+    if (trim($npc) === '' || strtolower(trim($eventType)) !== 'chat') return false;
+    $line = strval($GLOBALS['STOBE_CURRENT_PLAYER_MESSAGE'] ?? '');
+    if ($line === '') return false;
+    $player = normalizeParticipantNameToken(getSetting('PLAYER_NAME', 'Drifter'));
+    if (preg_match('/(?:^|[\s,;|])ATTACK@([^@,;|\]\s][^@,;|\]]*)/i', $actionTag, $m)) {
+        if (!stobeSocialSparProposal($line)) return false;
+        return stobeSocialRecordSpar($npc, trim($m[1]), null, 'attack');
+    }
+    if (!stobeSocialSparStopLine($line)) return false;
+    if (stripos($actionTag, 'STOP_ATTACK') !== false) return false;   // Stobe's STOP_ATTACK already rejoins her
+    if (preg_match("/\b(no|never|not yet|keep going|one more)\b/i", $reply)) return false;
+    $done = md5(strtolower($npc) . '|' . $line);
+    if (!empty($GLOBALS['STOBE_SPAR_STOP_SENT'][$done])) return false;
+    if (!stobeSocialSparActive($npc, $player, stobeSocialNowGameTs())) return false;
+    $GLOBALS['STOBE_SPAR_STOP_SENT'][$done] = true;
+    $serial = function_exists('stobeResolveLiveParticipantSerial') ? intval(stobeResolveLiveParticipantSerial($npc, true)) : 0;
+    if (!function_exists('stobeNegQueueBridgeBySerial')) require_once __DIR__ . '/negotiation_engine.php';
+    $ok = $serial > 0 && stobeNegQueueBridgeBySerial($serial, 'STOP_FIGHT');
+    if ($ok) setConfOpt(stobeSocialSparKey($npc, $player), '');   // the spar is over
+    if (function_exists('stobeLogInfo')) stobeLogInfo('Spar stopped by the player: STOP_FIGHT sent (item 141)',
+        ['npc'=>$npc, 'player'=>$player, 'serial'=>$serial, 'queued'=>$ok]);
+    return $ok;
+}
+
+function stobeSocialSparStopLine(string $line): bool
+{
+    return preg_match("/\b(enough|stop|halt|yield|i give up|truce|done spar\w*|that'?s it|call it)\b/i", $line) === 1;
+}
+
 // ---------- #2 deals ----------
 /** 0 (proud, vengeful) .. 1 (forgiving, easygoing); 0.5 when the personality says nothing either way. */
 function stobeSocialForgiveness(array|false $npcRow): float
