@@ -64,12 +64,10 @@ function pas_invalidate($conn): void {
 function pas_guard($conn, bool $required = false): void {
     if (PHP_SAPI === 'cli' || !empty($GLOBALS['pas_checked'])) return;
     $token = $_SERVER['HTTP_X_STOBE_PLAYTHROUGH'] ?? '';
-    if (!$required && $token === '') return;
-    $GLOBALS['pas_checked'] = true;
-    if (!pas_enabled($conn)) return;
     $session = ptr_read($conn, 'PLAYTHROUGH_SESSION', []);
-    if (is_string($token) && $token !== '' && ($session['status'] ?? '') === 'ready'
-        && hash_equals($session['token'] ?? '', $token)) return;
+    if (!$required && $token === '' && empty($session['client_id'])) return;
+    $identity = pg_fetch_assoc(pth_query($conn, "SELECT value FROM public.conf_opts WHERE id='PLAYTHROUGH_CAMPAIGN_ID'"));
+    if (pas_receipt_valid($session, $token) && hash_equals($session['character_id'], $identity['value'] ?? '')) { $GLOBALS['pas_checked'] = true; return; }
     http_response_code(409);
     header('Content-Type: application/json');
     header('Cache-Control: no-store');
@@ -77,9 +75,81 @@ function pas_guard($conn, bool $required = false): void {
     exit;
 }
 
+// A legacy header is never authority, including when automatic profile switching is off.
+function pas_receipt_valid(array $session, $token): bool {
+    return is_string($token) && preg_match('/^[a-f0-9]{32}$/D', $token)
+        && ($session['status'] ?? '') === 'ready'
+        && is_string($session['character_id'] ?? null)
+        && preg_match('/^[a-f0-9]{32}$/D', $session['character_id'])
+        && is_string($session['token'] ?? null)
+        && preg_match('/^[a-f0-9]{32}$/D', $session['token'])
+        && hash_equals($session['token'], $token);
+}
+
+// Authenticate the live campaign only. No profile manager, selection or restore APIs.
+function pas_off_handshake($conn, array $input, string $name): array {
+    $requestDigest = hash('sha256', json_encode([$input['client_id'], $input['load_id'], $input['character_id'],
+        $input['new_game'] ?? false, $input['player_name'], $input['gamets'], $input['player_members'] ?? []], JSON_THROW_ON_ERROR));
+    pth_query($conn, 'BEGIN');
+    try {
+        // Receipt metadata is the only schema this path needs; do not run profile upgrades.
+        pth_query($conn, 'CREATE SCHEMA IF NOT EXISTS stobe_meta');
+        pth_query($conn, 'CREATE TABLE IF NOT EXISTS stobe_meta.settings (key TEXT PRIMARY KEY, value TEXT)');
+        $last = ptr_read($conn, 'PLAYTHROUGH_SESSION', []);
+        $retired = ptr_read($conn, 'PLAYTHROUGH_RETIRED_CLIENTS', []);
+        $identity = pg_fetch_assoc(pth_query($conn, "SELECT value FROM public.conf_opts WHERE id='PLAYTHROUGH_CAMPAIGN_ID' FOR UPDATE"));
+        if (in_array($input['client_id'], $retired, true)) throw new RuntimeException('This Kenshi session was replaced.');
+        if (($last['client_id'] ?? '') === $input['client_id']) {
+            if (($last['load_id'] ?? 0) > $input['load_id']) throw new RuntimeException('This load request is stale.');
+            if (($last['load_id'] ?? 0) === $input['load_id']) {
+                if (($last['load_character_id'] ?? null) !== $input['character_id']
+                    || ($last['request_digest'] ?? '') !== $requestDigest) throw new RuntimeException('Conflicting load identity.');
+                if (($last['status'] ?? '') === 'ready' && ($last['character_id'] ?? '') !== ($identity['value'] ?? '')) throw new RuntimeException('The current campaign changed.');
+                pth_query($conn, 'COMMIT');
+                return ['ok'=>($last['status'] ?? '') === 'ready'] + $last;
+            }
+        }
+        if (!empty($last['client_id']) && $last['client_id'] !== $input['client_id']) {
+            $retired[] = $last['client_id'];
+            ptr_write($conn, 'PLAYTHROUGH_RETIRED_CLIENTS', array_slice($retired, -32));
+        }
+        $session = array_intersect_key($input, array_flip(['client_id','load_id','character_id','gamets']));
+        $session += ['load_character_id'=>$input['character_id'], 'new_game'=>$input['new_game'] ?? false,
+            'request_digest'=>$requestDigest, 'auth_mode'=>'current_campaign', 'player_name'=>$name, 'status'=>'pending', 'message'=>'The loaded campaign identity does not match the current campaign.'];
+        $character = $identity['value'] ?? '';
+        $unbound = !$identity || $character === '';
+        // Switching is off, so there is one shared campaign. An explicit new game (or a save written by a
+        // new game before its first handshake succeeded) carries a fresh id: adopt it instead of locking
+        // Stobe out. Loads (new_game false) of a different campaign stay rejected.
+        if (!$unbound && !empty($input['new_game']) && preg_match('/^[a-f0-9]{32}$/D', $input['character_id'])) {
+            $unbound = true;
+            $character = $input['character_id'];
+        }
+        // First genuine load may bind the previously unbound public campaign. Never repair
+        // malformed existing identity or guess identity from names/party/profile metadata.
+        if ($unbound) {
+            $character = $input['character_id'] !== '' ? $input['character_id'] : bin2hex(random_bytes(16));
+            pth_query($conn, "INSERT INTO public.conf_opts(id,value) VALUES('PLAYTHROUGH_CAMPAIGN_ID',$1) ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value", [$character]);
+        }
+        if (($unbound || empty($input['new_game'])) && preg_match('/^[a-f0-9]{32}$/D', $character)
+            && ($input['character_id'] === '' || hash_equals($character, $input['character_id']))) {
+            $session['character_id'] = $character;
+            $session['status'] = 'ready';
+            $session['token'] = bin2hex(random_bytes(16));
+            $session['message'] = '';
+        }
+        ptr_write($conn, 'PLAYTHROUGH_SESSION', $session);
+        pth_query($conn, 'COMMIT');
+        return ['ok'=>$session['status'] === 'ready'] + $session;
+    } catch (Throwable $error) {
+        if (pg_transaction_status($conn) !== PGSQL_TRANSACTION_IDLE) @pg_query($conn, 'ROLLBACK');
+        throw $error;
+    }
+}
+
 // Tagged uploads must be checked before file writes or connector calls, not just SQL writes.
 function pas_http_guard(bool $required = false): void {
-    if (PHP_SAPI === 'cli' || (!$required && !isset($_SERVER['HTTP_X_STOBE_PLAYTHROUGH']))) return;
+    if (PHP_SAPI === 'cli') return;
     ptr_runtime_enter();
     $conn = ptp_connect();
     if (!$conn) { http_response_code(503); exit; }
@@ -169,12 +239,32 @@ function pas_handshake($conn, array $input): array {
     }
     $runtime = ptr_runtime_begin_switch(30.0, $conn);
     try {
+        // Runtime readiness uses background_processor.php, whose settings helpers
+        // and DB adapter are normally loaded by the profile-switch path below.
+        // OFF mode skips that path, but still must bootstrap the same helpers
+        // before ptr_runtime_finish_switch() checks manager readiness.
         require_once __DIR__ . '/postgresql.class.php';
         require_once __DIR__ . '/settings.php';
         require_once __DIR__ . '/data_functions.php';
         $GLOBALS['db'] ??= new sql();
 
-        if (!pas_enabled($conn)) return ['ok'=>true,'status'=>'off','character_id'=>$input['character_id']];
+        if (!pas_enabled($conn)) {
+            $session = pas_off_handshake($conn, $input, $name);
+            $committed = array_diff_key($session, ['ok'=>true]);
+            // The manager may take >30s to acknowledge this generation after
+            // an ordinary Kenshi load. Keep one load generation alive long
+            // enough for its bounded startup; WinHTTP allows 60s here.
+            if (!ptr_runtime_finish_switch($runtime, 45.0)) {
+                $session['ok'] = false;
+                $session['status'] = 'pending';
+                unset($session['token']);
+                $session['message'] = 'Restart the mod server before reloading Kenshi.';
+                // finish releases the barrier. Never overwrite a newer load that acquired it.
+                pth_query($conn, "UPDATE stobe_meta.settings SET value=$1 WHERE key='PLAYTHROUGH_SESSION' AND value=$2",
+                    [json_encode(array_diff_key($session, ['ok'=>true]), JSON_THROW_ON_ERROR), json_encode($committed, JSON_THROW_ON_ERROR)]);
+            }
+            return $session;
+        }
         $last = ptr_read($conn, 'PLAYTHROUGH_SESSION', []);
         if (($last['client_id'] ?? '') === $input['client_id']) {
             if (($last['load_id'] ?? 0) > $input['load_id']) throw new RuntimeException('This load request is stale.');

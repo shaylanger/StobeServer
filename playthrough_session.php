@@ -15,9 +15,7 @@ try {
     if (!is_array($input)) throw new InvalidArgumentException('Invalid load request.');
     $conn = ptp_connect();
     if (!$conn) throw new RuntimeException('Database unavailable.');
-    // An unconfigured installation remains off without creating schemas or inspecting saves.
-    if (!pas_enabled($conn)) $result = ['ok'=>true,'status'=>'off'];
-    else $result = pas_handshake($conn, $input);
+    $result = pas_handshake($conn, $input);
     echo json_encode($result, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
 } catch (PlaythroughSwitchBusyException $error) {
     http_response_code(503);
